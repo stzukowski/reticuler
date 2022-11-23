@@ -122,8 +122,8 @@ class FreeFEM:
         for i, triple in enumerate(network.box.connections_bc()):
             x0 = network.box.points[triple[0], 0]
             y0 = network.box.points[triple[0], 1]
-            x1 = network.box.points[triple[Ref1], 0]
-            y1 = network.box.points[triple[Ref1], 1]
+            x1 = network.box.points[triple[1], 0]
+            y1 = network.box.points[triple[1], 1]
             boundary_condition = triple[2]
             n_points = np.max((1, int(np.sqrt((x0 - x1) ** 2 + (y0 - y1) ** 2) / 2)))
 
@@ -142,9 +142,9 @@ class FreeFEM:
         for i, branch in enumerate(network.branches):
             for j, pair in enumerate(zip(branch.points, branch.points[1:])):
                 x0 = pair[0][0]
-                y0 = pair[0][Ref1]
-                x1 = pair[Ref1][0]
-                y1 = pair[Ref1][Ref1]
+                y0 = pair[0][1]
+                x1 = pair[1][0]
+                y1 = pair[1][1]
 
                 border_network = (
                     border_network
