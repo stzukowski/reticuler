@@ -9,22 +9,15 @@ Reticuler Documentation
    
    modules
    
-Reticuler is a Python package to conduct network growth simulations.
+Reticuler is a Python package to simulate the growth of spatial networks in nature.
    
 How to install
 ''''''''''''''
 
-Basic usage:
-
 .. prompt:: bash $ auto
 
-   pip install .
+   pip install reticuler
 
-or in the develop mode (overwrites the directory in site-packages with a symbolic link to the repository, hence any changes in code will be automatically reflected):
-
-.. prompt:: bash $ auto
-
-   pip install -e .
    
    
 Usage

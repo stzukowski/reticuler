@@ -6,7 +6,7 @@
 <a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 </p>
 
-Network growth simulations package.
+Python package to simulate the growth of spatial networks in nature.
 
 [Documentation](https://reticuler.readthedocs.io/en/latest/)
 
@@ -16,14 +16,8 @@ Network growth simulations package.
 [__FreeFEM++__](https://freefem.org/) - PDE solver
 
 ### Package installation
-Basic usage:
 ```
-pip install .
-```
-
-or in the develop mode (overwrites the directory in site-packages with a symbolic link to the repository, hence any changes in code will be automatically reflected):
-```
-pip install -e .
+pip install reticuler
 ```
 
 ## Usage
