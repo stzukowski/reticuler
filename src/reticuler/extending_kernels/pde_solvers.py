@@ -12,9 +12,10 @@ import os
 from tempfile import NamedTemporaryFile
 import textwrap
 
+
 class FreeFEM:
     """PDE solver based on finite element method implemented in FreeFEM [Ref2]_.
-    
+
     Attributes
     ----------
     equation : int, default 0
@@ -22,17 +23,17 @@ class FreeFEM:
         - 1: Poisson
     a1a2a3_coefficients : array
         An array of a1a2a3 coefficients for each tip in the network.
-        
-    
+
+
     References
     ----------
     .. [Ref2] https://freefem.org/
-    
+
     """
-    
+
     def __init__(self, equation=0):
         """Initialize FreeFEM.
-        
+
         Parameters
         ----------
         equation : int, default 0
@@ -43,13 +44,14 @@ class FreeFEM:
 
         """
         self.equation = equation
-        
+
         self.a1a2a3_coefficients = []
 
     def __prepare_script(self, network):
         """Return a FreeFEM script with `Network` geometry."""
-        
-        initialisation = textwrap.dedent('''
+
+        initialisation = textwrap.dedent(
+            """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INITIALISATION
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,47 +114,67 @@ class FreeFEM:
             	
             	return nvAroundTips;
             }
-            ''')
-        
-        border_box = '\n'
-        inside_buildmesh = ''
+            """
+        )
+
+        border_box = "\n"
+        inside_buildmesh = ""
         for i, triple in enumerate(network.box.connections_bc()):
             x0 = network.box.points[triple[0], 0]
             y0 = network.box.points[triple[0], 1]
             x1 = network.box.points[triple[Ref1], 0]
             y1 = network.box.points[triple[Ref1], 1]
             boundary_condition = triple[2]
-            n_points = np.max( (1, int(np.sqrt((x0-x1)**2+(y0-y1)**2)/2)) )
-            
-            border_box = border_box + \
-                'border box{i}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label={bc};}}\n'.format(i=i, x0=x0, ax=x1-x0, y0=y0, ay=y1-y0, bc=boundary_condition)
-            
-            inside_buildmesh = inside_buildmesh + ' box{i}({n}) +'.format(i=i, n=n_points)
-        
-        border_network = ''
+            n_points = np.max((1, int(np.sqrt((x0 - x1) ** 2 + (y0 - y1) ** 2) / 2)))
+
+            border_box = (
+                border_box
+                + "border box{i}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label={bc};}}\n".format(
+                    i=i, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0, bc=boundary_condition
+                )
+            )
+
+            inside_buildmesh = inside_buildmesh + " box{i}({n}) +".format(
+                i=i, n=n_points
+            )
+
+        border_network = ""
         for i, branch in enumerate(network.branches):
             for j, pair in enumerate(zip(branch.points, branch.points[1:])):
                 x0 = pair[0][0]
                 y0 = pair[0][Ref1]
                 x1 = pair[Ref1][0]
                 y1 = pair[Ref1][Ref1]
-                
-                border_network = border_network + \
-                    'border branch{i}connection{j}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label=1;}}\n'.format(i=i, j=j, x0=x0, ax=x1-x0, y0=y0, ay=y1-y0)
-                
-                inside_buildmesh = inside_buildmesh + ' branch{i}connection{j}(1) +'.format(i=i, j=j)
+
+                border_network = (
+                    border_network
+                    + "border branch{i}connection{j}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label=1;}}\n".format(
+                        i=i, j=j, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0
+                    )
+                )
+
+                inside_buildmesh = (
+                    inside_buildmesh + " branch{i}connection{j}(1) +".format(i=i, j=j)
+                )
         inside_buildmesh = inside_buildmesh[:-1]
-        
-        
-        buildmesh = textwrap.dedent('''
+
+        buildmesh = (
+            textwrap.dedent(
+                """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // BUILDING MESH
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            ''') + border_box + border_network + '\nmesh Th = buildmesh({inside_buildmesh});'.format(inside_buildmesh=inside_buildmesh) 
-        
-        
-        
-        tip_information = textwrap.dedent('''
+            """
+            )
+            + border_box
+            + border_network
+            + "\nmesh Th = buildmesh({inside_buildmesh});".format(
+                inside_buildmesh=inside_buildmesh
+            )
+        )
+
+        tip_information = textwrap.dedent(
+            """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // TIP INFORMATION
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,15 +183,23 @@ class FreeFEM:
             real[int] angle(nbTips);
             real[int] X(nbTips); 
             real[int] Y(nbTips);
-            '''.format(n_tips=len(network.active_branches)))
+            """.format(
+                n_tips=len(network.active_branches)
+            )
+        )
         for i, branch in enumerate(network.active_branches):
-            tip_information = tip_information + \
-                '\nX({j})={x};'.format(j=i, x=branch.points[-1,0]) + \
-                    '\nY({j})={y};'.format(j=i, y=branch.points[-1,1]) + \
-                        '\nangle({j})={angle};'.format(j=i, angle=np.pi/2-branch.tip_angle()) # angle with X axis
-        tip_information = tip_information + '\n'                     
-        
-        problem_Laplace = textwrap.dedent('''
+            tip_information = (
+                tip_information
+                + "\nX({j})={x};".format(j=i, x=branch.points[-1, 0])
+                + "\nY({j})={y};".format(j=i, y=branch.points[-1, 1])
+                + "\nangle({j})={angle};".format(
+                    j=i, angle=np.pi / 2 - branch.tip_angle()
+                )
+            )  # angle with X axis
+        tip_information = tip_information + "\n"
+
+        problem_Laplace = textwrap.dedent(
+            """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND equation TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,9 +217,11 @@ class FreeFEM:
             potential;
             
             // cout<<"First solve completed."<<endl;         
-            ''')
-        
-        problem_Poisson = textwrap.dedent('''
+            """
+        )
+
+        problem_Poisson = textwrap.dedent(
+            """
                     
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND equation TO SOLVE
@@ -207,9 +239,11 @@ class FreeFEM:
             potential;
             
             // cout<<"First solve completed."<<endl;         
-            ''')
-        
-        adaptmesh = textwrap.dedent('''
+            """
+        )
+
+        adaptmesh = textwrap.dedent(
+            """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTING THE MESH AND SOLVING FOR THE FIELD
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
@@ -246,9 +280,11 @@ class FreeFEM:
             // plot(u, wait=true, fill=true);
             
             real adaptTime=clock() - adaptTime0;
-            ''')
-        
-        integrate_a1a2a3 = textwrap.dedent('''
+            """
+        )
+
+        integrate_a1a2a3 = textwrap.dedent(
+            """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
@@ -289,43 +325,57 @@ class FreeFEM:
             // cout << endl << endl << "Adaptation took: " << adaptTime; 
             // cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
             // cout << endl << "Total time: " << clock()-time0 << endl << endl;
-            ''')
-        
+            """
+        )
+
         script = initialisation + buildmesh + tip_information
         if self.equation:
             script = script + problem_Poisson
         else:
             script = script + problem_Laplace
         script = script + adaptmesh + integrate_a1a2a3
-        
+
         return script
-        
+
     def __run_freefem(self, script):
         """Run FreeFEM from temporary file and import the a1a2a3 coefficients."""
-        temporary_files = [] # to close at the end
-        with NamedTemporaryFile( suffix = '.edp', mode = 'w', delete = False ) as edp_temp_file:
-            edp_temp_file.write( script )
+        temporary_files = []  # to close at the end
+        with NamedTemporaryFile(suffix=".edp", mode="w", delete=False) as edp_temp_file:
+            edp_temp_file.write(script)
             temporary_files.append(edp_temp_file)
 
-        cmd = ['FreeFem++', '-nw', '-nc', '-v', '0', '-f', '{file_name}'.format(file_name=edp_temp_file.name)]
-        result = subprocess.run(args=cmd, stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+        cmd = [
+            "FreeFem++",
+            "-nw",
+            "-nc",
+            "-v",
+            "0",
+            "-f",
+            "{file_name}".format(file_name=edp_temp_file.name),
+        ]
+        result = subprocess.run(
+            args=cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         # print("stdout:", result.stdout.decode())
         # print("stderr:", result.stderr.decode())
         if result.returncode:
-            print('\nFreeFem++ failed.\n')
-        
-        ai_coeffs_flat = np.fromstring(result.stdout, sep=',')
-        self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat)//3,3)
+            print("\nFreeFem++ failed.\n")
+
+        ai_coeffs_flat = np.fromstring(result.stdout, sep=",")
+        self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         # print(self.a1a2a3_coefficients)
-        
+
         # close temporary files
-        for tmp_file in temporary_files :
+        for tmp_file in temporary_files:
             tmp_file.close()
             os.unlink(tmp_file.name)
-    
+
     def solve_PDE(self, network):
         """Solve the PDE for the field around the network.
-        
+
         Prepare a FreeFEM script, export it to a temporary file and run.
         Then, import the a1a2a3 coefficients to ``self.a1a2a3_coefficients``.
 
@@ -341,4 +391,3 @@ class FreeFEM:
         """
         script = self.__prepare_script(network)
         self.__run_freefem(script)
-    
