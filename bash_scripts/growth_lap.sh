@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function run_single_exp {
-	eta=`printf '%.1f' "$(echo $1/10 | bc)"`
+	eta=`printf '%.3f' "$(echo "scale=3; $1/10" | bc)"`
 	
 	# results will be saved in 'outputFile' + '.json'
 	# final plot in 'outputFile' + '.pdf'

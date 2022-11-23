@@ -10,17 +10,17 @@ import numpy as np
 def modified_euler(extender, network, max_approximation_step=3):
     """Integrate tips trajectory with modified Euler's method.
     
-    Modified Euler's method [1]_:
-    x(n+1) = x(n) + dt * 0.5 *(v[x(n)] + v[x(n+1)]),
-    where x(n+1) needs to be found implicitly.
+    Modified Euler's method [Ref3]_ (x(n+1) needs to be found implicitly):
+    
+    .. math:: x(n+1) = x(n) + dt \cdot 0.5 \cdot (v[x(n)] + v[x(n+1)]).
     
     Parameters
     ----------
     max_approximation_step : int, default 3
         Number of approximation steps:
-            0 - explicit Euler's method
-            1 - Heuns's method
-            >1 - modified Euler's method
+            - 0:  explicit Euler's method
+            - 1:  Heuns's method
+            - >1: modified Euler's method
 
     Returns
     -------
@@ -28,7 +28,7 @@ def modified_euler(extender, network, max_approximation_step=3):
         
     References
     ----------
-    .. [1] https://en.wikipedia.org/wiki/Trapezoidal_rule_(differential_equations)
+    .. [Ref3] https://en.wikipedia.org/wiki/Trapezoidal_rule_(differential_equations)
     
     """
     # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler

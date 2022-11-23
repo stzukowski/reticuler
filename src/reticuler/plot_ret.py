@@ -1,3 +1,5 @@
+"""Command line script to plot a network"""
+
 import argparse
 import json
 import textwrap
@@ -50,7 +52,9 @@ def main():
                         help = textwrap.dedent('''\
                             Optional plotting parameters.
                             
-                            Pass dictionary in a form (no spaces!): "{\"value\":key}"
+                            Pass dictionary in a form (no spaces, 
+                            backslash before quotes around `value`): 
+                                "{\"value\":key}"
                             default = {} (keeps default values as listed below)
                             
                             ''') + textwrap.dedent(graphics.plot_tree.__doc__[\

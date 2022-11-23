@@ -1,7 +1,7 @@
 """Preparing plots.
 
 Functions:
-    plot_tree(ax, network, height=2.0, width=2.0, **kwargs_tree_plot)
+    plot_tree(ax, network, height=2.0, width=2.0, \*\*kwargs_tree_plot)
 
 """
 import numpy as np
@@ -34,17 +34,20 @@ cm2inch = 1/2.54
 golden = (1 + 5 ** 0.5) / 2
 
 def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
-    """Plot a tree with optional arguments from **kwargs_tree, and a black box.    
+    """Plot a tree with optional arguments from \*\*kwargs_tree, and a black box.    
     
     Parameters
     -------
     ax : Axes 
         An object to plot on.
     network : object of class Network
+        Network to plot.
     ylim : float, default None
+        Plot extends from y=0 to y=``ylim``.
         If None ylim = max( 2, max height of the network ).
     xlim : float, default 2.0
-    kwargs_plots : dict, default {'color': '#0066CC', 'linewidth': 2.5}
+        Plot extends from x=0 to x=``xlim``.
+    kwargs_plots : dict, default {`color`: `#0066CC`, `linewidth`: 2.5}
         Arguments to plot the tree.
     
     Returns

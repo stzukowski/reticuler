@@ -49,18 +49,7 @@ class Branch:
     isMoving : bool, default True
         A boolean condition if branch is moving further or not
         (Based on the inflow_thresh from extender.)
-        
-    Methods
-    -------
-    extend_by_dR()
-        Add a new point to self.points (progressed tip).
-    length()
-        Return length of the Branch.
-    tip_angle()
-        Return angle between the tip segment (last and penultimate point) and Y axis.
-    points_steps()
-        Return a 3-n array of points and evolution steps when they were added.
-        
+          
     """
     
     def __init__(self, ID, points, steps):
@@ -115,28 +104,18 @@ class Box:
     points : array, default []
         A 2-n array with xy coordinates of the points composing the Box.
     connections : array, default []
-        A 2-n array with connections between the `points`.
+        A 2-n array with connections between the ``points``.
     boundary_conditions : array, default []
-        A 1-n array (same length as `connections`) of boundary conditions
-        corresponding to links in `connections` list.
-        1 - absorbing BC (vanishing field)
-        2 - reflective BC (vanishing normal derivative)
-        3 - constant flux
+        A 1-n array of boundary conditions \
+        corresponding to links in ``connections`` list.
+            - 1: absorbing BC (vanishing field)
+            - 2: reflective BC (vanishing normal derivative)
+            - 3: constant flux
     seeds_connectivity : array, default []
         A 2-n array of seeds connectivity.
-        1st column - index in `points`
-        2nd column - outgoing branch `ID` 
+            - 1st column: index in ``points``
+            - 2nd column: outgoing branch ``ID`` 
         
-    Methods
-    -------
-    connections_bc()
-        Return a 3-n array of points and boundary conditions corresponding to them.
-        (1st/2nd column - point indices, 3rd column - BC)
-    construct(initial_condition=0, 
-                seeds_x=[0.1], initial_lengths=[0.01],
-                width=2.0, height=2.0)
-        Return constructed box and initial branches.
-
     """   
     
     def __init__(self, points=[], connections=[], boundary_conditions=[], seeds_connectivity=[]):
@@ -193,11 +172,10 @@ class Box:
         Parameters
         ----------
         initial_condition : int, default 0
-            IC = 0 or 1
-                Rectangular box of dimensions `width` x `height`, 
-                absorbing bottom wall, reflecting left and right, and:
-                IC = 0: constant flux on top (Laplacian case)
-                IC = 1: reflective top (Poissonian case)
+            IC = 0 or 1. Rectangular box of dimensions ``width`` x ``height``, \
+            absorbing bottom wall, reflecting left and right, and:
+                - IC = 0: constant flux on top (Laplacian case)
+                - IC = 1: reflective top (Poissonian case)
         kwargs_construct:
             IC = 0 or 1
                 seeds_x : array, default [0.1]
@@ -288,17 +266,6 @@ class Network:
         A 2-n array with connections between the branches
         (noted with branch IDs).
     
-    Methods
-    -------
-    copy()
-        Return a deepcopy of the Network.
-    height_and_length()
-        Return network height (max y coordinate) and total length of the branches.
-    move_test_tips(dRs)
-        Assign `dRs` to self.dR and extend branches (no bifurcations or killing).
-    move_tips(step):
-        Move tips (with bifurcations and killing).
-    
     """
     
     def __init__(self, box, branches=[], active_branches=[], sleeping_branches=[], branch_connectivity=[]):
@@ -349,7 +316,7 @@ class Network:
     def move_test_tips(self, dRs):
         """Move test tips (no bifurcations or killing).
         
-        Assign `dRs` to self.dR and extend branches.
+        Assign ``dRs`` to self.dR and extend branches.
         
         """
         for i, branch in enumerate(self.active_branches):
@@ -408,28 +375,18 @@ class System:
         One of the functions from reticuler.extending_kernels.trajectory_integrator. 
     growth_thresh_type : int, default 0
         Type of growth threshold.
-        0 - number of steps
-        1 - height
-        2 - network length
+            - 0: number of steps
+            - 1: height
+            - 2: network length
     growth_thresh : float, default 5
         A value of growth threshold. The simulation is stopped, when it's reached.
     growth_gauges : array, default array([0.,0.,0.])
         A 1-3 array with growth gauges (number of steps, height, network length).
+    dump_every : int, default 10
+        Dumps the results every ``dump_every`` steps.
     exp_name: str, default ''
         Path to a file, where the results will be stored.
-    dump_every : int, default 10
-        Dumps the results every `dump_every` steps.
-    
-    
-    Methods
-    -------
-    export_json()
-        Export all the information to 'self.exp_name'+'.json'.
-    import_json(input_file)
-        Construct an instance of class System based on the json `input_file`.
-    evolve()
-        Run the simulation.
-        
+      
     """
     
     def __init__(self, network, extender, trajectory_integrator,
@@ -444,7 +401,7 @@ class System:
         trajectory_integrator : function
         growth_gauges : array, default array([0.,0.,0.])
         growth_thresh_type : int, default 0
-        growth_thresh : TYPE, default 5
+        growth_thresh : float, default 5
         dump_every : int, default 10
         exp_name: str, default ''
 
@@ -662,7 +619,7 @@ class System:
     def evolve(self):
         """Run the simulation.
         
-        Run the simulation in a while loop until `self.growth_thresh` is not reached.
+        Run the simulation in a while loop until ``self.growth_thresh`` is not reached.
         Print real time that the simulation took.
 
         Returns

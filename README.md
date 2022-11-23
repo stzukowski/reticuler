@@ -15,7 +15,7 @@ Basic usage:
 pip install .
 ```
 
-or in develop mode (overwrites the directory in site-packages with a symbolic link to the repository, hence any changes in code will be automatically reflected):
+or in the develop mode (overwrites the directory in site-packages with a symbolic link to the repository, hence any changes in code will be automatically reflected):
 ```
 pip install -e .
 ```
@@ -40,11 +40,11 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 ```
 
 ## How to cite
-*Through history to growth dynamics - backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak (2022) (submitted)
+*Through history to growth dynamics - backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak (2022) (accepted)
 
 ### References
-[1]: [P. Morawiecki *Problem odwrotny do ewolucji sieci rzecznych* (2016)](http://www.fuw.edu.pl/~piotrek/theses/PMorawiecki.pdf).
+[1]: [P. Morawiecki, *Problem odwrotny do ewolucji sieci rzecznych* (2016)](http://www.fuw.edu.pl/~piotrek/theses/PMorawiecki.pdf).
 
-[2]: [S. Żukowski *Związek między geometrią sieci rzecznych a prawami ich wzrostu* (2019)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski.pdf).
+[2]: [S. Żukowski, *Związek między geometrią sieci rzecznych a prawami ich wzrostu* (2019)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski.pdf).
 
-[3]: [S. Żukowski *Backward evolution of river networks* (2021)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski2.pdf).
+[3]: [S. Żukowski, *Backward evolution of river networks* (2021)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski2.pdf).

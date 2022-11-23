@@ -8,7 +8,7 @@ Classes:
 import numpy as np
 
 class Streamline:
-    """Extender based on the streamline algorithm [1]_.
+    """Extender based on the streamline algorithm [Ref1]_.
     
     Attributes
     ----------
@@ -21,10 +21,10 @@ class Streamline:
         A distance over which the fastest branch in the network 
         will move in each timestep.
     bifurcation_type : int, default 0
-        0 - no bifurcations
-        1 - a1 bifurcations (velocity criterion)
-        2 - a3/a1 bifurcations (bimodality criterion)
-        3 - random bifurcations
+        - 0: no bifurcations
+        - 1: a1 bifurcations (velocity criterion)
+        - 2: a3/a1 bifurcations (bimodality criterion)
+        - 3: random bifurcations
     bifurcation_thresh : float, default 0
         Threshold for the bifurcation criterion.
     bifurcation_angle : float, default 2pi/5
@@ -32,15 +32,15 @@ class Streamline:
         Default angle (72 degrees) corresponds to the analytical solution 
         for fingers in a diffusive field.
     inflow_thresh : float, default 0.05
-        Threshold to put asleep the tips with less than `inflow_thresh` 
+        Threshold to put asleep the tips with less than ``inflow_thresh`` 
         of max flux/velocity. 
-    distance_from_bif_thresh : float, default 2.1*`ds`
+    distance_from_bif_thresh : float, default 2.1*``ds``
         A minimal distance the tip has to move from the previous bifurcations 
         to split again.
     
     References
     ----------
-    .. [1] "Through history to growth dynamics -- backward evolution of spatial networks", 
+    .. [Ref1] "Through history to growth dynamics -- backward evolution of spatial networks", 
             S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak (2022)
         
     """
@@ -84,7 +84,7 @@ class Streamline:
         self.distance_from_bif_thresh = 2.1*ds
     
     def __rotation_matrix(self, angle):
-        """Construct a matrix to rotate a vector by `angle`.
+        """Construct a matrix to rotate a vector by ``angle``.
         
         Parameters
         ----------
@@ -132,7 +132,7 @@ class Streamline:
         """Calculate a vector over which the tip is shifted.
         
         Derived from the fact that the finger proceeds along a unique 
-        streamling going through the tip [1]_.
+        streamling going through the tip.
 
         Parameters
         ----------
@@ -145,12 +145,7 @@ class Streamline:
         -------
         dR : array
             An 1-2 array.
-
-        References
-        ----------
-        .. [1] "Through history to growth dynamics -- backward evolution of spatial networks", 
-                S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak (2022)
-                
+    
         """
         y = ( (beta**2)/9 ) * ( ( 27*dr / (2*beta**2) + 1)**(2/3) - 1 )
         x = np.sign(beta) * 2 * ( (y**3/beta**2) + (y/beta)**4 )**(1/2)
@@ -191,7 +186,7 @@ class Streamline:
         return dRs_test  
 
     def assign_dRs(self, dRs, network):
-        """Assign `dRs` to each branch in `network`."""
+        """Assign ``dRs`` to each branch in ``network``."""
         for i, branch in enumerate(network.active_branches):
             if branch.isBifurcating:
                 branch.dR = [np.dot(self.__rotation_matrix(-self.bifurcation_angle/2), dRs[i]),

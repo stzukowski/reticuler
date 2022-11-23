@@ -1,3 +1,5 @@
+"""Command line script to run the simulation"""
+
 import argparse
 import json
 import textwrap
@@ -32,12 +34,14 @@ def main():
                         help = textwrap.dedent('''\
                             Optional growth parameters.
                             
-                            Pass dictionary in a form (no spaces!): "{\"value\":key}"
+                            Pass dictionary in a form (no spaces, 
+                            backslash before quotes around `value`): 
+                                "{\"value\":key}"
                             default = {} (keeps default values as listed below)
                             
-                            ''') + textwrap.dedent(System.__init__.__doc__[\
-                                    System.__init__.__doc__.find('growth_thresh_type')-8:\
-                                        System.__init__.__doc__.find('exp_name')]),
+                            ''') + textwrap.dedent(System.__doc__[\
+                                    System.__doc__.find('growth_thresh_type')-4:\
+                                        System.__doc__.find('exp_name')]),
                         default = [{}])
     
     # Box options
@@ -52,7 +56,9 @@ def main():
                         help = textwrap.dedent('''\
                             Kwargs for Box construct method.
                             
-                            Pass dictionary in a form (no spaces!): "{\"value\":key}"
+                            Pass dictionary in a form (no spaces, 
+                            backslash before quotes around `value`): 
+                                "{\"value\":key}"
                             default = {} (keeps default values as listed below)
                             
                             ''') + textwrap.dedent(Box.construct.__doc__[\
@@ -80,13 +86,15 @@ def main():
                         help = textwrap.dedent('''\
                             Optional parameters for solver.
                             
-                            Pass dictionary in a form (no spaces!): "{\"value\":key}"
+                            Pass dictionary in a form (no spaces, 
+                            backslash before quotes around `value`): 
+                                "{\"value\":key}"
                             default = {} (keeps default values as listed below)
                             
                             ''') + \
-                            '1. FreeFEM\n' + textwrap.dedent(pde_solvers.FreeFEM.__init__.__doc__[\
-                                    pde_solvers.FreeFEM.__init__.__doc__.find('equation')-8:\
-                                        pde_solvers.FreeFEM.__init__.__doc__.find('Returns')]),
+                            '1. FreeFEM\n' + textwrap.dedent(pde_solvers.FreeFEM.__doc__[\
+                                    pde_solvers.FreeFEM.__doc__.find('equation')-4:\
+                                        pde_solvers.FreeFEM.__doc__.find('a1a2a3_coefficients')]),
                         default = [{}])                            
         
     # Extender
@@ -101,13 +109,15 @@ def main():
                         help = textwrap.dedent('''\
                             Optional parameters for extender.
                             
-                            Pass dictionary in a form (no spaces!): "{\"value\":key}"
+                            Pass dictionary in a form (no spaces, 
+                            backslash before quotes around `value`): 
+                                "{\"value\":key}"
                             default = {} (keeps default values as listed below)
                             
                             ''') + \
-                            '1. Streamline\n' + textwrap.dedent(extenders.Streamline.__init__.__doc__[\
-                                    extenders.Streamline.__init__.__doc__.find('eta')-8:\
-                                        extenders.Streamline.__init__.__doc__.find('Returns')]),
+                            '1. Streamline\n' + textwrap.dedent(extenders.Streamline.__doc__[\
+                                    extenders.Streamline.__doc__.find('eta')-4:\
+                                        extenders.Streamline.__doc__.find('References')]),
                         default = [{}])
                                                                                                            
     # Plotting at the end

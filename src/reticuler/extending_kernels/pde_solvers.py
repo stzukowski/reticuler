@@ -13,20 +13,20 @@ from tempfile import NamedTemporaryFile
 import textwrap
 
 class FreeFEM:
-    """PDE solver based on finite element method implemented in FreeFEM [1]_.
+    """PDE solver based on finite element method implemented in FreeFEM [Ref2]_.
     
     Attributes
     ----------
-    equation : int 
-        0 - Laplace
-        1 - Poisson
+    equation : int, default 0
+        - 0: Laplace
+        - 1: Poisson
     a1a2a3_coefficients : array
         An array of a1a2a3 coefficients for each tip in the network.
         
     
     References
     ----------
-    .. [1] https://freefem.org/
+    .. [Ref2] https://freefem.org/
     
     """
     
@@ -119,8 +119,8 @@ class FreeFEM:
         for i, triple in enumerate(network.box.connections_bc()):
             x0 = network.box.points[triple[0], 0]
             y0 = network.box.points[triple[0], 1]
-            x1 = network.box.points[triple[1], 0]
-            y1 = network.box.points[triple[1], 1]
+            x1 = network.box.points[triple[Ref1], 0]
+            y1 = network.box.points[triple[Ref1], 1]
             boundary_condition = triple[2]
             n_points = np.max( (1, int(np.sqrt((x0-x1)**2+(y0-y1)**2)/2)) )
             
@@ -133,9 +133,9 @@ class FreeFEM:
         for i, branch in enumerate(network.branches):
             for j, pair in enumerate(zip(branch.points, branch.points[1:])):
                 x0 = pair[0][0]
-                y0 = pair[0][1]
-                x1 = pair[1][0]
-                y1 = pair[1][1]
+                y0 = pair[0][Ref1]
+                x1 = pair[Ref1][0]
+                y1 = pair[Ref1][Ref1]
                 
                 border_network = border_network + \
                     'border branch{i}connection{j}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label=1;}}\n'.format(i=i, j=j, x0=x0, ax=x1-x0, y0=y0, ay=y1-y0)
@@ -327,11 +327,12 @@ class FreeFEM:
         """Solve the PDE for the field around the network.
         
         Prepare a FreeFEM script, export it to a temporary file and run.
-        Then, import the a1a2a3 coefficients to self.a1a2a3_coefficients.
+        Then, import the a1a2a3 coefficients to ``self.a1a2a3_coefficients``.
 
         Parameters
         ----------
         network : object of class Network
+            Network around which the field will be calculated.
 
         Returns
         -------
