@@ -1,12 +1,12 @@
-# Reticuler
-
 <p align="center">
+<a href='https://reticuler.readthedocs.io/en/latest/?badge=latest'><img src='https://readthedocs.org/projects/reticuler/badge/?version=latest' alt='Documentation Status'/></a>
 <a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 </p>
+# Reticuler
 
 Network growth simulations package.
 
-[Documentation]()
+[Documentation](https://reticuler.readthedocs.io/en/latest/)
 
 ## Setup
 
