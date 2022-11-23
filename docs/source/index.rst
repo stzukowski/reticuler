@@ -9,6 +9,8 @@ Reticuler Documentation
    
    modules
    
+Reticuler is a Python package to conduct network growth simulations.
+   
 How to install
 ''''''''''''''
 
