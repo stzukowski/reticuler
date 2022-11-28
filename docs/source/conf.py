@@ -12,6 +12,8 @@
 
 import os
 import sys
+import importlib.metadata
+
 sys.path.insert(0, os.path.abspath('../../src'))
 
 
@@ -22,7 +24,7 @@ copyright = '2022, Stanisław Żukowski'
 author = 'Stanisław Żukowski'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = importlib.metadata.version("reticuler")
 
 
 # -- General configuration ---------------------------------------------------

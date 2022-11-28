@@ -13,7 +13,7 @@ import datetime
 import time
 import copy
 import json
-import pkg_resources
+import importlib.metadata
 
 from .extending_kernels import extenders, pde_solvers, trajectory_integrators
 
@@ -79,7 +79,7 @@ class Branch:
         self.isMoving = True
 
     def extend_by_dR(self):
-        """Add a new point to self.points (progressed tip)."""
+        """Add a new point to ``self.points`` (progressed tip)."""
         self.points = np.vstack((self.points, self.points[-1] + self.dR))
 
     def length(self):
@@ -360,7 +360,7 @@ class Network:
     def move_test_tips(self, dRs):
         """Move test tips (no bifurcations or killing).
 
-        Assign ``dRs`` to self.dR and extend branches.
+        Assign ``dRs`` ``to self.dR`` and extend branches.
 
         """
         for i, branch in enumerate(self.active_branches):
@@ -482,7 +482,7 @@ class System:
         """Export all the information to 'self.exp_name'+'.json'."""
         growth_type_legend = ["number of steps", "max height", "max tree length"]
         export_general = {
-            "reticuler_version": pkg_resources.get_distribution("reticuler").version,
+            "reticuler_version": importlib.metadata.version("reticuler"),
             "exp_name": self.exp_name,
             "growth": {
                 "threshold_type": growth_type_legend[self.growth_thresh_type],

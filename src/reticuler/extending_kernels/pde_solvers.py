@@ -117,7 +117,7 @@ class FreeFEM:
             """
         )
 
-        border_box = "\n"
+        border_box = "\nreal buildTime0=clock();\n\n"
         inside_buildmesh = ""
         for i, triple in enumerate(network.box.connections_bc()):
             x0 = network.box.points[triple[0], 0]
@@ -168,9 +168,10 @@ class FreeFEM:
             )
             + border_box
             + border_network
-            + "\nmesh Th = buildmesh({inside_buildmesh});".format(
+            + "\nmesh Th = buildmesh({inside_buildmesh});\n".format(
                 inside_buildmesh=inside_buildmesh
             )
+            + "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
         )
 
         tip_information = textwrap.dedent(
@@ -203,6 +204,7 @@ class FreeFEM:
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND equation TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            
             fespace Vh(Th,P2);
             Vh u,v;
             
@@ -212,17 +214,11 @@ class FreeFEM:
             			 // +on(3,u=50) // constant field
             			 // -int2d(Th)(v) // rain in domain
                          +on(1,u=0);
-            
-            // solving the problem for the first time
-            potential;
-            
-            // cout<<"First solve completed."<<endl;         
             """
         )
 
         problem_Poisson = textwrap.dedent(
-            """
-                    
+            """ 
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND equation TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,11 +230,6 @@ class FreeFEM:
                          -int2d(Th)(v) 
             			 -int1d(Th,3)(v)  // constant flux
                          +on(1,u=0);
-            
-            // solving the problem for the first time
-            potential;
-            
-            // cout<<"First solve completed."<<endl;         
             """
         )
 
@@ -247,13 +238,27 @@ class FreeFEM:
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTING THE MESH AND SOLVING FOR THE FIELD
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
-            real adaptTime0=clock();
-            // cout << endl << endl << "Adaptation..." << endl;
-            
+
             // counting cells around the tips
             real R=0.01; // circle around the tip over which field is integrated
             int[int] nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
             
+            // First adaptation
+            real firstAdaptTime0=clock();
+            // Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
+            Th = adaptmesh(Th,1,nbvx=500000,hmax=0.1,nbsmooth=100,iso=true,ratio=1.8);
+            real firstAdaptTime=clock() - firstAdaptTime0;
+            // plot(Th, wait=true);
+            
+            // Solving the problem for the first time
+            real firstRunTime0=clock();
+            potential;
+            // cout<<"First solve completed."<<endl;
+            real firstRunTime=clock() - firstRunTime0;
+            
+            // Adaptation loop
+            real adaptTime0=clock();
+            // cout << endl << endl << "Adaptation..." << endl;
             fespace Vh0(Th,P0);
             Vh0 h=1;
             real error=0.02;
@@ -322,7 +327,10 @@ class FreeFEM:
             	// cout << endl;
             }};
             
-            // cout << endl << endl << "Adaptation took: " << adaptTime; 
+            // cout << endl << endl << "Building mesh took: " << buildTime; 
+            // cout << endl << "First adapt took: " << firstAdaptTime; 
+            // cout << endl << "First run took: " << firstRunTime; 
+            // cout << endl << "Adaptation took: " << adaptTime; 
             // cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
             // cout << endl << "Total time: " << clock()-time0 << endl << endl;
             """

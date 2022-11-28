@@ -40,7 +40,7 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 ```
 
 ## How to cite
-*Through history to growth dynamics - backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak (2022) (accepted)
+*Through history to growth dynamics: backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022). https://doi.org/10.1038/s41598-022-24656-x
 
 ### References
 [1]: [P. Morawiecki, *Problem odwrotny do ewolucji sieci rzecznych* (2016)](http://www.fuw.edu.pl/~piotrek/theses/PMorawiecki.pdf).
