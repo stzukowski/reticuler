@@ -21,7 +21,7 @@ def get_meta() -> MutableMapping:
     """
     import toml
 
-    toml_path = os.path.join(os.path.dirname(__file__), "..", "pyproject.toml")
+    toml_path = os.path.join(os.path.dirname(__file__), "..", "..", "pyproject.toml")
 
     with open(toml_path) as fopen:
         pyproject = toml.load(fopen)
