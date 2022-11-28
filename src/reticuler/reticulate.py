@@ -3,6 +3,7 @@
 import argparse
 import json
 import textwrap
+import importlib.metadata
 import matplotlib.pyplot as plt
 
 from reticuler.system import Box, Network, System
@@ -17,6 +18,13 @@ def main():
 
     # defining arguments for parser object
     parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=importlib.metadata.version("reticuler"),
+    )
+
+    parser.add_argument(
         "-in",
         "--input_file",
         type=str,
@@ -24,11 +32,12 @@ def main():
         metavar="exp_name",
         help=textwrap.dedent(
             """\
-                            File to import. If None, the System is prepared based on the rest of the arguments.
-                            default = None"""
+            File to import. If None, the System is prepared based on the rest of the arguments.
+            default = None"""
         ),
         default=None,
     )
+
     parser.add_argument(
         "-out",
         "--output_file",
@@ -37,8 +46,8 @@ def main():
         metavar="exp_name",
         help=textwrap.dedent(
             """\
-                            File to export.
-                            default = '' """
+            File to export.
+            default = '' """
         ),
         default=[""],
     )
@@ -51,14 +60,14 @@ def main():
         metavar="dict",
         help=textwrap.dedent(
             """\
-                            Optional growth parameters.
-                            
-                            Pass dictionary in a form (no spaces, 
-                            backslash before quotes around `value`): 
-                                "{\"value\":key}"
-                            default = {} (keeps default values as listed below)
-                            
-                            """
+            Optional growth parameters.
+            
+            Pass dictionary in a form (no spaces, 
+            backslash before quotes around `value`): 
+                "{\"value\":key}"
+            default = {} (keeps default values as listed below)
+            
+            """
         )
         + textwrap.dedent(
             System.__doc__[
@@ -91,14 +100,14 @@ def main():
         metavar="dict",
         help=textwrap.dedent(
             """\
-                            Kwargs for Box construct method.
-                            
-                            Pass dictionary in a form (no spaces, 
-                            backslash before quotes around `value`): 
-                                "{\"value\":key}"
-                            default = {} (keeps default values as listed below)
-                            
-                            """
+            Kwargs for Box construct method.
+            
+            Pass dictionary in a form (no spaces, 
+            backslash before quotes around `value`): 
+                "{\"value\":key}"
+            default = {} (keeps default values as listed below)
+            
+            """
         )
         + textwrap.dedent(
             Box.construct.__doc__[
@@ -117,8 +126,8 @@ def main():
         metavar="name",
         help=textwrap.dedent(
             """\
-                            Trajectory integrator
-                            default = modified_euler"""
+            Trajectory integrator
+            default = modified_euler"""
         ),
         default=["modified_euler"],
     )
@@ -131,8 +140,8 @@ def main():
         metavar="name",
         help=textwrap.dedent(
             """\
-                            PDE solver
-                            default = FreeFEM"""
+            PDE solver
+            default = FreeFEM"""
         ),
         default=["FreeFEM"],
     )
@@ -143,14 +152,14 @@ def main():
         metavar="dict",
         help=textwrap.dedent(
             """\
-                            Optional parameters for solver.
-                            
-                            Pass dictionary in a form (no spaces, 
-                            backslash before quotes around `value`): 
-                                "{\"value\":key}"
-                            default = {} (keeps default values as listed below)
-                            
-                            """
+            Optional parameters for solver.
+            
+            Pass dictionary in a form (no spaces, 
+            backslash before quotes around `value`): 
+                "{\"value\":key}"
+            default = {} (keeps default values as listed below)
+            
+            """
         )
         + "1. FreeFEM\n"
         + textwrap.dedent(
@@ -170,8 +179,8 @@ def main():
         metavar="name",
         help=textwrap.dedent(
             """\
-                            Extender
-                            default = Streamline"""
+            Extender
+            default = Streamline"""
         ),
         default=["Streamline"],
     )
@@ -182,14 +191,14 @@ def main():
         metavar="dict",
         help=textwrap.dedent(
             """\
-                            Optional parameters for extender.
-                            
-                            Pass dictionary in a form (no spaces, 
-                            backslash before quotes around `value`): 
-                                "{\"value\":key}"
-                            default = {} (keeps default values as listed below)
-                            
-                            """
+            Optional parameters for extender.
+            
+            Pass dictionary in a form (no spaces, 
+            backslash before quotes around `value`): 
+                "{\"value\":key}"
+            default = {} (keeps default values as listed below)
+            
+            """
         )
         + "1. Streamline\n"
         + textwrap.dedent(
@@ -208,8 +217,8 @@ def main():
         action=argparse.BooleanOptionalAction,
         help=textwrap.dedent(
             """\
-                            Flag indicating to plot the final network.
-                            """
+            Flag indicating to plot the final network.
+            """
         ),
     )
 

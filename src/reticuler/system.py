@@ -182,7 +182,7 @@ class Box:
         Parameters
         ----------
         initial_condition : int, default 0
-            IC = 0 or 1. Rectangular box of dimensions ``width`` x ``height``, \
+            IC = 0 or 1. Rectangular box of dimensions ``width`` x ``height``,
             absorbing bottom wall, reflecting left and right, and:
                 - IC = 0: constant flux on top (Laplacian case)
                 - IC = 1: reflective top (Poissonian case)
@@ -428,7 +428,7 @@ class System:
         A value of growth threshold. The simulation is stopped, when it's reached.
     growth_gauges : array, default array([0.,0.,0.])
         A 1-3 array with growth gauges (number of steps, height, network length).
-    dump_every : int, default 10
+    dump_every : int, default 1
         Dumps the results every ``dump_every`` steps.
     exp_name: str, default ''
         Path to a file, where the results will be stored.
@@ -443,7 +443,7 @@ class System:
         growth_gauges=np.zeros(3),
         growth_thresh_type=0,
         growth_thresh=5,
-        dump_every=10,
+        dump_every=1,
         exp_name="",
     ):
         """Initialize System.
@@ -456,7 +456,7 @@ class System:
         growth_gauges : array, default array([0.,0.,0.])
         growth_thresh_type : int, default 0
         growth_thresh : float, default 5
-        dump_every : int, default 10
+        dump_every : int, default 1
         exp_name: str, default ''
 
         Returns

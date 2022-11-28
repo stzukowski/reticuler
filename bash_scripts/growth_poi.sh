@@ -56,7 +56,7 @@ growthThresh=13 # Poisson: 13
 bifurcationType=2
 
 echo "Starting growth."
-for subexp in test_poisson
+for subexp in testing/test_0.3/poisson
 do
 	experimentName="${subexp}"
 	experimentDirectory="reticuler/archive/growth/$experimentName"
