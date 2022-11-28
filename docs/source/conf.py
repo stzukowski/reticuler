@@ -12,19 +12,33 @@
 
 import os
 import sys
-import importlib.metadata
+from typing import MutableMapping
+
+def get_meta() -> MutableMapping:
+    """Get project metadata from pyproject.toml file.
+    Returns:
+        MutableMapping
+    """
+    import toml
+
+    toml_path = os.path.join(os.path.dirname(__file__), "..", "pyproject.toml")
+
+    with open(toml_path) as fopen:
+        pyproject = toml.load(fopen)
+
+    return pyproject
 
 sys.path.insert(0, os.path.abspath('../../src'))
-
+meta = get_meta()
 
 # -- Project information -----------------------------------------------------
 
-project = 'reticuler'
-copyright = '2022, Stanisław Żukowski'
-author = 'Stanisław Żukowski'
+project = meta["project"]["name"]
+author = ",".join(meta["project"]["authors"])
+copyright = f"2022, {author}"
 
 # The full version, including alpha/beta/rc tags
-release = importlib.metadata.version("reticuler")
+release = meta["project"]["version"]
 
 
 # -- General configuration ---------------------------------------------------

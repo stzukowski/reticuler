@@ -2,3 +2,4 @@ pydata-sphinx-theme==0.6.3
 sphinx-copybutton==0.3.1
 sphinx-prompt==1.4.0
 sphinxcontrib-napoleon==0.7
+toml==0.10.0
