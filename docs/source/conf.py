@@ -34,7 +34,7 @@ meta = get_meta()
 # -- Project information -----------------------------------------------------
 
 project = meta["project"]["name"]
-author = ",".join(meta["project"]["authors"])
+author = "Stanisław Żukowski"
 copyright = f"2022, {author}"
 
 # The full version, including alpha/beta/rc tags

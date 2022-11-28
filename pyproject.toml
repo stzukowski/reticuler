@@ -11,7 +11,7 @@ name = "reticuler"
 version = "0.3"
 authors = [
 	{name="Stanisław Żukowski"},
-	{email="zukowski.st@gmail.com" }
+	{email="zukowski.st@gmail.com"}
 ]
 description = "Simulations of spatial networks growth"
 readme = "README.md"
