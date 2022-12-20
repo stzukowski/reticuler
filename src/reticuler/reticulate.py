@@ -127,9 +127,9 @@ def main():
         help=textwrap.dedent(
             """\
             Trajectory integrator
-            default = modified_euler"""
+            default = ModifiedEulerMethod"""
         ),
-        default=["modified_euler"],
+        default=["ModifiedEulerMethod"],
     )
 
     # Solver
@@ -238,7 +238,7 @@ def main():
 
         # Trajectory integrator
         if args.trajectory_integrator[0] == "ModifiedEulerMethod":
-            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod
+            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod()
 
         # Solver
         if args.pde_solver[0] == "FreeFEM":
