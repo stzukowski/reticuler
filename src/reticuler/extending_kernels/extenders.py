@@ -94,7 +94,7 @@ class Streamline:
         self.distance_from_bif_thresh = 2.1 * ds
 
     def __rotation_matrix(self, angle):
-        """Construct a matrix to rotate a vector by ``angle``.
+        """Construct a matrix to rotate a vector by an ``angle``.
 
         Parameters
         ----------
@@ -130,20 +130,20 @@ class Streamline:
                 if (self.bifurcation_type == 1 and a1 > self.bifurcation_thresh) or (
                     self.bifurcation_type == 2 and a3 / a1 < self.bifurcation_thresh
                 ):
-                    branch.isBifurcating = True
+                    branch.is_bifurcating = True
                 elif self.bifurcation_type == 3:
                     p = self.bifurcation_thresh * (a1 / max_a1) ** self.eta
                     r = np.random.uniform(0, 1)  # uniform distribution [0,1)
                     if p > r:
-                        branch.isBifurcating = True
+                        branch.is_bifurcating = True
 
-            # checking if branch isMoving
+            # checking if branch is_moving
             # (first condition for low eta, second for high)
             if (
                 a1 < self.inflow_thresh * max_a1
                 or a1**self.eta < self.inflow_thresh * max_a1**self.eta
             ):
-                branch.isMoving = False
+                branch.is_moving = False
 
     def __streamline_extension(self, beta, dr):
         """Calculate a vector over which the tip is shifted.
@@ -164,8 +164,13 @@ class Streamline:
             An 1-2 array.
 
         """
-        y = ((beta**2) / 9) * ((27 * dr / (2 * beta**2) + 1) ** (2 / 3) - 1)
-        x = np.sign(beta) * 2 * ((y**3 / beta**2) + (y / beta) ** 4) ** (1 / 2)
+        if np.abs(beta) < 1000:
+            y = ((beta**2) / 9) * ((27 * dr / (2 * beta**2) + 1) ** (2 / 3) - 1)
+        else: 
+            y = dr - (9*dr**2)/(4*beta**2) + (27*dr**3)/(2*beta**4) - (1701*dr**4)/(16*beta**6)
+        x = np.around( \
+                      np.sign(beta) * 2 * ((y**3 / beta**2) + \
+                                           (y / beta) ** 4) ** (1 / 2), 7)
         return np.array([x, y])
 
     def find_test_dRs(self, network):
@@ -185,8 +190,6 @@ class Streamline:
         # self.pde_solver.a1a2a3_coefficients are updated in FreeFEM solver
         self.pde_solver.solve_PDE(network)
 
-        # dr norm, so that the fastest tip moves over ds
-        dr_norm = np.max(self.pde_solver.a1a2a3_coefficients[..., 0] ** self.eta)
         dRs_test = np.empty((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
             a1 = self.pde_solver.a1a2a3_coefficients[i, 0]
@@ -197,7 +200,7 @@ class Streamline:
             # system where the tip segment lies on a negative Y axis;
             # hence, we rotate obtained dR vector to that system
             tip_angle = branch.tip_angle()
-            dr = self.ds * a1**self.eta / dr_norm
+            dr = self.ds * a1**self.eta
             dRs_test[i] = np.dot(
                 self.__rotation_matrix(tip_angle), self.__streamline_extension(beta, dr)
             )
@@ -206,7 +209,7 @@ class Streamline:
     def assign_dRs(self, dRs, network):
         """Assign ``dRs`` to each branch in ``network``."""
         for i, branch in enumerate(network.active_branches):
-            if branch.isBifurcating:
+            if branch.is_bifurcating:
                 branch.dR = [
                     np.dot(self.__rotation_matrix(-self.bifurcation_angle / 2), dRs[i]),
                     np.dot(self.__rotation_matrix(self.bifurcation_angle / 2), dRs[i]),

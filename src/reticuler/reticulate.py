@@ -237,8 +237,8 @@ def main():
         network = Network(box=box, branches=branches, active_branches=branches.copy())
 
         # Trajectory integrator
-        if args.trajectory_integrator[0] == "modified_euler":
-            trajectory_integrator = trajectory_integrators.modified_euler
+        if args.trajectory_integrator[0] == "ModifiedEulerMethod":
+            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod
 
         # Solver
         if args.pde_solver[0] == "FreeFEM":

@@ -345,7 +345,7 @@ class FreeFEM:
 
         return script
 
-    def __run_freefem(self, script):
+    def __run_freefem_temp(self, script):
         """Run FreeFEM from temporary file and import the a1a2a3 coefficients."""
         temporary_files = []  # to close at the end
         with NamedTemporaryFile(suffix=".edp", mode="w", delete=False) as edp_temp_file:
@@ -367,10 +367,10 @@ class FreeFEM:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        # print("stdout:", result.stdout.decode())
-        # print("stderr:", result.stderr.decode())
         if result.returncode:
             print("\nFreeFem++ failed.\n")
+            print("stdout:", result.stdout.decode())
+            print("stderr:", result.stderr.decode())
 
         ai_coeffs_flat = np.fromstring(result.stdout, sep=",")
         self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
@@ -380,6 +380,36 @@ class FreeFEM:
         for tmp_file in temporary_files:
             tmp_file.close()
             os.unlink(tmp_file.name)
+
+    def __run_freefem(self, script):
+        """Run FreeFEM and import the a1a2a3 coefficients. Useful for debugging."""
+
+        with open("script.edp", "w") as edp_temp_file:
+            edp_temp_file.write(script)
+
+        cmd = [
+            "FreeFem++",
+            "-nw",
+            "-nc",
+            "-v",
+            "0",
+            "-f",
+            "{file_name}".format(file_name=edp_temp_file.name),
+        ]
+        result = subprocess.run(
+            args=cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        print("stdout:", result.stdout.decode())
+        print("stderr:", result.stderr.decode())
+        if result.returncode:
+            print("\nFreeFem++ failed.\n")
+
+        ai_coeffs_flat = np.fromstring(result.stdout, sep=",")
+        self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
+        print(self.a1a2a3_coefficients)
 
     def solve_PDE(self, network):
         """Solve the PDE for the field around the network.
@@ -398,4 +428,5 @@ class FreeFEM:
 
         """
         script = self.__prepare_script(network)
-        self.__run_freefem(script)
+        self.__run_freefem_temp(script)
+        # self.__run_freefem(script) # useful for debugging
