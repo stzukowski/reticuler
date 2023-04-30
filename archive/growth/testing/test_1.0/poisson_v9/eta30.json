@@ -1,0 +1,127 @@
+{
+    "reticuler_version": "0.4",
+    "exp_name": "eta30",
+    "growth": {
+        "threshold_type": "max tree length",
+        "threshold": 13,
+        "growth_gauges": {
+            "number_of_steps": 3.0,
+            "height": 0.029999999932642716,
+            "network_length": 0.03,
+            "time": 0.04584737685769384
+        },
+        "dump_every": 1
+    },
+    "extending_kernel": {
+        "trajectory_integrator": {
+            "type": "ModifiedEulerMethod",
+            "max_approximation_step": 3
+        },
+        "extender": {
+            "type": "Streamline",
+            "eta": 1.0,
+            "ds": 0.01,
+            "bifurcations": {
+                "type": "a3/a1",
+                "threshold": -0.1,
+                "angle": 1.2566370614359172
+            },
+            "inflow_thresh": 0.05,
+            "distance_from_bif_thresh": 0.021,
+            "pde_solver": {
+                "type": "FreeFEM",
+                "equation": "Poisson"
+            }
+        }
+    },
+    "network": {
+        "description": "Geometry of the system: box and branches.",
+        "box": {
+            "description": "Border geometry. Points should be in a counterclokwise order. Connections and boundary conditions (BC) -> 1st/2nd columns: point IDs, 3rd column: BC. Seeds connectivity -> 1st column: index on border, 2nd column: branch ID.",
+            "points": [
+                [
+                    2.0,
+                    0.0
+                ],
+                [
+                    2.0,
+                    2.0
+                ],
+                [
+                    0.0,
+                    2.0
+                ],
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    1.5,
+                    0.0
+                ]
+            ],
+            "connections_and_bc": [
+                [
+                    0,
+                    1,
+                    2
+                ],
+                [
+                    1,
+                    2,
+                    2
+                ],
+                [
+                    2,
+                    3,
+                    2
+                ],
+                [
+                    3,
+                    4,
+                    1
+                ],
+                [
+                    4,
+                    0,
+                    1
+                ]
+            ],
+            "seeds_connectivity": [
+                [
+                    4,
+                    0
+                ]
+            ]
+        },
+        "branch_connectivity": [],
+        "branches": {
+            "0": {
+                "ID": 0,
+                "state": "active",
+                "points_and_steps": [
+                    [
+                        1.5,
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        1.5,
+                        0.01,
+                        0.0
+                    ],
+                    [
+                        1.5000004604134627,
+                        0.019999999989400972,
+                        2.0
+                    ],
+                    [
+                        1.4999993949721782,
+                        0.029999999932642716,
+                        3.0
+                    ]
+                ]
+            }
+        }
+    }
+}

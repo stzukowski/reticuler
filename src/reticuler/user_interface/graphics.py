@@ -75,7 +75,5 @@ def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
     ax.set_facecolor("#def1ff")
     ax.set_aspect("equal")
     ax.set_xlim(0, xlim)
-    if ylim is None:
-        ax.set_ylim(0, y_max)
-    else:
-        ax.set_ylim(0, ylim)
+    ylim = 1.05*y_max if ylim is None else ylim
+    ax.set_ylim(0, ylim)    

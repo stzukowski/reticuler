@@ -18,7 +18,7 @@ import importlib.metadata
 from .extending_kernels import extenders, pde_solvers, trajectory_integrators
 
 
-class _NumpyEncoder(json.JSONEncoder):
+class NumpyEncoder(json.JSONEncoder):
     """Special json encoder for numpy types.
 
     References
@@ -29,6 +29,8 @@ class _NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.ndarray):
             return obj.tolist()
+        if isinstance(obj, np.int32): 
+            return int(obj)
         return json.JSONEncoder.default(self, obj)
 
 
@@ -49,9 +51,6 @@ class Branch:
     is_bifurcating : bool, default False
         A boolean condition if branch is bifurcating or not.
         (Based on the bifurcation_type and bifurcation_thresh from extender.)
-    is_moving : bool, default True
-        A boolean condition if branch is moving further or not
-        (Based on the inflow_thresh from extender.)
 
     """
 
@@ -76,22 +75,17 @@ class Branch:
 
         self.dR = 0
         self.is_bifurcating = False
-        self.is_moving = True
 
-    def extend_by_dR(self):
+    def extend(self):
         """Add a new point to ``self.points`` (progressed tip)."""
         self.points = np.vstack((self.points, self.points[-1] + self.dR))
 
     def length(self):
         """Return length of the Branch."""
-        return np.sum(
-            np.linalg.norm((np.roll(self.points, -1, axis=0) - self.points), axis=1)[
-                :-1
-            ]
-        )
+        return np.sum(np.linalg.norm(self.points[1:]-self.points[:-1], axis=1))
 
     def tip_angle(self):
-        """Return angle between the tip segment (last and penultimate point) and Y axis."""
+        """Return the angle between the tip segment (last and penultimate point) and Y axis."""
         point_penult = self.points[-2]
         point_last = self.points[-1]
         dx = point_last[0] - point_penult[0]
@@ -105,7 +99,7 @@ class Branch:
 
 class Box:
     """A class containing borders of the simulation domain.
-    
+
     Attributes
     ----------
     points : array, default []
@@ -122,11 +116,11 @@ class Box:
         A 2-n array of seeds connectivity.
             - 1st column: index in ``points``
             - 2nd column: outgoing branch ``ID`` 
-        
+
     """
 
     def __init__(
-        self, points=[], connections=[], boundary_conditions=[], seeds_connectivity=[]
+        self, points, connections, boundary_conditions, seeds_connectivity
     ):
         """Initialize Box.
 
@@ -142,14 +136,14 @@ class Box:
         None.
 
         """
-        self.points = points
+        self.points = points # [] if points is None else points
         self.connections = connections
         self.boundary_conditions = boundary_conditions
 
         # 1st column: index on border
         # 2nd column: branch_id
         self.seeds_connectivity = seeds_connectivity
-
+        
     def __add_points(self, points):
         if not len(self.points):
             self.points = points
@@ -178,7 +172,7 @@ class Box:
     @classmethod
     def construct(cls, initial_condition=0, **kwargs_construct):
         """Construct a Box with given initial condition.
-        
+
         Parameters
         ----------
         initial_condition : int, default 0
@@ -205,7 +199,7 @@ class Box:
             An object of class Box.
         branches : list
             A list of objects of class Branch.
-            
+
 
         """
         # Labels for boundary conditions
@@ -237,7 +231,8 @@ class Box:
             )
             box.seeds_connectivity = np.column_stack(
                 (
-                    len(box.points) + np.arange(len(options_construct["seeds_x"])),
+                    len(box.points) +
+                    np.arange(len(options_construct["seeds_x"])),
                     np.arange(len(options_construct["seeds_x"])),
                 )
             )
@@ -251,7 +246,8 @@ class Box:
             )
 
             connections_to_add = np.vstack(
-                [np.arange(len(box.points)), np.roll(np.arange(len(box.points)), -1)]
+                [np.arange(len(box.points)), np.roll(
+                    np.arange(len(box.points)), -1)]
             ).T
             box.__add_connection(
                 connections_to_add,
@@ -309,10 +305,10 @@ class Network:
     def __init__(
         self,
         box,
-        branches=[],
-        active_branches=[],
-        sleeping_branches=[],
-        branch_connectivity=[],
+        branches=None,
+        active_branches=None,
+        sleeping_branches=None,
+        branch_connectivity=None,
     ):
         """Initialize Network.
 
@@ -332,11 +328,13 @@ class Network:
 
         self.box = box
 
-        self.branches = branches  # all branches (to construct mesh): moving + sleeping + branches inside the tree
-        self.active_branches = active_branches  # moving branches (to extend)
-        self.sleeping_branches = sleeping_branches  # branches without enough flux to move (may revive in the Poisson case)
+        # all branches (to construct mesh): moving + sleeping + branches inside the tree
+        self.branches = [] if branches is None else branches
+        self.active_branches = [] if active_branches is None else active_branches  # moving branches (to extend)
+        # branches without enough flux to move (may revive in the Poisson case)
+        self.sleeping_branches = [] if sleeping_branches is None else sleeping_branches
 
-        self.branch_connectivity = branch_connectivity
+        self.branch_connectivity = [] if branch_connectivity is None else branch_connectivity
 
     def copy(self):
         """Return a deepcopy of the Network."""
@@ -356,7 +354,8 @@ class Network:
         if not len(self.branch_connectivity):
             self.branch_connectivity = connection
         else:
-            self.branch_connectivity = np.vstack((self.branch_connectivity, connection))
+            self.branch_connectivity = np.vstack(
+                (self.branch_connectivity, connection))
 
     def move_tips(self, step):
         """Move tips (with bifurcations and killing).
@@ -374,29 +373,26 @@ class Network:
 
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = self.active_branches.copy()
-        for i, branch in enumerate(branches_to_iterate):
-            if not branch.is_moving:
-                self.sleeping_branches.append(branch)
-                self.active_branches.remove(branch)
-                print("! Branch {ID} is sleeping !".format(ID=branch.ID))
-            else:
-                if branch.is_bifurcating:
-                    print("! Branch {ID} bifurcated !".format(ID=branch.ID))
-                    max_branch_id = len(self.branches) - 1
+        for branch in branches_to_iterate:
+            if branch.is_bifurcating:
+                print("! Branch {ID} bifurcated !".format(ID=branch.ID))
+                max_branch_id = len(self.branches) - 1
 
-                    for i, dR in enumerate(branch.dR):
-                        points = np.array([branch.points[-1], branch.points[-1] + dR])
-                        branch_new = Branch(
-                            ID=max_branch_id + i + 1,
-                            points=points,
-                            steps=np.array([step - 1]),
-                        )
-                        self.branches.append(branch_new)
-                        self.active_branches.append(branch_new)
-                        self.__add_connection(np.array([branch.ID, branch_new.ID]))
-                    self.active_branches.remove(branch)
-                else:
-                    branch.extend_by_dR()
+                for i, dR in enumerate(branch.dR):
+                    points = np.array(
+                        [branch.points[-1], branch.points[-1] + dR])
+                    branch_new = Branch(
+                        ID=max_branch_id + i + 1,
+                        points=points,
+                        steps=np.array([step - 1]),
+                    )
+                    self.branches.append(branch_new)
+                    self.active_branches.append(branch_new)
+                    self.__add_connection(
+                        np.array([branch.ID, branch_new.ID]))
+                self.active_branches.remove(branch)
+            else:
+                branch.extend()
 
 
 class System:
@@ -408,8 +404,8 @@ class System:
         An object of class Network.
     extender : Extender
         An object of one of the classes from reticuler.extending_kernels.extenders.
-    trajectory_integrator : function
-        One of the classes from reticuler.extending_kernels.trajectory_integrator.
+    trajectory_integrator : TrajectoryIntegrator
+        One of the classes from reticuler.extending_kernels.trajectory_integrators.
     growth_thresh_type : int, default 0
         Type of growth threshold.
             - 0: number of steps
@@ -431,9 +427,9 @@ class System:
         network,
         extender,
         trajectory_integrator,
-        growth_gauges=np.zeros(4),
         growth_thresh_type=0,
         growth_thresh=5,
+        growth_gauges=None,
         dump_every=1,
         exp_name="",
     ):
@@ -462,16 +458,21 @@ class System:
         # Growth limits:
         # 0: number of steps, 1: max height
         # 2: max tree length 3: max time
-        self.growth_gauges = growth_gauges
+        self.growth_gauges = np.zeros(4) if growth_gauges is None else growth_gauges
         self.growth_thresh_type = growth_thresh_type
         self.growth_thresh = growth_thresh
 
         self.dump_every = dump_every
         self.exp_name = exp_name
+    
+    def copy(self):
+        """Return a deepcopy of the Network."""
+        return copy.deepcopy(self)
 
     def export_json(self):
         """Export all the information to 'self.exp_name'+'.json'."""
-        growth_type_legend = ["number of steps", "max height", "max tree length", "max time"]
+        growth_type_legend = ["number of steps",
+                              "max height", "max tree length", "max time"]
         export_general = {
             "reticuler_version": importlib.metadata.version("reticuler"),
             "exp_name": self.exp_name,
@@ -487,21 +488,22 @@ class System:
                 "dump_every": self.dump_every,
             },
         }
-        
+
         if type(self.extender).__name__ == "Streamline":
             if type(self.trajectory_integrator).__name__ == "ModifiedEulerMethod":
                 export_trajectory_integrator = {
                     "type": type(self.trajectory_integrator).__name__,
                     "max_approximation_step": self.trajectory_integrator.max_approximation_step,
-                }            
+                }
             if type(self.extender.pde_solver).__name__ == "FreeFEM":
                 equation_legend = ["Laplace", "Poisson"]
                 export_solver = {
                     "type": type(self.extender.pde_solver).__name__,
                     "equation": equation_legend[self.extender.pde_solver.equation],
-                }            
+                }
 
-            bifurcation_type_legend = ["no bifurcations", "a1", "a3/a1", "random"]
+            bifurcation_type_legend = [
+                "no bifurcations", "a1", "a3/a1", "random"]
             export_extender = {
                 "type": type(self.extender).__name__,
                 "eta": self.extender.eta,
@@ -517,7 +519,7 @@ class System:
                 "distance_from_bif_thresh": self.extender.distance_from_bif_thresh,
                 "pde_solver": {**export_solver},
             }
-            
+
             export_extending_kernel = {
                 "extending_kernel": {
                     "trajectory_integrator": {**export_trajectory_integrator},
@@ -557,7 +559,8 @@ class System:
 
         to_export = export_general | export_extending_kernel | export_network
         with open(self.exp_name + ".json", "w", encoding="utf-8") as f:
-            json.dump(to_export, f, ensure_ascii=False, indent=4, cls=_NumpyEncoder)
+            json.dump(to_export, f, ensure_ascii=False,
+                      indent=4, cls=NumpyEncoder)
 
     @classmethod
     def import_json(cls, input_file):
@@ -586,7 +589,7 @@ class System:
             branch = Branch(
                 ID=json_branch["ID"],
                 points=points_steps[:, :2],
-                steps=points_steps[:, 2],
+                steps=np.array(points_steps[:, 2], dtype=int),
             )
 
             branches.append(branch)
@@ -594,9 +597,6 @@ class System:
                 active_branches.append(branch)
             elif json_branch["state"] == "sleeping":
                 sleeping_branches.append(branch)
-                branch.is_moving = False
-            elif json_branch["state"] == "dead":
-                branch.is_moving = False
 
         # Box
         json_box = json_load["network"]["box"]
@@ -608,7 +608,8 @@ class System:
             seeds_connectivity=np.asarray(json_box["seeds_connectivity"]),
         )
         # Network
-        branch_connectivity = np.asarray(json_load["network"]["branch_connectivity"])
+        branch_connectivity = np.asarray(
+            json_load["network"]["branch_connectivity"])
         network = Network(
             box=box,
             branches=branches,
@@ -623,7 +624,8 @@ class System:
         ]
         if json_trajectory_integrator["type"] == "ModifiedEulerMethod":
             max_approximation_step = json_trajectory_integrator["max_approximation_step"]
-            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod(max_approximation_step=max_approximation_step)
+            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod(
+                max_approximation_step=max_approximation_step)
 
         # Solver
         json_solver = json_load["extending_kernel"]["extender"]["pde_solver"]
@@ -636,8 +638,10 @@ class System:
         json_extender = json_load["extending_kernel"]["extender"]
         if json_extender["type"] == "Streamline":
             json_bifurcation = json_extender["bifurcations"]
-            bifurcation_type_legend = ["no bifurcations", "a1", "a3/a1", "random"]
-            bifurcation_type = bifurcation_type_legend.index(json_bifurcation["type"])
+            bifurcation_type_legend = [
+                "no bifurcations", "a1", "a3/a1", "random"]
+            bifurcation_type = bifurcation_type_legend.index(
+                json_bifurcation["type"])
             extender = extenders.Streamline(
                 pde_solver=pde_solver,
                 eta=json_extender["eta"],
@@ -653,8 +657,10 @@ class System:
 
         # General
         json_growth = json_load["growth"]
-        growth_type_legend = ["number of steps", "max height", "max tree length", "max time"]
-        growth_thresh_type = growth_type_legend.index(json_growth["threshold_type"])
+        growth_type_legend = ["number of steps",
+                              "max height", "max tree length", "max time"]
+        growth_thresh_type = growth_type_legend.index(
+            json_growth["threshold_type"])
         growth_thresh = json_growth["threshold"]
         dump_every = json_growth["dump_every"]
 
@@ -683,13 +689,15 @@ class System:
 
     def __update_growth_gauges(self, dt):
         """Update growth gauges."""
-        self.growth_gauges[1], self.growth_gauges[2] = self.network.height_and_length()
+        self.growth_gauges[1], self.growth_gauges[2] = self.network.height_and_length(
+        )
         self.growth_gauges[3] = self.growth_gauges[3] + dt
 
-        print("Active branches: {n:d}".format(n=len(self.network.active_branches)))
+        print("Active branches: {n:d}".format(
+            n=len(self.network.active_branches)))
         print("Network height: {h:.3f}".format(h=self.growth_gauges[1]))
         print("Network length: {l:.3f}".format(l=self.growth_gauges[2]))
-        print("Evolution time: {l:.3f}".format(l=self.growth_gauges[3]))
+        print("Evolution time: {t:.3f}".format(t=self.growth_gauges[3]))
 
         for branch in self.network.active_branches:
             branch.steps = np.append(branch.steps, self.growth_gauges[0])
@@ -716,7 +724,8 @@ class System:
             )
             print("Date and time: ", datetime.datetime.now())
 
-            dt = self.trajectory_integrator.integrate(extender=self.extender, network=self.network)
+            dt, _ = self.trajectory_integrator.integrate(
+                extender=self.extender, network=self.network)
             self.network.move_tips(step=self.growth_gauges[0])
             self.__update_growth_gauges(dt)
 

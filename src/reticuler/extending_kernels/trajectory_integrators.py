@@ -1,7 +1,7 @@
-"""Functions to integrate the tips trajectory.
+"""Classes to integrate tip trajectories.
 
-Functions:
-    modified_euler(extender, network, max_approximation_step=3)
+Classes:
+    ModifiedEulerMethod
 
 """
 
@@ -51,7 +51,7 @@ class ModifiedEulerMethod:
         """
         for i, branch in enumerate(network.active_branches):
             branch.dR = dRs[i]
-            branch.extend_by_dR()
+            branch.extend()
 
     def integrate(self, extender, network, is_BEA_off=True):
         """Integrate tip trajectories with modified Euler's method.
@@ -73,21 +73,18 @@ class ModifiedEulerMethod:
             Time of growth at the current evolution step.
         a1a2a3_coefficients_0 : array
             An array of a_i coefficients for each tip in the network.
-            Not returned if is_BEA_off.
     
         """
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
-        dRs_0 = extender.find_test_dRs(network)
-        if is_BEA_off:
-            # normalize, so that the fastest tip moves over ds
-            dRs_0 = dRs_0 / np.max(np.linalg.norm(dRs_0, axis=1)) * extender.ds
-        else:
-            # here we want to move over dt as in the backward step,
-            # so no normalization
-            a1a2a3_coefficients_0 = extender.pde_solver.a1a2a3_coefficients_0
+        dRs_0 = extender.find_test_dRs(network, is_BEA_off)
+        
+        # in the BEA we want to move over dt as in the backward step,
+        # so no normalization
+        a1a2a3_coefficients_0 = extender.pde_solver.a1a2a3_coefficients
             
-        # checking if each branch is_moving or is_bifurcating
-        extender.check_bifurcation_and_moving_conditions(network)
+        # checking if branches are_moving or each branch.is_bifurcating
+        are_moving = extender.check_bifurcation_and_moving_conditions(network)
+        dRs_0 = dRs_0[are_moving]
         # print('a1, a2, a3:\n',extender.pde_solver.a1a2a3_coefficients)
     
         # moving test_system by dRs_0
@@ -106,31 +103,28 @@ class ModifiedEulerMethod:
             approximation_step = approximation_step + 1
     
             # v[ x(n+1)] ]: finding velocity at the next point
-            dRs_1 = extender.find_test_dRs(test_network)
-    
+            dRs_1 = extender.find_test_dRs(test_network, is_BEA_off)
+            
             # calculating approximation error and average dR
-            epsilon = np.sum(np.linalg.norm(dRs_test - (dRs_0 + dRs_1) / 2, axis=1)) / len(
-                dRs_0
-            )
+            epsilon = np.sum(np.linalg.norm(dRs_test - \
+                            (dRs_0 + dRs_1) / 2, axis=1)) / len(dRs_0)
             dRs_test = (dRs_0 + dRs_1) / 2
             if is_BEA_off:
-                # normalize
                 dRs_test = dRs_test * extender.ds / np.max(np.linalg.norm(dRs_test, axis=1))
-    
+                
             # moving test_system by dR
             test_network = network.copy()
             self.move_test_tips(test_network, dRs_test)
-    
+            
             # print('Forth loop, approximation step: {step}, epsilon = {eps}'.format(step=approximation_step, eps=epsilon) )
-    
-        extender.assign_dRs(dRs_test, network)
-        
         if is_BEA_off:
             # normally division dX/a1^eta would give single dt
             # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
             # dt is not perfectly the same for different tips, so we take a mean
             dt = np.mean( np.linalg.norm(dRs_test, axis=1) / extender.pde_solver.a1a2a3_coefficients[...,0]**extender.eta)
-            return dt
         else: 
             dt = extender.ds
-            return dt, a1a2a3_coefficients_0
+        
+        extender.assign_dRs(network, dRs_test)
+        
+        return dt, a1a2a3_coefficients_0

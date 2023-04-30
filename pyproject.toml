@@ -8,7 +8,7 @@ include = ["reticuler*"]  # package names should match these glob patterns (["*"
 
 [project]
 name = "reticuler"
-version = "0.4"
+version = "1.0"
 authors = [
 	{name="Stanisław Żukowski"},
 	{email="zukowski.st@gmail.com"}
@@ -31,5 +31,7 @@ dependencies = [
 "Source" = "https://github.com/stzukowski/reticuler"
 
 [project.scripts]
-reticulate = "reticuler.reticulate:main"
-plot_ret = "reticuler.plot_ret:main"
+reticulate = "reticuler.user_interface.reticulate:main"
+reticulate_back = "reticuler.user_interface.reticulate_back:main"
+plot_ret = "reticuler.user_interface.plot_ret:main"
+clip_ret = "reticuler.user_interface.clip_ret:main"
