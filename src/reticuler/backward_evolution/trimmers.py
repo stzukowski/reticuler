@@ -44,7 +44,7 @@ class BackwardModifiedEulerMethod:
     def __init__(
         self,
         pde_solver,
-        eta=1.0,
+        eta=0.0,
         ds=0.01,
         max_approximation_step=3,
         inflow_thresh = 0.05,
@@ -74,91 +74,6 @@ class BackwardModifiedEulerMethod:
         # less than `inflow_thresh` of max flux/velocity puts branches asleep
         self.inflow_thresh = inflow_thresh
         
-    def trim(self, network, backward_branches_0, backward_bifurcations_0, BEA_step):
-        """Perform backward step with the reversed modified Euler's method and the streamline algorithm.
-    
-        Parameters
-        ----------
-        network : Network
-            An object of class Network.
-        backward_branches_0 : list
-            A list of all backward branches.
-        backward_bifurcations_0 : BackwardBifurcations
-            An object of class BackwardBifurcations.
-        BEA_step : int
-            Current step of the BEA.            
-    
-        Returns
-        -------
-        initial_network : Network
-            The initial network with updated active_branches list (removed branches: (i) aren't moving, (ii) reached bifurcation)
-        test_network : Network
-            A network after backward evolution step.
-        backward_branches : list
-            An updated list of all backward branches.
-        backward_bifurcations : BackwardBifurcations
-            An updated object of class BackwardBifurcations.
-        dt : float
-            Time of (backward) growth at the current BEA step.
-        
-        Returns
-        -------
-        None.
-                
-        """
-        # activate sleeping branches        
-        network.active_branches = network.active_branches + network.sleeping_branches
-        network.sleeping_branches = []
-        
-        # v[x(n)]: finding velocity at the starting point
-        self.pde_solver.solve_PDE(network)
-        velocity_0 = self.pde_solver.a1a2a3_coefficients[:, 0]**self.eta
-        dt_0 = self.ds / np.max(velocity_0)
-        drs_0 = dt_0 * velocity_0
-
-        # are moving?
-        are_moving = self.__check_moving_conditions(network) # here we put branches to sleep
-        drs_0 = drs_0[are_moving]
-        initial_network = network.copy()
-        
-        # x(n-1): trimming drs_0 from test_network
-        backward_branches = copy.deepcopy(backward_branches_0)
-        backward_bifurcations = copy.deepcopy(backward_bifurcations_0)
-        test_network = network.copy()
-        are_living_after_bif = self.__explicit_network_trim(test_network, drs_0, backward_branches, backward_bifurcations, BEA_step)
-
-        if test_network.active_branches:
-            drs = np.zeros_like(drs_0)   
-            approximation_step = 0
-            # APPROXIMATION LOOP
-            while approximation_step < self.max_approximation_step and not (~are_living_after_bif).all():
-                approximation_step = approximation_step + 1
-
-                # v[x(n-1)]: finding velocity at the x(n-1) point
-                self.pde_solver.solve_PDE(test_network)
-                velocity_1 = self.pde_solver.a1a2a3_coefficients[:, 0]**self.eta
-                drs_1 = dt_0 * velocity_1
-
-                # 0.5 * dt * (v[x(n)] + v[x(n-1)]): average drs
-                drs[np.logical_not(are_living_after_bif)] = drs_0[np.logical_not(are_living_after_bif)] / 2
-                # !!! dead tips after bif don't move, so dt*(v[x(n)] + v[x(n-1)])/2 = dt*v[x(n-1)]/2 - it was commented in matlab code?
-                drs[are_living_after_bif] = (drs_0[are_living_after_bif] + drs_1) / 2
-                velocity = drs/dt_0
-                dt = self.ds / np.max(velocity)
-                drs = dt * velocity
-
-                # improved x(n-1)
-                backward_branches = copy.deepcopy(backward_branches_0)
-                backward_bifurcations = copy.deepcopy(backward_bifurcations_0)
-                test_network = network.copy()
-                are_living_after_bif = self.__explicit_network_trim(test_network, drs, backward_branches, backward_bifurcations, BEA_step)
-                
-            initial_network.active_branches = [b for i, b in enumerate(network.active_branches) if are_living_after_bif[i]]
-        else:
-            dt = 0
-        
-        return initial_network, test_network, backward_branches, backward_bifurcations, dt        
-        
     def __check_moving_conditions(self, network):
         """Check moving conditions."""
         a1 = self.pde_solver.a1a2a3_coefficients[:, 0]
@@ -175,17 +90,15 @@ class BackwardModifiedEulerMethod:
                 # print("! Branch {ID} is sleeping !".format(ID=branch.ID))                
         return are_moving
 
-    def __explicit_network_trim(self, test_network, drs, backward_branches, backward_bifurcations, BEA_step):
+    def __explicit_network_trim(self, test_network, drs_0, backward_branches, backward_bifurcations, BEA_step):
         """Trim branches with given ``drs``."""
         min_distance = 0.0001  # avoid two nodes very close to each other after trimming
 
-        drs_0 = drs.copy()
+        drs = drs_0.copy()
         branches_to_iterate = test_network.active_branches.copy()
         are_living_after_bif = np.ones(len(branches_to_iterate), dtype=bool)
         for i, forward_branch in enumerate(branches_to_iterate):
             backward_branch = backward_branches[forward_branch.ID]
-            # if len(backward_branch.steps)==0 or backward_branch.steps[-1]<BEA_step-1:
-            backward_branch.add_point(forward_branch.points[-1], BEA_step-1) 
             
             # check the distances from the tip to bifurcation point
             segment_lengths = np.linalg.norm(
@@ -199,7 +112,7 @@ class BackwardModifiedEulerMethod:
                 # how many points to remove
                 to_remove = np.sum(drs[i]+min_distance > length_from_tip)
                 
-                if to_remove:
+                if to_remove>0:
                     forward_branch.points = forward_branch.points[:-to_remove]
                     forward_branch.steps = forward_branch.steps[:-to_remove]
                     drs[i] = drs[i] - length_from_tip[to_remove-1]
@@ -209,12 +122,12 @@ class BackwardModifiedEulerMethod:
                     tip_versor = forward_branch.points[-1] - forward_branch.points[-2]
                     tip_versor = tip_versor / np.linalg.norm(tip_versor)
                     forward_branch.points[-1] = forward_branch.points[-1] - tip_versor * drs[i]
+                    backward_branch.add_point(forward_branch.points[-1], len(forward_branch.points)-1, BEA_step) 
                     
             # bifurcation reached
             else:
                 drs[i] = drs[i] - length_from_tip[-1]
-                # if backward_branch.steps[-1]<BEA_step:
-                backward_branch.add_point(forward_branch.points[-1], BEA_step)
+                backward_branch.add_point(forward_branch.points[-1], 0, BEA_step) 
                                 
                 mask = test_network.branch_connectivity[:,1]!=forward_branch.ID
                 test_network.branch_connectivity = test_network.branch_connectivity[mask,...]
@@ -268,14 +181,100 @@ class BackwardModifiedEulerMethod:
         branch_IDs = np.array([b.ID for b in network.branches])
         remaining_length = 0
         remaining_IDs = []
-        while to_check:
+        while to_check.size:
             next_ID = to_check[0]
             remaining_length = remaining_length + network.branches[np.where(branch_IDs==next_ID)[0][0]].length()
             
             to_add = network.branch_connectivity[network.branch_connectivity[:,0]==next_ID,1]
-            if to_add:
+            if to_add.size:
                 to_check = np.concatenate((to_check, to_add))
+                remaining_IDs.append(next_ID)
             else:
                 remaining_IDs.append(next_ID)
             to_check = to_check[1:]
         return remaining_length, remaining_IDs
+    
+    def trim(self, network, backward_branches_0, backward_bifurcations_0, BEA_step):
+        """Perform backward step with the reversed modified Euler's method and the streamline algorithm.
+    
+        Parameters
+        ----------
+        network : Network
+            An object of class Network.
+        backward_branches_0 : list
+            A list of all backward branches.
+        backward_bifurcations_0 : BackwardBifurcations
+            An object of class BackwardBifurcations.
+        BEA_step : int
+            Current step of the BEA.            
+    
+        Returns
+        -------
+        initial_network : Network
+            The initial network with updated active_branches list (removed branches: (i) aren't moving, (ii) reached bifurcation)
+        test_network : Network
+            A network after backward evolution step.
+        backward_branches : list
+            An updated list of all backward branches.
+        backward_bifurcations : BackwardBifurcations
+            An updated object of class BackwardBifurcations.
+        dt : float
+            Time of (backward) growth at the current BEA step.
+        
+        Returns
+        -------
+        None.
+                
+        """
+        # activate sleeping branches        
+        network.active_branches = network.sleeping_branches + network.active_branches
+        network.sleeping_branches = []
+        
+        # v[x(n)]: finding velocity at the starting point
+        self.pde_solver.solve_PDE(network)
+        velocity_0 = self.pde_solver.a1a2a3_coefficients[:, 0]**self.eta
+        dt_0 = self.ds / np.max(velocity_0)
+        drs_0 = dt_0 * velocity_0
+
+        # are moving?
+        are_moving = self.__check_moving_conditions(network) # here we put branches to sleep
+        drs_0 = drs_0[are_moving]
+        initial_network = network.copy()
+        
+        # x(n-1): trimming drs_0 from test_network
+        backward_branches = copy.deepcopy(backward_branches_0)
+        backward_bifurcations = copy.deepcopy(backward_bifurcations_0)
+        test_network = network.copy()
+        are_living_after_bif = self.__explicit_network_trim(test_network, drs_0, backward_branches, backward_bifurcations, BEA_step)
+        if test_network.active_branches:
+            drs = np.zeros_like(drs_0)   
+            approximation_step = 0
+            # APPROXIMATION LOOP
+            while approximation_step < self.max_approximation_step and not (~are_living_after_bif).all():
+                approximation_step = approximation_step + 1
+
+                # v[x(n-1)]: finding velocity at the x(n-1) point
+                self.pde_solver.solve_PDE(test_network)
+                velocity_1 = self.pde_solver.a1a2a3_coefficients[:, 0]**self.eta
+                drs_1 = dt_0 * velocity_1
+
+                # 0.5 * dt * (v[x(n)] + v[x(n-1)]): average drs
+                # drs[np.logical_not(are_living_after_bif)] = drs_0[np.logical_not(are_living_after_bif)] / 2
+                # !!! dead tips after bif don't move, so dt*(v[x(n)] + v[x(n-1)])/2 = dt*v[x(n-1)]/2 - it was commented in matlab code?
+                drs[are_living_after_bif] = (drs_0[are_living_after_bif] + drs_1) / 2
+                velocity = drs / dt_0
+                dt = self.ds / np.max(velocity)
+                drs = dt * velocity
+
+                # improved x(n-1)
+                backward_branches = copy.deepcopy(backward_branches_0)
+                backward_bifurcations = copy.deepcopy(backward_bifurcations_0)
+                test_network = network.copy()
+                are_living_after_bif = self.__explicit_network_trim(test_network, drs, backward_branches, backward_bifurcations, BEA_step)
+                
+            initial_network.active_branches = [b for i, b in enumerate(network.active_branches) if are_living_after_bif[i]]
+        else:
+            dt = 0
+        
+        return initial_network, test_network, backward_branches, backward_bifurcations, dt        
+        

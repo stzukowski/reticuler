@@ -1,0 +1,330 @@
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INITIALISATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+verbosity = 0;
+
+real time0=clock();
+
+// Defining the base vectors of the analytical field around a tip
+func real BaseVector(int nf, complex zf)
+{
+  real result=0;
+
+  if (nf%2==0) 
+    result = -imag(zf^(nf/2.));
+  else 
+    result = real(zf^(nf/2.));
+  return result;
+}
+
+// Adaptation around the tip
+func real tipfield( real[int] X, real[int] Y,real sigma,int nTips)
+{
+real err=0;
+for(int i=0;i<nTips;i++)
+	{
+		real rsq=(x-X(i))^2 + (y-Y(i))^2;
+
+		if (rsq==0)
+			err+=1-erf(1);
+		else //if (rsq<2.*square(sigma))
+			err+=1 - 0.3*erf(1) + 0.3*erf(sqrt(rsq/(2*sigma^2)));
+		// else
+		//	err+=1;
+	}
+return err;
+}
+
+// Projection of a mesh around the tip
+func int inCircle (real x, real y, real R)
+{
+    if (x^2+y^2<R^2) return 1;
+    else return 0;
+}
+
+// Counting vertices in the circle around the tip
+real x0=0., y0=0.;
+func int[int] countNvAroundTips (real R, mesh Th, int nbVertices, int nbTips, real[int] X, real[int] Y)
+{
+	int[int] nvAroundTips(nbTips);
+	for(int i=0;i<nbTips;++i)
+	{
+		x0=X(i);
+		y0=Y(i);
+		int nvAroundTip = 0;
+		for (int i = 0; i < nbVertices; i++)
+			if ((x0-Th(i).x)^2 + (y0-Th(i).y)^2 < R^2) 
+				nvAroundTip += 1;		
+		nvAroundTips(i) = nvAroundTip;
+	};
+
+	return nvAroundTips;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// BUILDING MESH
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+real buildTime0=clock();
+
+border box0(t=0, 1){x=2.000000000000e+00+t*(0.000000000000e+00);y=0.000000000000e+00+t*(5.000000000000e+01); label=2.000000000000e+00;}
+border box1(t=0, 1){x=2.000000000000e+00+t*(-2.000000000000e+00);y=5.000000000000e+01+t*(0.000000000000e+00); label=3.000000000000e+00;}
+border box2(t=0, 1){x=0.000000000000e+00+t*(0.000000000000e+00);y=5.000000000000e+01+t*(-5.000000000000e+01); label=2.000000000000e+00;}
+border box3(t=0, 1){x=0.000000000000e+00+t*(1.500000000000e+00);y=0.000000000000e+00+t*(0.000000000000e+00); label=1.000000000000e+00;}
+border box4(t=0, 1){x=1.500000000000e+00+t*(5.000000000000e-01);y=0.000000000000e+00+t*(0.000000000000e+00); label=1.000000000000e+00;}
+border branch0connection0(t=0, 1){x=1.500000000000e+00+t*(0.000000000000e+00);y=0.000000000000e+00+t*(1.000000000000e-02); label=1;}
+border branch0connection1(t=0, 1){x=1.500000000000e+00+t*(-4.428750836061e-06);y=1.000000000000e-02+t*(9.999999019308e-03); label=1;}
+border branch0connection2(t=0, 1){x=1.499995571249e+00+t*(-3.002508703887e-07);y=1.999999901931e-02+t*(9.999999995492e-03); label=1;}
+border branch0connection3(t=0, 1){x=1.499995270998e+00+t*(-3.600087161715e-08);y=2.999999901480e-02+t*(9.999999999935e-03); label=1;}
+border branch0connection4(t=0, 1){x=1.499995234997e+00+t*(-6.227508742018e-07);y=3.999999901474e-02+t*(9.999999980609e-03); label=1;}
+border branch0connection5(t=0, 1){x=1.499994612247e+00+t*(-1.731500873348e-06);y=4.999999899534e-02+t*(9.999999850095e-03); label=1;}
+border branch0connection6(t=0, 1){x=1.499992880746e+00+t*(-2.369000861258e-06);y=5.999999884544e-02+t*(9.999999719392e-03); label=1;}
+border branch0connection7(t=0, 1){x=1.499990511745e+00+t*(-4.818500713322e-06);y=6.999999856483e-02+t*(9.999998839102e-03); label=1;}
+border branch0connection8(t=0, 1){x=1.499985693244e+00+t*(-5.568250627253e-06);y=7.999999740393e-02+t*(9.999998449729e-03); label=1;}
+border branch0connection9(t=0, 1){x=1.499980124993e+00+t*(-6.188750522051e-06);y=8.999999585366e-02+t*(9.999998084968e-03); label=1;}
+border branch0connection10(t=0, 1){x=1.499973936243e+00+t*(-7.818250128633e-06);y=9.999999393863e-02+t*(9.999996943748e-03); label=1;}
+border branch0connection11(t=0, 1){x=1.499966117993e+00+t*(-9.710749405256e-06);y=1.099999908824e-01+t*(9.999995285066e-03); label=1;}
+border branch0connection12(t=0, 1){x=1.499956407243e+00+t*(-1.165649832546e-05);y=1.199999861674e-01+t*(9.999993206300e-03); label=1;}
+border branch0connection13(t=0, 1){x=1.499944750745e+00+t*(-1.345924691631e-05);y=1.299999793737e-01+t*(9.999990942430e-03); label=1;}
+border branch0connection14(t=0, 1){x=1.499931291498e+00+t*(-1.556274479797e-05);y=1.399999703162e-01+t*(9.999987890041e-03); label=1;}
+border branch0connection15(t=0, 1){x=1.499915728753e+00+t*(-2.211773332439e-05);y=1.499999582062e-01+t*(9.999975540264e-03); label=1;}
+border branch0connection16(t=0, 1){x=1.499893611020e+00+t*(-2.754521666004e-05);y=1.599999337465e-01+t*(9.999962062980e-03); label=1;}
+border branch0connection17(t=0, 1){x=1.499866065803e+00+t*(-3.061120382619e-05);y=1.699998958095e-01+t*(9.999953147600e-03); label=1;}
+border branch0connection18(t=0, 1){x=1.499835454600e+00+t*(-3.782991173873e-05);y=1.799998489571e-01+t*(9.999928444633e-03); label=1;}
+border branch0connection19(t=0, 1){x=1.499797624688e+00+t*(-4.288562060717e-05);y=1.899997774017e-01+t*(9.999908040754e-03); label=1;}
+border branch0connection20(t=0, 1){x=1.499754739067e+00+t*(-5.008529304384e-05);y=1.999996854424e-01+t*(9.999874572384e-03); label=1;}
+border branch0connection21(t=0, 1){x=1.499704653774e+00+t*(-5.682319692002e-05);y=2.099995600148e-01+t*(9.999838554911e-03); label=1;}
+border branch0connection22(t=0, 1){x=1.499647830577e+00+t*(-6.384756937505e-05);y=2.199993985697e-01+t*(9.999796172317e-03); label=1;}
+border branch0connection23(t=0, 1){x=1.499583983008e+00+t*(-7.062191650475e-05);y=2.299991947421e-01+t*(9.999750624136e-03); label=1;}
+border branch0connection24(t=0, 1){x=1.499513361091e+00+t*(-7.822520642886e-05);y=2.399989453662e-01+t*(9.999694036173e-03); label=1;}
+border branch0connection25(t=0, 1){x=1.499435135885e+00+t*(-9.015778457377e-05);y=2.499986394024e-01+t*(9.999593570435e-03); label=1;}
+border branch0connection26(t=0, 1){x=1.499344978100e+00+t*(-1.035229090764e-04);y=2.599982329728e-01+t*(9.999464136007e-03); label=1;}
+border branch0connection27(t=0, 1){x=1.499241455191e+00+t*(-1.158761667754e-04);y=2.699976971088e-01+t*(9.999328613161e-03); label=1;}
+border branch0connection28(t=0, 1){x=1.499125579025e+00+t*(-1.261319164345e-04);y=2.799970257220e-01+t*(9.999204505342e-03); label=1;}
+border branch0connection29(t=0, 1){x=1.498999447108e+00+t*(-1.399419450934e-04);y=2.899962302273e-01+t*(9.999020764655e-03); label=1;}
+border branch0connection30(t=0, 1){x=1.498859505163e+00+t*(-1.508997868782e-04);y=2.999952509920e-01+t*(9.998861397895e-03); label=1;}
+border branch0connection31(t=0, 1){x=1.498708605376e+00+t*(-1.622746430361e-04);y=3.099941123899e-01+t*(9.998683260321e-03); label=1;}
+border branch0connection32(t=0, 1){x=1.498546330733e+00+t*(-1.764311139658e-04);y=3.199927956502e-01+t*(9.998443481964e-03); label=1;}
+border branch0connection33(t=0, 1){x=1.498369899619e+00+t*(-1.903120310938e-04);y=3.299912391322e-01+t*(9.998188902537e-03); label=1;}
+border branch0connection34(t=0, 1){x=1.498179587588e+00+t*(-2.031173039612e-04);y=3.399894280347e-01+t*(9.997936955234e-03); label=1;}
+border branch0connection35(t=0, 1){x=1.497976470284e+00+t*(-2.222062396653e-04);y=3.499873649899e-01+t*(9.997530914534e-03); label=1;}
+border branch0connection36(t=0, 1){x=1.497754264044e+00+t*(-2.419089360137e-04);y=3.599848959045e-01+t*(9.997073575136e-03); label=1;}
+border branch0connection37(t=0, 1){x=1.497512355108e+00+t*(-2.617813856205e-04);y=3.699819694796e-01+t*(9.996572938069e-03); label=1;}
+border branch1connection0(t=0, 1){x=1.497250573723e+00+t*(-6.100986450204e-03);y=3.799785424177e-01+t*(7.923254655407e-03); label=1;}
+border branch1connection1(t=0, 1){x=1.491149587273e+00+t*(-5.525644186728e-03);y=3.879017970731e-01+t*(8.334701933583e-03); label=1;}
+border branch1connection2(t=0, 1){x=1.485623943086e+00+t*(-5.760055260730e-03);y=3.962364990067e-01+t*(8.174457987741e-03); label=1;}
+border branch1connection3(t=0, 1){x=1.479863887825e+00+t*(-5.687079944076e-03);y=4.044109569944e-01+t*(8.225394927278e-03); label=1;}
+border branch1connection4(t=0, 1){x=1.474176807881e+00+t*(-5.597523122604e-03);y=4.126363519217e-01+t*(8.286599718335e-03); label=1;}
+border branch1connection5(t=0, 1){x=1.468579284758e+00+t*(-5.529592479664e-03);y=4.209229516400e-01+t*(8.332082993396e-03); label=1;}
+border branch1connection6(t=0, 1){x=1.463049692279e+00+t*(-5.463268066299e-03);y=4.292550346334e-01+t*(8.375720986026e-03); label=1;}
+border branch1connection7(t=0, 1){x=1.457586424212e+00+t*(-5.387459388385e-03);y=4.376307556194e-01+t*(8.424682862785e-03); label=1;}
+border branch1connection8(t=0, 1){x=1.452198964824e+00+t*(-5.311655767594e-03);y=4.460554384822e-01+t*(8.472680390915e-03); label=1;}
+border branch1connection9(t=0, 1){x=1.446887309056e+00+t*(-5.246424157488e-03);y=4.545281188731e-01+t*(8.513226976871e-03); label=1;}
+border branch1connection10(t=0, 1){x=1.441640884899e+00+t*(-5.185417539095e-03);y=4.630413458500e-01+t*(8.550523080213e-03); label=1;}
+border branch1connection11(t=0, 1){x=1.436455467360e+00+t*(-5.129077171098e-03);y=4.715918689302e-01+t*(8.584437510572e-03); label=1;}
+border branch1connection12(t=0, 1){x=1.431326390189e+00+t*(-5.075237841604e-03);y=4.801763064408e-01+t*(8.616377478451e-03); label=1;}
+border branch1connection13(t=0, 1){x=1.426251152347e+00+t*(-5.024068773452e-03);y=4.887926839192e-01+t*(8.646313258241e-03); label=1;}
+border branch1connection14(t=0, 1){x=1.421227083574e+00+t*(-4.968469520881e-03);y=4.974389971775e-01+t*(8.678381797321e-03); label=1;}
+border branch1connection15(t=0, 1){x=1.416258614053e+00+t*(-4.912513839579e-03);y=5.061173789748e-01+t*(8.710178400925e-03); label=1;}
+border branch1connection16(t=0, 1){x=1.411346100213e+00+t*(-4.864154918698e-03);y=5.148275573757e-01+t*(8.737276287660e-03); label=1;}
+border branch1connection17(t=0, 1){x=1.406481945295e+00+t*(-4.819316318150e-03);y=5.235648336634e-01+t*(8.762088234298e-03); label=1;}
+border branch1connection18(t=0, 1){x=1.401662628976e+00+t*(-4.776006932734e-03);y=5.323269218977e-01+t*(8.785770186983e-03); label=1;}
+border branch1connection19(t=0, 1){x=1.396886622044e+00+t*(-4.733310348782e-03);y=5.411126920847e-01+t*(8.808846300289e-03); label=1;}
+border branch1connection20(t=0, 1){x=1.392153311695e+00+t*(-4.691719690625e-03);y=5.499215383849e-01+t*(8.831068244816e-03); label=1;}
+border branch1connection21(t=0, 1){x=1.387461592004e+00+t*(-4.651729731294e-03);y=5.587526066298e-01+t*(8.852198060764e-03); label=1;}
+border branch1connection22(t=0, 1){x=1.382809862273e+00+t*(-4.613539819307e-03);y=5.676048046905e-01+t*(8.872161536834e-03); label=1;}
+border branch1connection23(t=0, 1){x=1.378196322454e+00+t*(-4.575322915873e-03);y=5.764769662274e-01+t*(8.891930061325e-03); label=1;}
+border branch1connection24(t=0, 1){x=1.373620999538e+00+t*(-4.525487471425e-03);y=5.853688962887e-01+t*(8.917396657432e-03); label=1;}
+border branch1connection25(t=0, 1){x=1.369095512066e+00+t*(-4.477433311566e-03);y=5.942862929461e-01+t*(8.941621270244e-03); label=1;}
+border branch1connection26(t=0, 1){x=1.364618078755e+00+t*(-4.437731459660e-03);y=6.032279142164e-01+t*(8.961391604653e-03); label=1;}
+border branch1connection27(t=0, 1){x=1.360180347295e+00+t*(-4.397848688673e-03);y=6.121893058210e-01+t*(8.981031505987e-03); label=1;}
+border branch1connection28(t=0, 1){x=1.355782498606e+00+t*(-4.361848261678e-03);y=6.211703373270e-01+t*(8.998570983334e-03); label=1;}
+border branch1connection29(t=0, 1){x=1.351420650345e+00+t*(-4.328109045516e-03);y=6.301689083103e-01+t*(9.014847313744e-03); label=1;}
+border branch1connection30(t=0, 1){x=1.347092541299e+00+t*(-4.291098066238e-03);y=6.391837556241e-01+t*(9.032523312227e-03); label=1;}
+border branch1connection31(t=0, 1){x=1.342801443233e+00+t*(-4.254937538969e-03);y=6.482162789363e-01+t*(9.049613612717e-03); label=1;}
+border branch1connection32(t=0, 1){x=1.338546505694e+00+t*(-4.218118478330e-03);y=6.572658925490e-01+t*(9.066833874224e-03); label=1;}
+border branch1connection33(t=0, 1){x=1.334328387216e+00+t*(-4.189169960455e-03);y=6.663327264233e-01+t*(9.080245318406e-03); label=1;}
+border branch1connection34(t=0, 1){x=1.330139217255e+00+t*(-4.154625268663e-03);y=6.754129717417e-01+t*(9.096102949999e-03); label=1;}
+border branch1connection35(t=0, 1){x=1.325984591987e+00+t*(-4.122037137702e-03);y=6.845090746917e-01+t*(9.110917068847e-03); label=1;}
+border branch2connection0(t=0, 1){x=1.497250573723e+00+t*(5.650154474726e-03);y=3.799785424177e-01+t*(8.250803258576e-03); label=1;}
+border branch2connection1(t=0, 1){x=1.502900728197e+00+t*(5.011853500547e-03);y=3.882293456762e-01+t*(8.621278159825e-03); label=1;}
+border branch2connection2(t=0, 1){x=1.507912581698e+00+t*(5.221578225930e-03);y=3.968506238361e-01+t*(8.467779916115e-03); label=1;}
+border branch2connection3(t=0, 1){x=1.513134159924e+00+t*(5.106573092719e-03);y=4.053184037522e-01+t*(8.502100873080e-03); label=1;}
+border branch2connection4(t=0, 1){x=1.518240733017e+00+t*(4.973606253244e-03);y=4.138205046253e-01+t*(8.549524182935e-03); label=1;}
+border branch2connection5(t=0, 1){x=1.523214339270e+00+t*(4.872869266698e-03);y=4.223700288082e-01+t*(8.577066487244e-03); label=1;}
+border branch2connection6(t=0, 1){x=1.528087208537e+00+t*(4.766015735307e-03);y=4.309470952954e-01+t*(8.599388490311e-03); label=1;}
+border branch2connection7(t=0, 1){x=1.532853224272e+00+t*(4.655623308163e-03);y=4.395464837857e-01+t*(8.633454920185e-03); label=1;}
+border branch2connection8(t=0, 1){x=1.537508847580e+00+t*(4.536363732712e-03);y=4.481799387059e-01+t*(8.655459903128e-03); label=1;}
+border branch2connection9(t=0, 1){x=1.542045211313e+00+t*(4.431557622937e-03);y=4.568353986091e-01+t*(8.672106267248e-03); label=1;}
+border branch2connection10(t=0, 1){x=1.546476768936e+00+t*(4.331438535650e-03);y=4.655075048763e-01+t*(8.681653547248e-03); label=1;}
+border branch2connection11(t=0, 1){x=1.550808207471e+00+t*(4.243613355728e-03);y=4.741891584236e-01+t*(8.700752762056e-03); label=1;}
+border branch2connection12(t=0, 1){x=1.555051820827e+00+t*(4.150077616150e-03);y=4.828899111856e-01+t*(8.700737709531e-03); label=1;}
+border branch2connection13(t=0, 1){x=1.559201898443e+00+t*(4.063752188022e-03);y=4.915906488951e-01+t*(8.707490528386e-03); label=1;}
+border branch2connection14(t=0, 1){x=1.563265650631e+00+t*(3.966291333734e-03);y=5.002981394235e-01+t*(8.714527040421e-03); label=1;}
+border branch2connection15(t=0, 1){x=1.567231941965e+00+t*(3.865467042245e-03);y=5.090126664639e-01+t*(8.716554076327e-03); label=1;}
+border branch2connection16(t=0, 1){x=1.571097409007e+00+t*(3.779100647727e-03);y=5.177292205403e-01+t*(8.718078622318e-03); label=1;}
+border branch2connection17(t=0, 1){x=1.574876509655e+00+t*(3.694261452155e-03);y=5.264472991626e-01+t*(8.708147161104e-03); label=1;}
+border branch2connection18(t=0, 1){x=1.578570771107e+00+t*(3.614225174464e-03);y=5.351554463237e-01+t*(8.704899889110e-03); label=1;}
+border branch2connection19(t=0, 1){x=1.582184996282e+00+t*(3.533198628469e-03);y=5.438603462128e-01+t*(8.697227489469e-03); label=1;}
+border branch2connection20(t=0, 1){x=1.585718194910e+00+t*(3.456040760282e-03);y=5.525575737023e-01+t*(8.688785004202e-03); label=1;}
+border branch2connection21(t=0, 1){x=1.589174235670e+00+t*(3.378239903849e-03);y=5.612463587065e-01+t*(8.674298367034e-03); label=1;}
+border branch2connection22(t=0, 1){x=1.592552475574e+00+t*(3.303343779308e-03);y=5.699206570735e-01+t*(8.666823402984e-03); label=1;}
+border branch2connection23(t=0, 1){x=1.595855819354e+00+t*(3.224895400791e-03);y=5.785874804765e-01+t*(8.655954605770e-03); label=1;}
+border branch2connection24(t=0, 1){x=1.599080714754e+00+t*(3.132458061272e-03);y=5.872434350823e-01+t*(8.649661218050e-03); label=1;}
+border branch2connection25(t=0, 1){x=1.602213172816e+00+t*(3.042614951038e-03);y=5.958930963003e-01+t*(8.640954263337e-03); label=1;}
+border branch2connection26(t=0, 1){x=1.605255787767e+00+t*(2.959097663144e-03);y=6.045340505637e-01+t*(8.627386734275e-03); label=1;}
+border branch2connection27(t=0, 1){x=1.608214885430e+00+t*(2.883980193874e-03);y=6.131614372979e-01+t*(8.610467226747e-03); label=1;}
+border branch2connection28(t=0, 1){x=1.611098865624e+00+t*(2.809203472624e-03);y=6.217719045247e-01+t*(8.601028720386e-03); label=1;}
+border branch2connection29(t=0, 1){x=1.613908069096e+00+t*(2.731379798292e-03);y=6.303729332451e-01+t*(8.585131617022e-03); label=1;}
+border branch2connection30(t=0, 1){x=1.616639448895e+00+t*(2.657157282784e-03);y=6.389580648621e-01+t*(8.567731317151e-03); label=1;}
+border branch2connection31(t=0, 1){x=1.619296606177e+00+t*(2.585523200404e-03);y=6.475257961792e-01+t*(8.553355924481e-03); label=1;}
+border branch2connection32(t=0, 1){x=1.621882129378e+00+t*(2.518529316548e-03);y=6.560791521037e-01+t*(8.531629274792e-03); label=1;}
+border branch2connection33(t=0, 1){x=1.624400658694e+00+t*(2.437281417033e-03);y=6.646107813785e-01+t*(8.518039861523e-03); label=1;}
+border branch2connection34(t=0, 1){x=1.626837940111e+00+t*(2.369104453399e-03);y=6.731288212400e-01+t*(8.500653718745e-03); label=1;}
+border branch2connection35(t=0, 1){x=1.629207044565e+00+t*(2.301901533859e-03);y=6.816294749588e-01+t*(8.477871165710e-03); label=1;}
+border branch2connection36(t=0, 1){x=1.631508946099e+00+t*(2.234758851695e-03);y=6.901073461245e-01+t*(8.457683142672e-03); label=1;}
+border branch2connection37(t=0, 1){x=1.633743704950e+00+t*(2.492644093107e-03);y=6.985650292672e-01+t*(9.684354672620e-03); label=1;}
+border branch2connection38(t=0, 1){x=1.636236349043e+00+t*(2.426799004901e-03);y=7.082493839398e-01+t*(9.701064198830e-03); label=1;}
+border branch3connection0(t=0, 1){x=1.321862554849e+00+t*(-8.674349219291e-03);y=6.936199917605e-01+t*(4.975506569364e-03); label=1;}
+border branch3connection1(t=0, 1){x=1.313188205630e+00+t*(-7.921710523163e-03);y=6.985954983299e-01+t*(5.390182639685e-03); label=1;}
+border branch3connection2(t=0, 1){x=1.305266495106e+00+t*(-7.969382653428e-03);y=7.039856809696e-01+t*(5.172266524732e-03); label=1;}
+border branch4connection0(t=0, 1){x=1.321862554849e+00+t*(2.051466620759e-03);y=6.936199917605e-01+t*(9.787312435184e-03); label=1;}
+border branch4connection1(t=0, 1){x=1.323914021470e+00+t*(1.218907345918e-03);y=7.034073041957e-01+t*(9.519161164590e-03); label=1;}
+border branch4connection2(t=0, 1){x=1.325132928816e+00+t*(1.399449653762e-03);y=7.129264653603e-01+t*(9.436319988232e-03); label=1;}
+
+mesh Th = buildmesh( box0(25) + box1(1) + box2(25) + box3(1) + box4(1) + branch0connection0(1) + branch0connection1(1) + branch0connection2(1) + branch0connection3(1) + branch0connection4(1) + branch0connection5(1) + branch0connection6(1) + branch0connection7(1) + branch0connection8(1) + branch0connection9(1) + branch0connection10(1) + branch0connection11(1) + branch0connection12(1) + branch0connection13(1) + branch0connection14(1) + branch0connection15(1) + branch0connection16(1) + branch0connection17(1) + branch0connection18(1) + branch0connection19(1) + branch0connection20(1) + branch0connection21(1) + branch0connection22(1) + branch0connection23(1) + branch0connection24(1) + branch0connection25(1) + branch0connection26(1) + branch0connection27(1) + branch0connection28(1) + branch0connection29(1) + branch0connection30(1) + branch0connection31(1) + branch0connection32(1) + branch0connection33(1) + branch0connection34(1) + branch0connection35(1) + branch0connection36(1) + branch0connection37(1) + branch1connection0(1) + branch1connection1(1) + branch1connection2(1) + branch1connection3(1) + branch1connection4(1) + branch1connection5(1) + branch1connection6(1) + branch1connection7(1) + branch1connection8(1) + branch1connection9(1) + branch1connection10(1) + branch1connection11(1) + branch1connection12(1) + branch1connection13(1) + branch1connection14(1) + branch1connection15(1) + branch1connection16(1) + branch1connection17(1) + branch1connection18(1) + branch1connection19(1) + branch1connection20(1) + branch1connection21(1) + branch1connection22(1) + branch1connection23(1) + branch1connection24(1) + branch1connection25(1) + branch1connection26(1) + branch1connection27(1) + branch1connection28(1) + branch1connection29(1) + branch1connection30(1) + branch1connection31(1) + branch1connection32(1) + branch1connection33(1) + branch1connection34(1) + branch1connection35(1) + branch2connection0(1) + branch2connection1(1) + branch2connection2(1) + branch2connection3(1) + branch2connection4(1) + branch2connection5(1) + branch2connection6(1) + branch2connection7(1) + branch2connection8(1) + branch2connection9(1) + branch2connection10(1) + branch2connection11(1) + branch2connection12(1) + branch2connection13(1) + branch2connection14(1) + branch2connection15(1) + branch2connection16(1) + branch2connection17(1) + branch2connection18(1) + branch2connection19(1) + branch2connection20(1) + branch2connection21(1) + branch2connection22(1) + branch2connection23(1) + branch2connection24(1) + branch2connection25(1) + branch2connection26(1) + branch2connection27(1) + branch2connection28(1) + branch2connection29(1) + branch2connection30(1) + branch2connection31(1) + branch2connection32(1) + branch2connection33(1) + branch2connection34(1) + branch2connection35(1) + branch2connection36(1) + branch2connection37(1) + branch2connection38(1) + branch3connection0(1) + branch3connection1(1) + branch3connection2(1) + branch4connection0(1) + branch4connection1(1) + branch4connection2(1) );
+
+real buildTime=clock() - buildTime0;
+// plot(Th, wait=true);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// TIP INFORMATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int nbTips=3; 
+real[int] angle(nbTips);
+real[int] X(nbTips); 
+real[int] Y(nbTips);
+
+X(0)=1.638663148048e+00;
+Y(0)=7.179504481386e-01;
+angle(0)=1.325668945169e+00;
+X(1)=1.297297112453e+00;
+Y(1)=7.091579474943e-01;
+angle(1)=2.565908629959e+00;
+X(2)=1.326532378469e+00;
+Y(2)=7.223627853485e-01;
+angle(2)=1.423564883852e+00;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DEFINING PROBLEM AND equation TO SOLVE
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+fespace Vh(Th,P2);
+Vh u,v;
+
+problem potential(u,v,solver=sparsesolver)=
+         int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
+             -int1d(Th,3)(v)  // constant flux
+			 // +on(3,u=50) // constant field
+			 // -int2d(Th)(v) // rain in domain
+             +on(1,u=0);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ADAPTING THE MESH AND SOLVING FOR THE FIELD
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+
+// counting cells around the tips
+real R=0.01; // circle around the tip over which field is integrated
+int[int] nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
+
+// First adaptation
+real firstAdaptTime0=clock();
+// Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
+Th = adaptmesh(Th,1,nbvx=500000,hmax=0.1,nbsmooth=100,iso=true,ratio=1.8);
+real firstAdaptTime=clock() - firstAdaptTime0;
+// plot(Th, wait=true);
+
+// Solving the problem for the first time
+real firstRunTime0=clock();
+potential;
+// cout<<"First solve completed."<<endl;
+real firstRunTime=clock() - firstRunTime0;
+
+// Adaptation loop
+real adaptTime0=clock();
+// cout << endl << endl << "Adaptation..." << endl;
+fespace Vh0(Th,P0);
+Vh0 h=1;
+real error=0.02;
+int adaptCounter=1;
+while(nvAroundTips.min < 250 || adaptCounter<=3)
+{
+	// cout << "Adaptation step: " << adaptCounter << ", h[].min = " << h[].min;
+	// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
+	potential;
+	Th=adaptmesh(Th,[u, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5);
+	error = 0.5*error;
+	u=u;
+	h=hTriangle; // the triangle size
+	nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
+	adaptCounter++;
+}
+
+// cout << endl << "Adaptation finished." << " h[].min = " << h[].min;
+// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
+
+// solving with adapted mesh
+potential;
+// cout << "Problem solved." << endl;
+// plot(u, wait=true, fill=true);
+
+real adaptTime=clock() - adaptTime0;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+real coeffTime0=clock();
+// cout << endl << endl << "Finding the Tip coefficients..." << endl;
+
+mesh Ph;
+real[int] a(3); // list of coefficients of the expansion
+int exponant=2; // precision of the exponential
+// ofstream freefemOutput("{file_name}");
+
+cout.precision(50);
+cout << "kopytko ";
+for(int i=0;i<nbTips;++i)
+{
+    // cout << "Processing Tip " << i << " ";   
+    x0=X(i);y0=Y(i);
+    // cout << "(x0, y0) = (" << x0 << ", " <<y0<< "), angle = " << angle(i) << endl;
+
+	// cout << "Projecting... Th.nv = " << Th.nv;
+    Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R)); 
+	// cout << ", Ph.nv = " << Ph.nv << endl;
+
+    for(int order=1; order<=a.n; ++order){ 
+        a[order-1]=
+        int2d(Ph)( u*exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
+		*BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) ) /
+        (int2d(Ph)(exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
+		*square(BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) )));
+
+		cout << a[order-1] << ",";
+        // cout << "a(" << order << ") = " << a[order-1] << endl;
+    }
+	// freefemOutput << Th.nv << " ";
+	// freefemOutput << Ph.nv << " ";
+	// freefemOutput << adaptCounter << " ";
+
+	// cout << endl;
+};
+
+// cout << endl << endl << "Building mesh took: " << buildTime; 
+// cout << endl << "First adapt took: " << firstAdaptTime; 
+// cout << endl << "First run took: " << firstRunTime; 
+// cout << endl << "Adaptation took: " << adaptTime; 
+// cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
+// cout << endl << "Total time: " << clock()-time0 << endl << endl;

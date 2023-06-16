@@ -1,0 +1,348 @@
+{
+    "reticuler_version": "1.0",
+    "exp_name": "eta00_results",
+    "BEA_parameters": {
+        "back_forth_steps_thresh": 1,
+        "BEA_step": 1,
+        "BEA_step_thresh": 10000.0,
+        "dump_every": 1
+    },
+    "trimmer": {
+        "type": "BackwardModifiedEulerMethod",
+        "eta": 0.0,
+        "ds": 0.01,
+        "max_approximation_step": 3,
+        "inflow_thresh": 0.05,
+        "pde_solver": {
+            "type": "FreeFEM",
+            "equation": "Laplace"
+        }
+    },
+    "backward_bifurcations": {
+        "description": "Information gathered in the bifurcation points: mother_ID, a1, a2, a3, length mismatch, flag",
+        "bif_info": [
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                4.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                5.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                8.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                9.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                12.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                13.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                16.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+            ]
+        ]
+    },
+    "backward_branches": {
+        "18": {
+            "ID": 18,
+            "mother_ID": 16,
+            "points_and_steps": [
+                [
+                    1.0501888628159763,
+                    2.5078265576252026,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.613554197366,
+                    -0.0065261398395,
+                    1.10216299575
+                ]
+            ],
+            "overshoot": [
+                1.2472096683592205e-05
+            ],
+            "angular_deflection": [
+                -0.0012472086198402899
+            ]
+        },
+        "17": {
+            "ID": 17,
+            "mother_ID": 16,
+            "points_and_steps": [
+                [
+                    0.8359741847469281,
+                    2.4853801543716143,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.698979430967,
+                    0.00949948527697,
+                    0.814984781142
+                ]
+            ],
+            "overshoot": [
+                1.3801822211544661e-06
+            ],
+            "angular_deflection": [
+                0.00013787621619343327
+            ]
+        },
+        "16": {
+            "ID": 16,
+            "mother_ID": 13,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "15": {
+            "ID": 15,
+            "mother_ID": 13,
+            "points_and_steps": [
+                [
+                    0.7274902637540538,
+                    2.140315760446888,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.284826612352,
+                    -0.0226160804671,
+                    0.436945063713
+                ]
+            ],
+            "overshoot": [
+                0.00022131624108574254
+            ],
+            "angular_deflection": [
+                -0.022133434129064877
+            ]
+        },
+        "14": {
+            "ID": 14,
+            "mother_ID": 12,
+            "points_and_steps": [
+                [
+                    1.4284026963571634,
+                    2.4836906068014426,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.702118792829,
+                    -0.00419417458793,
+                    0.589672407775
+                ]
+            ],
+            "overshoot": [
+                4.491478756893321e-07
+            ],
+            "angular_deflection": [
+                -4.489994670975328e-05
+            ]
+        },
+        "13": {
+            "ID": 13,
+            "mother_ID": 12,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "12": {
+            "ID": 12,
+            "mother_ID": 9,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "11": {
+            "ID": 11,
+            "mother_ID": 9,
+            "points_and_steps": [
+                [
+                    0.8345507567204999,
+                    1.6788769872808793,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.0781359450124,
+                    -0.0141311328671,
+                    0.140278768787
+                ]
+            ],
+            "overshoot": [
+                0.0003040409853093981
+            ],
+            "angular_deflection": [
+                -0.0304107867003518
+            ]
+        },
+        "10": {
+            "ID": 10,
+            "mother_ID": 8,
+            "points_and_steps": [
+                [
+                    1.5228921879445771,
+                    1.8403825241235492,
+                    0.0
+                ]
+            ],
+            "a1a2a3_coefficients": [
+                [
+                    0.099280590016,
+                    0.01300053988,
+                    0.166635319984
+                ]
+            ],
+            "overshoot": [
+                0.00017417588959265084
+            ],
+            "angular_deflection": [
+                0.017419363773915286
+            ]
+        },
+        "9": {
+            "ID": 9,
+            "mother_ID": 8,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "8": {
+            "ID": 8,
+            "mother_ID": 5,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "7": {
+            "ID": 7,
+            "mother_ID": 5,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "6": {
+            "ID": 6,
+            "mother_ID": 4,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "5": {
+            "ID": 5,
+            "mother_ID": 4,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "4": {
+            "ID": 4,
+            "mother_ID": 1,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "3": {
+            "ID": 3,
+            "mother_ID": 1,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "2": {
+            "ID": 2,
+            "mother_ID": 0,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "1": {
+            "ID": 1,
+            "mother_ID": 0,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        },
+        "0": {
+            "ID": 0,
+            "mother_ID": -1,
+            "points_and_steps": [],
+            "a1a2a3_coefficients": [],
+            "overshoot": [],
+            "angular_deflection": []
+        }
+    }
+}

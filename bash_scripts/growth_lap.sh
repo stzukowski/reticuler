@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# reticulate -out test --growth_params "{\"growth_thresh\":1}" -ic 0 --kwargs_box "{\"seeds_x\":1.5}"
+
 function run_single_exp {
 	eta=`printf '%.3f' "$(echo "scale=3; $1/10" | bc)"`
 	

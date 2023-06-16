@@ -1,0 +1,259 @@
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INITIALISATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+verbosity = 0;
+
+real time0=clock();
+
+// Defining the base vectors of the analytical field around a tip
+func real BaseVector(int nf, complex zf)
+{
+  real result=0;
+
+  if (nf%2==0) 
+    result = -imag(zf^(nf/2.));
+  else 
+    result = real(zf^(nf/2.));
+  return result;
+}
+
+// Adaptation around the tip
+func real tipfield( real[int] X, real[int] Y,real sigma,int nTips)
+{
+real err=0;
+for(int i=0;i<nTips;i++)
+	{
+		real rsq=(x-X(i))^2 + (y-Y(i))^2;
+
+		if (rsq==0)
+			err+=1-erf(1);
+		else //if (rsq<2.*square(sigma))
+			err+=1 - 0.3*erf(1) + 0.3*erf(sqrt(rsq/(2*sigma^2)));
+		// else
+		//	err+=1;
+	}
+return err;
+}
+
+// Projection of a mesh around the tip
+func int inCircle (real x, real y, real R)
+{
+    if (x^2+y^2<R^2) return 1;
+    else return 0;
+}
+
+// Counting vertices in the circle around the tip
+real x0=0., y0=0.;
+func int[int] countNvAroundTips (real R, mesh Th, int nbVertices, int nbTips, real[int] X, real[int] Y)
+{
+	int[int] nvAroundTips(nbTips);
+	for(int i=0;i<nbTips;++i)
+	{
+		x0=X(i);
+		y0=Y(i);
+		int nvAroundTip = 0;
+		for (int i = 0; i < nbVertices; i++)
+			if ((x0-Th(i).x)^2 + (y0-Th(i).y)^2 < R^2) 
+				nvAroundTip += 1;		
+		nvAroundTips(i) = nvAroundTip;
+	};
+
+	return nvAroundTips;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// BUILDING MESH
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+real buildTime0=clock();
+
+border box0(t=0, 1){x=2+t*(0);y=0+t*(50); label=2;}
+border box1(t=0, 1){x=2+t*(-2);y=50+t*(0); label=3;}
+border box2(t=0, 1){x=0+t*(0);y=50+t*(-50); label=2;}
+border box3(t=0, 1){x=0+t*(1.5);y=0+t*(0); label=1;}
+border box4(t=0, 1){x=1.5+t*(0.5);y=0+t*(0); label=1;}
+border branch0connection0(t=0, 1){x=1.5+t*(0);y=0+t*(0.01); label=1;}
+border branch0connection1(t=0, 1){x=1.5+t*(-3.7080007222467515e-06);y=0.01+t*(0.0099999993125365078); label=1;}
+border branch0connection2(t=0, 1){x=1.4999962919992778+t*(-1.5490005462748258e-06);y=0.019999999312536508+t*(0.009999999880029864); label=1;}
+border branch0connection3(t=0, 1){x=1.4999947429987315+t*(-1.3805005745215482e-06);y=0.029999999192566372+t*(0.0099999999047109059); label=1;}
+border branch0connection4(t=0, 1){x=1.499993362498157+t*(-8.4925051413442532e-07);y=0.039999999097277278+t*(0.0099999999639386744); label=1;}
+border branch0connection5(t=0, 1){x=1.4999925132476428+t*(1.0757495005897511e-06);y=0.049999999061215952+t*(0.0099999999421381547); label=1;}
+border branch0connection6(t=0, 1){x=1.4999935889971434+t*(-9.1125059564767241e-07);y=0.059999999003354107+t*(0.0099999999584811233); label=1;}
+border branch0connection7(t=0, 1){x=1.4999926777465478+t*(-4.4255005440252404e-06);y=0.06999999896183523+t*(0.009999999020747205); label=1;}
+border branch0connection8(t=0, 1){x=1.4999882522460037+t*(-3.016000629463278e-06);y=0.079999997982582435+t*(0.0099999995451870022); label=1;}
+border branch0connection9(t=0, 1){x=1.4999852362453743+t*(-4.1700005579681232e-06);y=0.089999997527769438+t*(0.0099999991305547292); label=1;}
+border branch0connection10(t=0, 1){x=1.4999810662448163+t*(-6.4530003009988235e-06);y=0.099999996658324167+t*(0.0099999979179391379); label=1;}
+border branch0connection11(t=0, 1){x=1.4999746132445153+t*(-5.2365012934707522e-06);y=0.1099999945762633+t*(0.0099999986289526221); label=1;}
+border branch0connection12(t=0, 1){x=1.4999693767432218+t*(-9.7670001102390103e-06);y=0.11999999320521593+t*(0.0099999952302843031); label=1;}
+border branch0connection13(t=0, 1){x=1.4999596097431116+t*(-1.2052248899552254e-05);y=0.12999998843550023+t*(0.0099999927371621777); label=1;}
+border branch0connection14(t=0, 1){x=1.499947557494212+t*(-9.3182505656042025e-06);y=0.13999998117266241+t*(0.0099999956585093697); label=1;}
+border branch0connection15(t=0, 1){x=1.4999382392436464+t*(-1.9459990434178565e-05);y=0.14999997683117178+t*(0.0099999810654206878); label=1;}
+border branch0connection16(t=0, 1){x=1.4999187792532123+t*(-2.2947482703594702e-05);y=0.15999995789659247+t*(0.0099999736706172238); label=1;}
+border branch0connection17(t=0, 1){x=1.4998958317705087+t*(-2.8222966523827608e-05);y=0.16999993156720969+t*(0.009999960173128708); label=1;}
+border branch0connection18(t=0, 1){x=1.4998676088039848+t*(-3.464543644771112e-05);y=0.1799998917403384+t*(0.0099999399845065728); label=1;}
+border branch0connection19(t=0, 1){x=1.4998329633675371+t*(-4.1502888191491394e-05);y=0.18999983172484497+t*(0.0099999138751427075); label=1;}
+border branch0connection20(t=0, 1){x=1.4997914604793456+t*(-4.6180593316513807e-05);y=0.19999974559998768+t*(0.0099998933670715218); label=1;}
+border branch0connection21(t=0, 1){x=1.4997452798860291+t*(-4.992430030248407e-05);y=0.2099996389670592+t*(0.0099998753774354354); label=1;}
+border branch0connection22(t=0, 1){x=1.4996953555857266+t*(-5.5894217550145342e-05);y=0.21999951434449463+t*(0.0099998437906021476); label=1;}
+border branch0connection23(t=0, 1){x=1.4996394613681765+t*(-6.4714558499989749e-05);y=0.22999935813509678+t*(0.0099997905991034697); label=1;}
+border branch0connection24(t=0, 1){x=1.4995747468096765+t*(-7.5821285445920594e-05);y=0.23999914873420025+t*(0.0099997125525023711); label=1;}
+border branch0connection25(t=0, 1){x=1.4994989255242306+t*(-8.8326615763412164e-05);y=0.24999886128670262+t*(0.0099996099128389915); label=1;}
+border branch0connection26(t=0, 1){x=1.4994105989084672+t*(-9.9038646263815977e-05);y=0.25999847119954161+t*(0.0099995095553004898); label=1;}
+border branch0connection27(t=0, 1){x=1.4993115602622034+t*(-0.0001102280345539608);y=0.2699979807548421+t*(0.0099993924705653048); label=1;}
+border branch0connection28(t=0, 1){x=1.4992013322276494+t*(-0.00012676237525988121);y=0.27999737322540741+t*(0.0099991965327329568); label=1;}
+border branch0connection29(t=0, 1){x=1.4990745698523895+t*(-0.00013044032189246657);y=0.28999656975814037+t*(0.0099991492299307261); label=1;}
+border branch0connection30(t=0, 1){x=1.498944129530497+t*(-0.0001428784111909831);y=0.29999571898807109+t*(0.0099989792358828322); label=1;}
+border branch0connection31(t=0, 1){x=1.4988012511193061+t*(-0.00015793495906324395);y=0.30999469822395392+t*(0.0099987527496536166); label=1;}
+border branch0connection32(t=0, 1){x=1.4986433161602428+t*(-0.00016993709852508587);y=0.31999345097360754+t*(0.0099985559648653743); label=1;}
+border branch0connection33(t=0, 1){x=1.4984733790617177+t*(-0.00018554338579179763);y=0.32999200693847291+t*(0.0099982785344272518); label=1;}
+border branch0connection34(t=0, 1){x=1.4982878356759259+t*(-0.00020217301211200578);y=0.33999028547290017+t*(0.0099979560947812685); label=1;}
+border branch0connection35(t=0, 1){x=1.4980856626638139+t*(-0.00021593226460003834);y=0.34998824156768144+t*(0.0099976683910352193); label=1;}
+border branch0connection36(t=0, 1){x=1.4978697303992139+t*(-0.00023741849671932158);y=0.35998590995871665+t*(0.009997181225596341); label=1;}
+border branch0connection37(t=0, 1){x=1.4976323119024946+t*(-0.00025529357402431785);y=0.369983091184313+t*(0.0099967407284105581); label=1;}
+border branch1connection0(t=0, 1){x=1.4973770183284703+t*(-0.006095024075462474);y=0.37997983191272355+t*(0.0079278421729707671); label=1;}
+border branch1connection1(t=0, 1){x=1.4912819942530078+t*(-0.0055073280602229158);y=0.38790767408569432+t*(0.0083468160179244744); label=1;}
+border branch1connection2(t=0, 1){x=1.4857746661927849+t*(-0.0057479035743821516);y=0.39625449010361879+t*(0.0081830070572867508); label=1;}
+border branch1connection3(t=0, 1){x=1.4800267626184027+t*(-0.0056807682351369682);y=0.40443749716090555+t*(0.0082297552976172694); label=1;}
+border branch1connection4(t=0, 1){x=1.4743459943832657+t*(-0.0055929876437574855);y=0.41266725245852282+t*(0.0082896615863843892); label=1;}
+border branch1connection5(t=0, 1){x=1.4687530067395083+t*(-0.0055178765421795006);y=0.4209569140449072+t*(0.0083398464293573671); label=1;}
+border branch1connection6(t=0, 1){x=1.4632351301973288+t*(-0.0054543251709802121);y=0.42929676047426457+t*(0.0083815474066076256); label=1;}
+border branch2connection0(t=0, 1){x=1.4973770183284703+t*(0.0056563599383210317);y=0.37997983191272355+t*(0.0082465503241146987); label=1;}
+border branch2connection1(t=0, 1){x=1.5030333782667913+t*(0.0049981683288100598);y=0.38822638223683825+t*(0.0086249323475112716); label=1;}
+border branch2connection2(t=0, 1){x=1.5080315465956013+t*(0.0052141300499837229);y=0.39685131458434952+t*(0.008464230187315569); label=1;}
+border branch2connection3(t=0, 1){x=1.5132456766455851+t*(0.0051011384032628726);y=0.40531554477166509+t*(0.0085008631623751385); label=1;}
+border branch2connection4(t=0, 1){x=1.5183468150488479+t*(0.0049811359235267805);y=0.41381640793404023+t*(0.0085406832306013092); label=1;}
+border branch2connection5(t=0, 1){x=1.5233279509723747+t*(0.0048718971503305397);y=0.42235709116464154+t*(0.0085690854246893711); label=1;}
+border branch2connection6(t=0, 1){x=1.5281998481227053+t*(0.0047679445621506833);y=0.43092617658933091+t*(0.008596267717380035); label=1;}
+
+mesh Th = buildmesh( box0(25) + box1(1) + box2(25) + box3(1) + box4(1) + branch0connection0(1) + branch0connection1(1) + branch0connection2(1) + branch0connection3(1) + branch0connection4(1) + branch0connection5(1) + branch0connection6(1) + branch0connection7(1) + branch0connection8(1) + branch0connection9(1) + branch0connection10(1) + branch0connection11(1) + branch0connection12(1) + branch0connection13(1) + branch0connection14(1) + branch0connection15(1) + branch0connection16(1) + branch0connection17(1) + branch0connection18(1) + branch0connection19(1) + branch0connection20(1) + branch0connection21(1) + branch0connection22(1) + branch0connection23(1) + branch0connection24(1) + branch0connection25(1) + branch0connection26(1) + branch0connection27(1) + branch0connection28(1) + branch0connection29(1) + branch0connection30(1) + branch0connection31(1) + branch0connection32(1) + branch0connection33(1) + branch0connection34(1) + branch0connection35(1) + branch0connection36(1) + branch0connection37(1) + branch1connection0(1) + branch1connection1(1) + branch1connection2(1) + branch1connection3(1) + branch1connection4(1) + branch1connection5(1) + branch1connection6(1) + branch2connection0(1) + branch2connection1(1) + branch2connection2(1) + branch2connection3(1) + branch2connection4(1) + branch2connection5(1) + branch2connection6(1) );
+
+real buildTime=clock() - buildTime0;
+// plot(Th, wait=true);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// TIP INFORMATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int nbTips=2; 
+real[int] angle(nbTips);
+real[int] X(nbTips); 
+real[int] Y(nbTips);
+
+X(0)=1.4577808050263485;
+Y(0)=0.4376783078808722;
+angle(0)=2.1477013898380588;
+X(1)=1.5329677926848559;
+Y(1)=0.43952244430671095;
+angle(1)=1.06438787462464;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DEFINING PROBLEM AND equation TO SOLVE
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+fespace Vh(Th,P2);
+Vh u,v;
+
+problem potential(u,v,solver=sparsesolver)=
+         int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
+             -int1d(Th,3)(v)  // constant flux
+			 // +on(3,u=50) // constant field
+			 // -int2d(Th)(v) // rain in domain
+             +on(1,u=0);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ADAPTING THE MESH AND SOLVING FOR THE FIELD
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+
+// counting cells around the tips
+real R=0.01; // circle around the tip over which field is integrated
+int[int] nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
+
+// First adaptation
+real firstAdaptTime0=clock();
+// Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
+Th = adaptmesh(Th,1,nbvx=500000,hmax=0.1,nbsmooth=100,iso=true,ratio=1.8);
+real firstAdaptTime=clock() - firstAdaptTime0;
+// plot(Th, wait=true);
+
+// Solving the problem for the first time
+real firstRunTime0=clock();
+potential;
+// cout<<"First solve completed."<<endl;
+real firstRunTime=clock() - firstRunTime0;
+
+// Adaptation loop
+real adaptTime0=clock();
+// cout << endl << endl << "Adaptation..." << endl;
+fespace Vh0(Th,P0);
+Vh0 h=1;
+real error=0.02;
+int adaptCounter=1;
+while(nvAroundTips.min < 250 || adaptCounter<=3)
+{
+	// cout << "Adaptation step: " << adaptCounter << ", h[].min = " << h[].min;
+	// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
+	potential;
+	Th=adaptmesh(Th,[u, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5);
+	error = 0.5*error;
+	u=u;
+	h=hTriangle; // the triangle size
+	nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
+	adaptCounter++;
+}
+
+// cout << endl << "Adaptation finished." << " h[].min = " << h[].min;
+// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
+
+// solving with adapted mesh
+potential;
+// cout << "Problem solved." << endl;
+// plot(u, wait=true, fill=true);
+
+real adaptTime=clock() - adaptTime0;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+real coeffTime0=clock();
+// cout << endl << endl << "Finding the Tip coefficients..." << endl;
+
+mesh Ph;
+real[int] a(3); // list of coefficients of the expansion
+int exponant=2; // precision of the exponential
+// ofstream freefemOutput("{file_name}");
+
+cout << "kopytko ";
+for(int i=0;i<nbTips;++i)
+{
+    // cout << "Processing Tip " << i << " ";   
+    x0=X(i);y0=Y(i);
+    // cout << "(x0, y0) = (" << x0 << ", " <<y0<< "), angle = " << angle(i) << endl;
+
+	// cout << "Projecting... Th.nv = " << Th.nv;
+    Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R)); 
+	// cout << ", Ph.nv = " << Ph.nv << endl;
+
+    for(int order=1; order<=a.n; ++order){ 
+        a[order-1]=
+        int2d(Ph)( u*exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
+		*BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) ) /
+        (int2d(Ph)(exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
+		*square(BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) )));
+
+		cout << a[order-1] << ",";
+        // cout << "a(" << order << ") = " << a[order-1] << endl;
+    }
+	// freefemOutput << Th.nv << " ";
+	// freefemOutput << Ph.nv << " ";
+	// freefemOutput << adaptCounter << " ";
+
+	// cout << endl;
+};
+
+// cout << endl << endl << "Building mesh took: " << buildTime; 
+// cout << endl << "First adapt took: " << firstAdaptTime; 
+// cout << endl << "First run took: " << firstRunTime; 
+// cout << endl << "Adaptation took: " << adaptTime; 
+// cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
+// cout << endl << "Total time: " << clock()-time0 << endl << endl;

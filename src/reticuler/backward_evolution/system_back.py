@@ -14,6 +14,7 @@ import importlib.metadata
 import json
 
 from reticuler.system import NumpyEncoder
+from reticuler.backward_evolution import trimmers
 
 
 class BackwardBranch:
@@ -58,6 +59,7 @@ class BackwardBranch:
         self.mother_ID = mother_ID
 
         self.points = np.empty((0,2), dtype=float)  # in order of trimming
+        self.inds = [] # how many points are left in the forward branch (except point in self.points)
         self.steps = [] # at which step of the BEA the point was reached
 
         # arrays with BEA metrics are two elements shorter than points/steps
@@ -66,14 +68,15 @@ class BackwardBranch:
         self.overshoot = []
         self.angular_deflection = []
         
-    def add_point(self, point, BEA_step):
+    def add_point(self, point, ind, BEA_step):
         """Add a new point to ``self.points`` (position of the tip after trimming)."""
         self.points = np.vstack((self.points, point))
+        self.inds = np.append(self.inds, BEA_step)
         self.steps = np.append(self.steps, BEA_step)
 
-    def points_steps(self):
+    def points_inds_steps(self):
         """Return a 3-n array of points and BEA steps when they were added."""
-        return np.column_stack((self.points, self.steps))
+        return np.column_stack((self.points, self.inds, self.steps))
 
 
 class BackwardBifurcations:
@@ -184,7 +187,141 @@ class BackwardSystem:
         self.system.extender.inflow_thresh = 0
         
         self.dump_every = dump_every
-        self.exp_name = system.exp_name+'_back'
+        self.exp_name = system.exp_name+'_results'
+        
+    @classmethod
+    def import_json(cls, input_file, system):
+        """Construct an instance of class BackwardSystem based on the imported .json file.
+
+        Parameters
+        ----------
+        input_file : path
+            Name of the experiment location. Extension '.json' will be added.
+
+        Returns
+        -------
+        backward_system : object of class BackwardSystem
+
+        """
+        with open(input_file + ".json", "r") as f:
+            json_load = json.load(f)
+
+        # Backward branches
+        backward_branches = []
+        for i in reversed(list(json_load["backward_branches"].keys())):
+            json_branch = json_load["backward_branches"][i]
+            backward_branch = BackwardBranch(
+                ID=json_branch["ID"],
+                mother_ID=json_branch["mother_ID"],
+            )
+            
+            if np.asarray(json_branch["points_inds_steps"]).size:
+                backward_branch.points = np.asarray(json_branch["points_inds_steps"])[:, :2]
+                backward_branch.inds = np.asarray(json_branch["points_inds_steps"])[:, 2]
+                backward_branch.steps = np.asarray(json_branch["points_inds_steps"])[:, 3]
+                backward_branch.a1a2a3_coefficients = np.asarray(json_branch["a1a2a3_coefficients"])
+                backward_branch.overshoot = np.asarray(json_branch["overshoot"])
+                backward_branch.angular_deflection = np.asarray(json_branch["angular_deflection"])
+
+            backward_branches.append(backward_branch)
+
+        # BackwardBifurcations
+        bif_info = np.asarray(json_load["backward_bifurcations"]["bif_info"])
+        backward_bifurcations = BackwardBifurcations(np.array(bif_info[:,0],dtype=int))
+        backward_bifurcations.a1a2a3_coefficients = bif_info[:, 1:4]
+        backward_bifurcations.length_mismatch = bif_info[:, 4]
+        backward_bifurcations.flags = np.array(bif_info[:,5],dtype=int)
+
+        # Trimmer
+        json_trimmer = json_load["trimmer"]
+        if json_trimmer["type"] == "BackwardModifiedEulerMethod":
+            trimmer = trimmers.BackwardModifiedEulerMethod(
+                pde_solver=system.extender.pde_solver,
+                eta=json_trimmer["eta"],
+                ds=json_trimmer["ds"],
+                max_approximation_step=json_trimmer["max_approximation_step"],
+                inflow_thresh=json_trimmer["inflow_thresh"],
+            )
+
+        # General
+        json_BEA_parameters = json_load["BEA_parameters"]
+        BEA_step = json_BEA_parameters["BEA_step"]
+        BEA_step_thresh = json_BEA_parameters["BEA_step_thresh"]
+        back_forth_steps_thresh = json_BEA_parameters["back_forth_steps_thresh"]
+        dump_every = json_BEA_parameters["dump_every"]
+
+        backward_system = cls(
+            system=system,
+            trimmer=trimmer,
+            BEA_step_thresh=BEA_step_thresh,
+            back_forth_steps_thresh=back_forth_steps_thresh,
+            dump_every=dump_every,
+        )
+        backward_system.BEA_step = BEA_step
+        backward_system.backward_branches = backward_branches
+        backward_system.backward_bifurcations = backward_bifurcations
+
+        return backward_system
+
+    def export_json(self):
+        """Export all the information to 'self.exp_name'+'.json'."""
+        
+        export_general = {
+            "reticuler_version": importlib.metadata.version("reticuler"),
+            "exp_name": self.exp_name,
+            "BEA_parameters": {
+                "back_forth_steps_thresh": self.back_forth_steps_thresh,
+                "BEA_step": self.BEA_step,
+                "BEA_step_thresh": self.BEA_step_thresh,
+                "dump_every": self.dump_every,
+            },
+        }
+        
+        if type(self.trimmer.pde_solver).__name__ == "FreeFEM":
+            equation_legend = ["Laplace", "Poisson"]
+            export_solver = {
+                "type": type(self.trimmer.pde_solver).__name__,
+                "equation": equation_legend[self.trimmer.pde_solver.equation],
+            }
+        
+        if type(self.trimmer).__name__ == "BackwardModifiedEulerMethod":
+            export_trimmer = {
+                    "trimmer": {
+                        "type": type(self.trimmer).__name__,
+                        "eta": self.trimmer.eta,
+                        "ds": self.trimmer.ds,
+                        "max_approximation_step": self.trimmer.max_approximation_step,
+                        "inflow_thresh": self.trimmer.inflow_thresh,
+                        "pde_solver": {**export_solver},
+                    }
+                }
+
+        export_backward_bifurcations = {
+            "backward_bifurcations": {
+                "description": "Information gathered in the bifurcation points: mother_ID, a1, a2, a3, length mismatch, flag",
+                "bif_info": self.backward_bifurcations.bif_info(),
+            }
+        }
+        
+        export_backward_branches = {}
+        for branch in self.backward_branches[::-1]:
+            branch_dict = {
+                branch.ID: {
+                    "ID": branch.ID,
+                    "mother_ID": branch.mother_ID,
+                    "points_inds_steps": branch.points_inds_steps(),
+                    "a1a2a3_coefficients": branch.a1a2a3_coefficients,
+                    "overshoot": branch.overshoot,
+                    "angular_deflection": branch.angular_deflection,
+                }
+            }
+            export_backward_branches = export_backward_branches | branch_dict
+        export_backward_branches = { "backward_branches": {**export_backward_branches} }
+        
+        to_export = export_general | export_trimmer | export_backward_bifurcations | export_backward_branches
+        with open(self.exp_name + ".json", "w", encoding="utf-8") as f:
+            json.dump(to_export, f, ensure_ascii=False,
+                      indent=4, cls=NumpyEncoder)
 
     def import_branches(self, network):
         """Reorganizing and importing branches from the networks.
@@ -214,19 +351,24 @@ class BackwardSystem:
                                            == forward_branch.ID, 1] = i
             forward_branch.ID = i
             
-            mother = network.branch_connectivity[
-                network.branch_connectivity[:,1]==i, 0]
-            if mother.size > 0:
-                mother_ID = mother[0]
-                mother_IDs.append(mother[0])
-            else:
+            if network.branch_connectivity.size==0:
                 mother_ID = -1
+                network.active_branches.append(forward_branch)
+            else:
+                mother = network.branch_connectivity[
+                    network.branch_connectivity[:,1]==i, 0]
+                if mother.size > 0:
+                    mother_ID = mother[0]
+                    mother_IDs.append(mother[0])
+                else:
+                    mother_ID = -1
                 
             # forward/backward branch ID is its index in backward_branches
             backward_branches.append(BackwardBranch(ID=i, mother_ID=mother_ID))
             
             # free node ==> active branch
-            if np.isin(forward_branch.ID, network.branch_connectivity[:,0], invert=True):
+            if network.branch_connectivity.size!=0 and \
+                np.isin(forward_branch.ID, network.branch_connectivity[:,0], invert=True):
                 network.active_branches.append(forward_branch)
 
         # above, we go over branches, so the mother_IDs are repeated; hence np.unique
@@ -234,6 +376,58 @@ class BackwardSystem:
 
         return backward_branches, backward_bifurcations
 
+    def __compare_networks(self, initial_network, backward_network, test_network, a1a2a3_coefficients):
+        """Gathering BEA metrics.
+        
+        Parameters
+        ----------
+        initial_network : Network
+        backward_network : Network
+            Network after backward step.
+        test_network : Network
+            Network after backward-forward step.
+        a1a2a3_coefficients : array
+            A 3-n array with a1,a2,a3 coefficients after backward step.
+
+        Returns
+        -------
+        None.
+        
+        """
+
+        for i in range(len(initial_network.active_branches)):
+            backward_branch = self.backward_branches[initial_network.active_branches[i].ID]
+            bifurcation_ind = self.backward_bifurcations.mother_IDs == \
+                initial_network.active_branches[i].ID
+                
+            # if we've reached the bifurcation point for the second time
+            if self.backward_bifurcations.flags[bifurcation_ind]==2:
+                self.backward_bifurcations.flags[bifurcation_ind] = 3
+                self.backward_bifurcations.a1a2a3_coefficients[bifurcation_ind] = a1a2a3_coefficients[i]
+                # length_mismatch is saved in the trimmer after first visit in the bifurcation point
+        
+            # if we haven't reached the bifurcation point
+            # (if we've reached it only once then the branched is popped from active_branches)
+            else:
+                initial_point = initial_network.active_branches[i].points[-1]
+                back_point = backward_network.active_branches[i].points[-1]
+                test_point = test_network.active_branches[i].points[-1]
+    
+                # for angular deflection
+                v1 = initial_point - back_point
+                real_angle = np.arctan2(v1[1], v1[0])
+                v2 = test_point - back_point
+                test_angle = np.arctan2(v2[1], v2[0])
+    
+                # overshoot
+                backward_branch.overshoot = np.append(backward_branch.overshoot, \
+                                                      np.linalg.norm(test_point - initial_point))
+                # angular deflection
+                backward_branch.angular_deflection = np.append(backward_branch.angular_deflection, \
+                                                               real_angle-test_angle)
+                # a1, a2, a3 coefficients
+                backward_branch.a1a2a3_coefficients = np.vstack((backward_branch.a1a2a3_coefficients, a1a2a3_coefficients[i]))
+                
     def run_BEA(self):
         """Run the Backward Evolution Algorithm.
 
@@ -245,7 +439,7 @@ class BackwardSystem:
         start_clock = time.time()
         backward_dts = np.empty(self.back_forth_steps_thresh)
         # while branches list is not empty
-        while not len(self.system.network.branches)==1 or self.BEA_step < self.BEA_step_thresh:
+        while not len(self.system.network.branches)==1 and self.BEA_step < self.BEA_step_thresh:
             self.BEA_step = self.BEA_step + 1
             print(
                 "\n-------------------   Backward Evolution Algorithm step: {step:.0f}   -------------------\n".format(
@@ -295,111 +489,3 @@ class BackwardSystem:
                 clock=time.time() - start_clock
             )
         )        
-
-    def __compare_networks(self, initial_network, backward_network, test_network, a1a2a3_coefficients):
-        """Gathering BEA metrics.
-        
-        Parameters
-        ----------
-        initial_network : Network
-        backward_network : Network
-            Network after backward step.
-        test_network : Network
-            Network after backward-forward step.
-        a1a2a3_coefficients : array
-            A 3-n array with a1,a2,a3 coefficients after backward step.
-
-        Returns
-        -------
-        None.
-        
-        """
-
-        for i in range(len(initial_network.active_branches)):
-            backward_branch = self.backward_branches[initial_network.active_branches[i].ID]
-            bifurcation_ind = self.backward_bifurcations.mother_IDs == \
-                initial_network.active_branches[i].ID
-                
-            # if we've reached the bifurcation point for the second time
-            if self.backward_bifurcations.flags[bifurcation_ind]==2:
-                self.backward_bifurcations.flags[bifurcation_ind] = 3
-                self.backward_bifurcations.a1a2a3_coefficients[bifurcation_ind] = a1a2a3_coefficients[i]
-                # length_mismatch is saved in the trimmer after first visit in the bifurcation point
-        
-            # if we haven't reached the bifurcation point
-            # (if we've reached it only once then the branched is popped from active_branches)
-            else:
-                initial_point = initial_network.active_branches[i].points[-1]
-                back_point = backward_network.active_branches[i].points[-1]
-                test_point = test_network.active_branches[i].points[-1]
-    
-                # for angular deflection
-                v1 = initial_point - back_point
-                v1 = v1 / np.linalg.norm(v1)
-                v2 = test_point - back_point
-                v2 = v2 / np.linalg.norm(v2)
-    
-                # overshoot
-                backward_branch.overshoot.append(
-                    np.linalg.norm(test_point - initial_point))
-                # angular deflection
-                backward_branch.angular_deflection.append(
-                    np.arccos(np.clip(np.dot(v1, v2), -1.0, 1.0)))
-                # a1, a2, a3 coefficients
-                backward_branch.a1a2a3_coefficients = np.vstack((backward_branch.a1a2a3_coefficients, a1a2a3_coefficients[i]))
-                
-    def export_json(self):
-        """Export all the information to 'self.exp_name'+'.json'."""
-        
-        export_general = {
-            "reticuler_version": importlib.metadata.version("reticuler"),
-            "exp_name": self.exp_name,
-            "BEA_parameters": {
-                "back_forth_steps_thresh": self.back_forth_steps_thresh,
-                "BEA_step": self.BEA_step,
-                "BEA_step_thresh": self.BEA_step_thresh,
-                "dump_every": self.dump_every,
-            },
-        }
-        
-        if type(self.trimmer.pde_solver).__name__ == "FreeFEM":
-            equation_legend = ["Laplace", "Poisson"]
-            export_solver = {
-                "type": type(self.trimmer.pde_solver).__name__,
-                "equation": equation_legend[self.trimmer.pde_solver.equation],
-            }
-        
-        if type(self.trimmer).__name__ == "BackwardModifiedEulerMethod":
-            export_trimmer = {
-                "type": type(self.trimmer).__name__,
-                "eta": self.trimmer.eta,
-                "ds": self.trimmer.ds,
-                "max_approximation_step": self.trimmer.max_approximation_step,
-                "inflow_thresh": self.trimmer.inflow_thresh,
-                "pde_solver": {**export_solver},
-            }
-
-        export_backward_bifurcations = {
-            "description": "Information gathered in the bifurcation points: mother_ID, a1, a2, a3, length mismatch, flag",
-            "bif_info": self.backward_bifurcations.bif_info(),
-        }
-
-        export_backward_branches = {}
-        for branch in self.backward_branches[::-1]:
-            branch_dict = {
-                branch.ID: {
-                    "ID": branch.ID,
-                    "mother_ID": branch.mother_ID,
-                    "points_and_steps": branch.points_steps(),
-                    "a1a2a3_coefficients": branch.a1a2a3_coefficients,
-                    "overshoot": branch.overshoot,
-                    "angular_deflection": branch.angular_deflection,
-                }
-            }
-            export_backward_branches = export_backward_branches | branch_dict
-    
-        to_export = export_general | export_trimmer | export_backward_bifurcations | export_backward_branches
-        with open(self.exp_name + ".json", "w", encoding="utf-8") as f:
-            json.dump(to_export, f, ensure_ascii=False,
-                      indent=4, cls=NumpyEncoder)
-

@@ -129,7 +129,7 @@ class FreeFEM:
 
             border_box = (
                 border_box
-                + "border box{i}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label={bc};}}\n".format(
+                + "border box{i}(t=0, 1){{x={x0:.6e}+t*({ax:.6e});y={y0:.6e}+t*({ay:.6e}); label={bc:.6e};}}\n".format(
                     i=i, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0, bc=boundary_condition
                 )
             )
@@ -148,7 +148,7 @@ class FreeFEM:
 
                 border_network = (
                     border_network
-                    + "border branch{i}connection{j}(t=0, 1){{x={x0}+t*({ax});y={y0}+t*({ay}); label=1;}}\n".format(
+                    + "border branch{i}connection{j}(t=0, 1){{x={x0:.6e}+t*({ax:.6e});y={y0:.6e}+t*({ay:.6e}); label=1;}}\n".format(
                         i=i, j=j, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0
                     )
                 )
@@ -191,10 +191,10 @@ class FreeFEM:
         for i, branch in enumerate(network.active_branches):
             tip_information = (
                 tip_information
-                + "\nX({j})={x};".format(j=i, x=branch.points[-1, 0])
-                + "\nY({j})={y};".format(j=i, y=branch.points[-1, 1])
-                + "\nangle({j})={angle};".format(
-                    j=i, angle=np.pi / 2 - branch.tip_angle()
+                + "\nX({j})={x:.6e};".format(j=i, x=branch.points[-1, 0])
+                + "\nY({j})={y:.6e};".format(j=i, y=branch.points[-1, 1])
+                + "\nangle({j})={angle:.6e};".format(
+                    j=i, angle=branch.tip_angle()
                 )
             )  # angle with X axis
         tip_information = tip_information + "\n"
@@ -300,8 +300,11 @@ class FreeFEM:
             real[int] a(3); // list of coefficients of the expansion
             int exponant=2; // precision of the exponential
             // ofstream freefemOutput("{file_name}");
+            
+            cout.precision(12);
+            cout << "kopytko ";
             for(int i=0;i<nbTips;++i)
-            {{
+            {
                 // cout << "Processing Tip " << i << " ";   
                 x0=X(i);y0=Y(i);
                 // cout << "(x0, y0) = (" << x0 << ", " <<y0<< "), angle = " << angle(i) << endl;
@@ -310,7 +313,7 @@ class FreeFEM:
                 Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R)); 
             	// cout << ", Ph.nv = " << Ph.nv << endl;
             	
-                for(int order=1; order<=a.n; ++order){{ 
+                for(int order=1; order<=a.n; ++order){ 
                     a[order-1]=
                     int2d(Ph)( u*exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
             		*BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) ) /
@@ -319,13 +322,13 @@ class FreeFEM:
             		
             		cout << a[order-1] << ",";
                     // cout << "a(" << order << ") = " << a[order-1] << endl;
-                }}
+                }
             	// freefemOutput << Th.nv << " ";
             	// freefemOutput << Ph.nv << " ";
             	// freefemOutput << adaptCounter << " ";
             	
             	// cout << endl;
-            }};
+            };
             
             // cout << endl << endl << "Building mesh took: " << buildTime; 
             // cout << endl << "First adapt took: " << firstAdaptTime; 
@@ -371,10 +374,9 @@ class FreeFEM:
             print("\nFreeFem++ failed.\n")
             print("stdout:", result.stdout.decode())
             print("stderr:", result.stderr.decode())
-
-        ai_coeffs_flat = np.fromstring(result.stdout, sep=",")
+            
+        ai_coeffs_flat = np.fromstring(result.stdout[result.stdout.find(b'kopytko')+7:], sep=",")
         self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
-        # print(self.a1a2a3_coefficients)
 
         # close temporary files
         for tmp_file in temporary_files:
@@ -402,14 +404,13 @@ class FreeFEM:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        print("stdout:", result.stdout.decode())
-        print("stderr:", result.stderr.decode())
+        # print("stdout:", result.stdout.decode())
+        # print("stderr:", result.stderr.decode())
         if result.returncode:
             print("\nFreeFem++ failed.\n")
 
-        ai_coeffs_flat = np.fromstring(result.stdout, sep=",")
+        ai_coeffs_flat = np.fromstring(result.stdout[result.stdout.find(b'kopytko')+7:], sep=",")
         self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
-        # print(self.a1a2a3_coefficients)
 
     def solve_PDE(self, network):
         """Solve the PDE for the field around the network.
@@ -428,6 +429,7 @@ class FreeFEM:
 
         """
         script = self.__prepare_script(network)
-        self.__run_freefem_temp(script)
-        # self.__run_freefem(script) # useful for debugging
-        # print('a1a2a3: ', self.a1a2a3_coefficients)
+        # self.__run_freefem_temp(script)
+        self.__run_freefem(script) # useful for debugging
+        with np.printoptions(formatter={'float': '{:.6e}'.format}):
+            print('a1a2a3: \n', self.a1a2a3_coefficients)

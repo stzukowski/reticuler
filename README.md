@@ -40,11 +40,7 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 ```
 
 ## How to cite
-*Through history to growth dynamics: backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022). https://doi.org/10.1038/s41598-022-24656-x
+*Through history to growth dynamics: backward evolution of spatial networks*, S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci. Rep. 12, 20407 (2022). https://doi.org/10.1038/s41598-022-24656-x
 
 ### References
-[1]: [P. Morawiecki, *Problem odwrotny do ewolucji sieci rzecznych* (2016)](http://www.fuw.edu.pl/~piotrek/theses/PMorawiecki.pdf).
-
-[2]: [S. Żukowski, *Związek między geometrią sieci rzecznych a prawami ich wzrostu* (2019)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski.pdf).
-
-[3]: [S. Żukowski, *Backward evolution of river networks* (2021)](http://www.fuw.edu.pl/~piotrek/theses/SZukowski2.pdf).
+*Bifurcation dynamics of natural drainage networks*,  A. Petroff, O. Devauchelle, H. Seybold, and D. H. Rothman. Philos. Trans. Royal Soc. A 371, no. 2004 (2013): 20120365.
