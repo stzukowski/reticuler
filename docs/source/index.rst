@@ -23,8 +23,10 @@ How to install
 Usage
 '''''
 
-During installation two command line scripts are installed:
+During the installation four command line scripts are installed:
    - *reticulate* - runs the simulation
+   - *reticulate_back* - runs the the Backward Evolution Algorithm
+   - *clip_ret* - clips the network to one of the growth thresholds (maximum forward evolution step, length, height, evolution time, or BEA step)
    - *plot_ret* - plots the network based on the *.json* file from the simulation
 
 To use just type in the command line:
@@ -33,12 +35,6 @@ To use just type in the command line:
 
    reticulate -h
    
-or
-
-.. prompt:: bash $ auto
-
-   plot_ret -h
-
 Typical network growth simulation:
    - output file: *test*,
    - growth threshold type: maximum network height,

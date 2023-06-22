@@ -7,27 +7,12 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
+   reticuler.backward_evolution
    reticuler.extending_kernels
    reticuler.user_interface
 
 Submodules
 ----------
-
-reticuler.plot\_ret module
---------------------------
-
-.. automodule:: reticuler.plot_ret
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-reticuler.reticulate module
----------------------------
-
-.. automodule:: reticuler.reticulate
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 reticuler.system module
 -----------------------

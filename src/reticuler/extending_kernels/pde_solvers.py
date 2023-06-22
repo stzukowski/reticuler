@@ -9,6 +9,7 @@ import numpy as np
 import subprocess
 import os.path
 import os
+from platform import system
 from tempfile import NamedTemporaryFile
 import textwrap
 
@@ -129,7 +130,7 @@ class FreeFEM:
 
             border_box = (
                 border_box
-                + "border box{i}(t=0, 1){{x={x0:.6e}+t*({ax:.6e});y={y0:.6e}+t*({ay:.6e}); label={bc:.6e};}}\n".format(
+                + "border box{i}(t=0, 1){{x={x0:.12g}+t*({ax:.12g});y={y0:.12g}+t*({ay:.12g}); label={bc};}}\n".format(
                     i=i, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0, bc=boundary_condition
                 )
             )
@@ -148,7 +149,7 @@ class FreeFEM:
 
                 border_network = (
                     border_network
-                    + "border branch{i}connection{j}(t=0, 1){{x={x0:.6e}+t*({ax:.6e});y={y0:.6e}+t*({ay:.6e}); label=1;}}\n".format(
+                    + "border branch{i}connection{j}(t=0, 1){{x={x0:.12g}+t*({ax:.12g});y={y0:.12g}+t*({ay:.12g}); label=1;}}\n".format(
                         i=i, j=j, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0
                     )
                 )
@@ -191,9 +192,9 @@ class FreeFEM:
         for i, branch in enumerate(network.active_branches):
             tip_information = (
                 tip_information
-                + "\nX({j})={x:.6e};".format(j=i, x=branch.points[-1, 0])
-                + "\nY({j})={y:.6e};".format(j=i, y=branch.points[-1, 1])
-                + "\nangle({j})={angle:.6e};".format(
+                + "\nX({j})={x:.12g};".format(j=i, x=branch.points[-1, 0])
+                + "\nY({j})={y:.12g};".format(j=i, y=branch.points[-1, 1])
+                + "\nangle({j})={angle:.12g};".format(
                     j=i, angle=branch.tip_angle()
                 )
             )  # angle with X axis
@@ -429,7 +430,9 @@ class FreeFEM:
 
         """
         script = self.__prepare_script(network)
-        # self.__run_freefem_temp(script)
-        self.__run_freefem(script) # useful for debugging
-        with np.printoptions(formatter={'float': '{:.6e}'.format}):
-            print('a1a2a3: \n', self.a1a2a3_coefficients)
+        if system() == 'Windows':
+            self.__run_freefem(script) # useful for debugging
+        else:
+            self.__run_freefem_temp(script)
+        # with np.printoptions(formatter={'float': '{:.6e}'.format}):
+            # print('a1a2a3: \n', self.a1a2a3_coefficients)

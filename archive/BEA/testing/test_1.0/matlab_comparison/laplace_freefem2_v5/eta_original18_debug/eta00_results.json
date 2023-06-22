@@ -9,7 +9,7 @@
     },
     "trimmer": {
         "type": "BackwardModifiedEulerMethod",
-        "eta": 0.0,
+        "eta": 0,
         "ds": 0.01,
         "max_approximation_step": 3,
         "inflow_thresh": 0.05,
@@ -99,55 +99,57 @@
         "18": {
             "ID": 18,
             "mother_ID": 16,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    1.0501888628159763,
-                    2.5078265576252026,
-                    0.0
+                    1.0473656853596978,
+                    2.488027033736194,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.613554197366,
-                    -0.0065261398395,
-                    1.10216299575
+                    0.612189731873,
+                    -0.00508378813535,
+                    1.11142579408
                 ]
             ],
             "overshoot": [
-                1.2472096683592205e-05
+                4.223815170616503e-06
             ],
             "angular_deflection": [
-                -0.0012472086198402899
+                -0.00042238219647705577
             ]
         },
         "17": {
             "ID": 17,
             "mother_ID": 16,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    0.8359741847469281,
-                    2.4853801543716143,
-                    0.0
+                    0.8464945058449638,
+                    2.468370778666062,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.698979430967,
-                    0.00949948527697,
-                    0.814984781142
+                    0.700813130953,
+                    0.0113767893304,
+                    0.827706575785
                 ]
             ],
             "overshoot": [
-                1.3801822211544661e-06
+                2.184220348571776e-06
             ],
             "angular_deflection": [
-                0.00013787621619343327
+                0.0002183689342509787
             ]
         },
         "16": {
             "ID": 16,
             "mother_ID": 13,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -155,55 +157,57 @@
         "15": {
             "ID": 15,
             "mother_ID": 13,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    0.7274902637540538,
-                    2.140315760446888,
-                    0.0
+                    0.7439781160714624,
+                    2.1289972539374746,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.284826612352,
-                    -0.0226160804671,
-                    0.436945063713
+                    0.285981232594,
+                    -0.0362034552188,
+                    0.438121640835
                 ]
             ],
             "overshoot": [
-                0.00022131624108574254
+                0.00034173372763007483
             ],
             "angular_deflection": [
-                -0.022133434129064877
+                -0.03417794794420148
             ]
         },
         "14": {
             "ID": 14,
             "mother_ID": 12,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    1.4284026963571634,
-                    2.4836906068014426,
-                    0.0
+                    1.421611641432104,
+                    2.4648788841071476,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.702118792829,
-                    -0.00419417458793,
-                    0.589672407775
+                    0.704478338921,
+                    -0.00493908467011,
+                    0.577694967945
                 ]
             ],
             "overshoot": [
-                4.491478756893321e-07
+                3.0322662364372546e-06
             ],
             "angular_deflection": [
-                -4.489994670975328e-05
+                0.00030322547958228085
             ]
         },
         "13": {
             "ID": 13,
             "mother_ID": 12,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -211,7 +215,7 @@
         "12": {
             "ID": 12,
             "mother_ID": 9,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -219,55 +223,57 @@
         "11": {
             "ID": 11,
             "mother_ID": 9,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    0.8345507567204999,
-                    1.6788769872808793,
-                    0.0
+                    0.8532212379797046,
+                    1.6717322875956806,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.0781359450124,
-                    -0.0141311328671,
-                    0.140278768787
+                    0.0785136824981,
+                    -0.0262714128124,
+                    0.139461075989
                 ]
             ],
             "overshoot": [
-                0.0003040409853093981
+                0.0005828065267165043
             ],
             "angular_deflection": [
-                -0.0304107867003518
+                -0.05830560006624408
             ]
         },
         "10": {
             "ID": 10,
             "mother_ID": 8,
-            "points_and_steps": [
+            "points_inds_steps": [
                 [
-                    1.5228921879445771,
-                    1.8403825241235492,
-                    0.0
+                    1.5092024452728963,
+                    1.825807583420924,
+                    1.0,
+                    1.0
                 ]
             ],
             "a1a2a3_coefficients": [
                 [
-                    0.099280590016,
-                    0.01300053988,
-                    0.166635319984
+                    0.0995696519041,
+                    0.0181564676255,
+                    0.169590017253
                 ]
             ],
             "overshoot": [
-                0.00017417588959265084
+                0.0003665110184263998
             ],
             "angular_deflection": [
-                0.017419363773915286
+                0.03665737759731835
             ]
         },
         "9": {
             "ID": 9,
             "mother_ID": 8,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -275,7 +281,7 @@
         "8": {
             "ID": 8,
             "mother_ID": 5,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -283,7 +289,7 @@
         "7": {
             "ID": 7,
             "mother_ID": 5,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -291,7 +297,7 @@
         "6": {
             "ID": 6,
             "mother_ID": 4,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -299,7 +305,7 @@
         "5": {
             "ID": 5,
             "mother_ID": 4,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -307,7 +313,7 @@
         "4": {
             "ID": 4,
             "mother_ID": 1,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -315,7 +321,7 @@
         "3": {
             "ID": 3,
             "mother_ID": 1,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -323,7 +329,7 @@
         "2": {
             "ID": 2,
             "mother_ID": 0,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -331,7 +337,7 @@
         "1": {
             "ID": 1,
             "mother_ID": 0,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
@@ -339,7 +345,7 @@
         "0": {
             "ID": 0,
             "mother_ID": -1,
-            "points_and_steps": [],
+            "points_inds_steps": [],
             "a1a2a3_coefficients": [],
             "overshoot": [],
             "angular_deflection": []
