@@ -61,7 +61,8 @@ def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
     y_max = 2
     for branch in network.branches:
         line = branch.points
-        y_max = np.max((np.max(line[:, 1]), y_max))
+        if np.max(line[:, 1]) > y_max:
+            y_max = 1.05*np.max(line[:, 1])
         ax.plot(*line.T, **options_tree_plot)
     # PLOT BOX
     points_to_plot = network.box.points[network.box.connections]
@@ -75,5 +76,5 @@ def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
     ax.set_facecolor("#def1ff")
     ax.set_aspect("equal")
     ax.set_xlim(0, xlim)
-    ylim = 1.05*y_max if ylim is None else ylim
+    ylim = y_max if ylim is None else ylim
     ax.set_ylim(0, ylim)    
