@@ -44,4 +44,4 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 [Materials](https://github.com/stzukowski/reticuler/tree/main/archive/papers/2022SciRep)
 
 ### References
-*Bifurcation dynamics of natural drainage networks*,  A. Petroff, O. Devauchelle, H. Seybold, and D. H. Rothman. Philos. Trans. Royal Soc. A 371, no. 2004 (2013): 20120365.
+[*Bifurcation dynamics of natural drainage networks*](https://doi.org/10.1098/rsta.2012.0365),  A. Petroff, O. Devauchelle, H. Seybold, and D. H. Rothman. Philos. Trans. Royal Soc. A 371, no. 2004 (2013): 20120365.
