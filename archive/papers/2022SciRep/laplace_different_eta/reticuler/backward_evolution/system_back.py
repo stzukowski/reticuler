@@ -327,7 +327,7 @@ class BackwardSystem:
             json.dump(to_export, f, ensure_ascii=False,
                       indent=4, cls=NumpyEncoder)
 
-    def __import_branches(self, network):
+    def import_branches(self, network):
         """Reorganizing and importing branches from the networks.
         
         Parameters

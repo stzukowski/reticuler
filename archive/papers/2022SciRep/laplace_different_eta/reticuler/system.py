@@ -15,14 +15,8 @@ import copy
 import json
 import importlib.metadata
 
-from .extending_kernels import extenders, pde_solvers
+from .extending_kernels import extenders, pde_solvers, trajectory_integrators
 
-# Labels for boundary conditions
-DIRICHLET = 1
-NEUMANN = 2
-CONSTANT_FLUX = 3
-RIGHT_WALL_PBC = 999
-LEFT_WALL_PBC = 998
 
 class NumpyEncoder(json.JSONEncoder):
     """Special json encoder for numpy types.
@@ -174,10 +168,9 @@ class Box:
             absorbing bottom wall, reflecting left and right, and:
                 - IC = 0: constant flux on top (Laplacian case)
                 - IC = 1: reflective top (Poissonian case)
-                - IC = 2: IC=1 + PBC right and left wall
         kwargs_construct:
-            IC = 0, 1 or 2
-                seeds_x : array, default [0.5]
+            IC = 0 or 1
+                seeds_x : array, default [0.1]
                     A 1-n array of x positions at the bottom boundary (y=0).
                 initial_lengths : array, default [0.01]
                     A 1-n array of seeds initial lengths.
@@ -197,15 +190,20 @@ class Box:
 
 
         """
+        # Labels for boundary conditions
+        DIRICHLET = 1
+        NEUMANN = 2
+        CONSTANT_FLUX = 3
+
         # Build a box
         box = cls()
 
         # Rectangular box of specified width and height
         # IC==0: Constant flux on top (Laplace)
         # IC==1: Neumann on top (Poisson)
-        if initial_condition == 0 or initial_condition == 1 or initial_condition == 2:
+        if initial_condition == 0 or initial_condition == 1:
             options_construct = {
-                "seeds_x": [0.5],
+                "seeds_x": [0.1],
                 "initial_lengths": [0.01],
                 "height": 50.0,
                 "width": 2.0,
@@ -219,8 +217,6 @@ class Box:
                     [0, 0],
                 ]
             )
-            
-            # seeds at the boundary
             box.seeds_connectivity = np.column_stack(
                 (
                     len(box.points) +
@@ -252,10 +248,6 @@ class Box:
             # or top constant flux:
             if initial_condition == 0:
                 box.boundary_conditions[1] = CONSTANT_FLUX
-            if initial_condition == 2:
-                box.boundary_conditions[1] = CONSTANT_FLUX
-                box.boundary_conditions[0] = RIGHT_WALL_PBC
-                box.boundary_conditions[2] = LEFT_WALL_PBC
 
             # Creating initial branches
             branches = []
@@ -399,7 +391,9 @@ class System:
     network : Network
         An object of class Network.
     extender : Extender
-        One of the classes from reticuler.extending_kernels.extenders.
+        An object of one of the classes from reticuler.extending_kernels.extenders.
+    trajectory_integrator : TrajectoryIntegrator
+        One of the classes from reticuler.extending_kernels.trajectory_integrators.
     growth_thresh_type : int, default 0
         Type of growth threshold.
             - 0: max step
@@ -420,6 +414,7 @@ class System:
         self,
         network,
         extender,
+        trajectory_integrator,
         growth_thresh_type=0,
         growth_thresh=5,
         growth_gauges=None,
@@ -431,7 +426,8 @@ class System:
         Parameters
         ----------
         network : Network
-        extender : function
+        extender : Extender
+        trajectory_integrator : function
         growth_gauges : array, default array([0.,0.,0.,0.])
         growth_thresh_type : int, default 0
         growth_thresh : float, default 5
@@ -445,6 +441,7 @@ class System:
         """
         self.network = network
         self.extender = extender
+        self.trajectory_integrator = trajectory_integrator
 
         # Growth limits:
         # 0: max step, 1: max height
@@ -480,7 +477,12 @@ class System:
             },
         }
 
-        if type(self.extender).__name__ == "ModifiedEulerMethod_Streamline":
+        if type(self.extender).__name__ == "Streamline":
+            if type(self.trajectory_integrator).__name__ == "ModifiedEulerMethod":
+                export_trajectory_integrator = {
+                    "type": type(self.trajectory_integrator).__name__,
+                    "max_approximation_step": self.trajectory_integrator.max_approximation_step,
+                }
             if type(self.extender.pde_solver).__name__ == "FreeFEM":
                 equation_legend = ["Laplace", "Poisson"]
                 export_solver = {
@@ -491,21 +493,25 @@ class System:
             bifurcation_type_legend = [
                 "no bifurcations", "a1", "a3/a1", "random"]
             export_extender = {
-                "extender": {
-                    "type": type(self.extender).__name__,
-                    "eta": self.extender.eta,
-                    "ds": self.extender.ds,
-                    "bifurcations": {
-                        "type": bifurcation_type_legend[
-                            self.extender.bifurcation_type
-                        ],
-                        "threshold": self.extender.bifurcation_thresh,
-                        "angle": self.extender.bifurcation_angle,
-                    },
-                    "inflow_thresh": self.extender.inflow_thresh,
-                    "distance_from_bif_thresh": self.extender.distance_from_bif_thresh,
-                    "max_approximation_step": self.extender.max_approximation_step,
-                    "pde_solver": {**export_solver},
+                "type": type(self.extender).__name__,
+                "eta": self.extender.eta,
+                "ds": self.extender.ds,
+                "bifurcations": {
+                    "type": bifurcation_type_legend[
+                        self.extender.bifurcation_type
+                    ],
+                    "threshold": self.extender.bifurcation_thresh,
+                    "angle": self.extender.bifurcation_angle,
+                },
+                "inflow_thresh": self.extender.inflow_thresh,
+                "distance_from_bif_thresh": self.extender.distance_from_bif_thresh,
+                "pde_solver": {**export_solver},
+            }
+
+            export_extending_kernel = {
+                "extending_kernel": {
+                    "trajectory_integrator": {**export_trajectory_integrator},
+                    "extender": {**export_extender},
                 }
             }
 
@@ -539,7 +545,7 @@ class System:
             }
         }
 
-        to_export = export_general | export_extender | export_network
+        to_export = export_general | export_extending_kernel | export_network
         with open(self.exp_name + ".json", "w", encoding="utf-8") as f:
             json.dump(to_export, f, ensure_ascii=False,
                       indent=4, cls=NumpyEncoder)
@@ -600,71 +606,72 @@ class System:
             branch_connectivity=branch_connectivity,
         )
 
-        try:
-            # Solver
-            json_solver = json_load["extender"]["pde_solver"]
-            if json_solver["type"] == "FreeFEM":
-                equation_legend = ["Laplace", "Poisson"]
-                equation = equation_legend.index(json_solver["equation"])
-                pde_solver = pde_solvers.FreeFEM(network, equation=equation)
-            # Extender
-            json_extender = json_load["extender"]
-            if json_extender["type"] == "ModifiedEulerMethod_Streamline":
-                json_bifurcation = json_extender["bifurcations"]
-                bifurcation_type_legend = [
-                    "no bifurcations", "a1", "a3/a1", "random"]
-                bifurcation_type = bifurcation_type_legend.index(
-                    json_bifurcation["type"])
-                extender = extenders.ModifiedEulerMethod_Streamline(
-                    pde_solver=pde_solver,
-                    eta=json_extender["eta"],
-                    ds=json_extender["ds"],
-                    bifurcation_type=bifurcation_type,
-                    bifurcation_thresh=json_bifurcation["threshold"],
-                    bifurcation_angle=json_bifurcation["angle"],
-                    inflow_thresh=json_extender["inflow_thresh"],
-                    distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
-                    max_approximation_step=json_extender["max_approximation_step"],
-                )
-    
-            # General
-            json_growth = json_load["growth"]
-            growth_type_legend = ["max step",
-                                  "max height", "max length", "max time"]
-            growth_thresh_type = growth_type_legend.index(
-                json_growth["threshold_type"])
-            growth_thresh = json_growth["threshold"]
-            dump_every = json_growth["dump_every"]
-    
-            json_growth_gauges = json_growth["growth_gauges"]
-            growth_gauges = np.array(
-                [
-                    json_growth_gauges["number_of_steps"],
-                    json_growth_gauges["height"],
-                    json_growth_gauges["network_length"],
-                    json_growth_gauges["time"],
-                ]
+        # Trajectory integrator
+        json_trajectory_integrator = json_load["extending_kernel"][
+            "trajectory_integrator"
+        ]
+        if json_trajectory_integrator["type"] == "ModifiedEulerMethod":
+            max_approximation_step = json_trajectory_integrator["max_approximation_step"]
+            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod(
+                max_approximation_step=max_approximation_step)
+
+        # Solver
+        json_solver = json_load["extending_kernel"]["extender"]["pde_solver"]
+        if json_solver["type"] == "FreeFEM":
+            equation_legend = ["Laplace", "Poisson"]
+            equation = equation_legend.index(json_solver["equation"])
+            pde_solver = pde_solvers.FreeFEM(equation=equation)
+
+        # Extender
+        json_extender = json_load["extending_kernel"]["extender"]
+        if json_extender["type"] == "Streamline":
+            json_bifurcation = json_extender["bifurcations"]
+            bifurcation_type_legend = [
+                "no bifurcations", "a1", "a3/a1", "random"]
+            bifurcation_type = bifurcation_type_legend.index(
+                json_bifurcation["type"])
+            extender = extenders.Streamline(
+                pde_solver=pde_solver,
+                eta=json_extender["eta"],
+                ds=json_extender["ds"],
+                bifurcation_type=bifurcation_type,
+                bifurcation_thresh=json_bifurcation["threshold"],
+                bifurcation_angle=json_bifurcation["angle"],
+                inflow_thresh=json_extender["inflow_thresh"],
             )
-    
-            system = cls(
-                network=network,
-                extender=extender,
-                growth_gauges=growth_gauges,
-                growth_thresh_type=growth_thresh_type,
-                growth_thresh=growth_thresh,
-                dump_every=dump_every,
-                exp_name=input_file,
-            )
-        except:
-            print("!WARNING! Error during importing - only `network` imported!")
-            pde_solver = pde_solvers.FreeFEM(network)
-            extender = extenders.ModifiedEulerMethod_Streamline(
-                pde_solver=pde_solver,)
-            system = cls(
-                network=network,
-                extender=extender,
-                exp_name=input_file,
-            )
+            extender.distance_from_bif_thresh = json_extender[
+                "distance_from_bif_thresh"
+            ]
+
+        # General
+        json_growth = json_load["growth"]
+        growth_type_legend = ["max step",
+                              "max height", "max length", "max time"]
+        growth_thresh_type = growth_type_legend.index(
+            json_growth["threshold_type"])
+        growth_thresh = json_growth["threshold"]
+        dump_every = json_growth["dump_every"]
+
+        json_growth_gauges = json_growth["growth_gauges"]
+        growth_gauges = np.array(
+            [
+                json_growth_gauges["number_of_steps"],
+                json_growth_gauges["height"],
+                json_growth_gauges["network_length"],
+                json_growth_gauges["time"],
+            ]
+        )
+
+        system = cls(
+            network=network,
+            extender=extender,
+            trajectory_integrator=trajectory_integrator,
+            growth_gauges=growth_gauges,
+            growth_thresh_type=growth_thresh_type,
+            growth_thresh=growth_thresh,
+            dump_every=dump_every,
+            exp_name=input_file,
+        )
 
         return system
 
@@ -705,9 +712,10 @@ class System:
             )
             print("Date and time: ", datetime.datetime.now())
 
-            out_growth = self.extender.integrate(network=self.network)
+            dt, _ = self.trajectory_integrator.integrate(
+                extender=self.extender, network=self.network)
             self.network.move_tips(step=self.growth_gauges[0])
-            self.__update_growth_gauges(out_growth[0])
+            self.__update_growth_gauges(dt)
 
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()

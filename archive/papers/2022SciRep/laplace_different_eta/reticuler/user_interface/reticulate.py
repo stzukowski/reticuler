@@ -7,7 +7,7 @@ import importlib.metadata
 import matplotlib.pyplot as plt
 
 from reticuler.system import Box, Network, System
-from reticuler.extending_kernels import extenders, pde_solvers
+from reticuler.extending_kernels import extenders, pde_solvers, trajectory_integrators
 from reticuler.user_interface import graphics
 
 # %%
@@ -119,6 +119,20 @@ def main():
         default=[{}],
     )
 
+    # Trajectory integrator
+    parser.add_argument(
+        "--trajectory_integrator",
+        type=str,
+        nargs=1,
+        metavar="name",
+        help=textwrap.dedent(
+            """\
+            Trajectory integrator
+            default = ModifiedEulerMethod"""
+        ),
+        default=["ModifiedEulerMethod"],
+    )
+
     # Solver
     parser.add_argument(
         "--pde_solver",
@@ -167,9 +181,9 @@ def main():
         help=textwrap.dedent(
             """\
             Extender
-            default = ModifiedEulerMethod_Streamline"""
+            default = Streamline"""
         ),
-        default=["ModifiedEulerMethod_Streamline"],
+        default=["Streamline"],
     )
     parser.add_argument(
         "--extender_params",
@@ -187,11 +201,11 @@ def main():
             
             """
         )
-        + "1. ModifiedEulerMethod_Streamline\n"
+        + "1. Streamline\n"
         + textwrap.dedent(
-            extenders.ModifiedEulerMethod_Streamline.__doc__[
-                extenders.ModifiedEulerMethod_Streamline.__doc__.find("eta")
-                - 4 : extenders.ModifiedEulerMethod_Streamline.__doc__.find("References")
+            extenders.Streamline.__doc__[
+                extenders.Streamline.__doc__.find("eta")
+                - 4 : extenders.Streamline.__doc__.find("References")
             ]
         ),
         default=[{}],
@@ -223,12 +237,17 @@ def main():
         # Network
         network = Network(box=box, branches=branches, active_branches=branches.copy())
 
+        # Trajectory integrator
+        if args.trajectory_integrator[0] == "ModifiedEulerMethod":
+            trajectory_integrator = trajectory_integrators.ModifiedEulerMethod()
+
         # Solver
         if args.pde_solver[0] == "FreeFEM":
-            pde_solver = pde_solvers.FreeFEM(network, **args.pde_solver_params[0])
+            pde_solver = pde_solvers.FreeFEM(**args.pde_solver_params[0])
+
         # Extender
-        if args.extender[0] == "ModifiedEulerMethod_Streamline":
-            extender = extenders.ModifiedEulerMethod_Streamline(
+        if args.extender[0] == "Streamline":
+            extender = extenders.Streamline(
                 pde_solver=pde_solver, **args.extender_params[0]
             )
 
@@ -236,6 +255,7 @@ def main():
         system = System(
             network=network,
             extender=extender,
+            trajectory_integrator=trajectory_integrator,
             exp_name=args.output_file[0],
             **args.growth_params[0]
         )
