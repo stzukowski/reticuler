@@ -15,11 +15,6 @@ import textwrap
 
 from reticuler.system import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET
 
-def moving_average(a, n=5) :
-    ret = np.cumsum(a, dtype=float)
-    ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:] / n
-
 class FreeFEM:
     """PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.
 
@@ -28,7 +23,7 @@ class FreeFEM:
     equation : int, default 0
         - 0: Laplace
         - 1: Poisson
-    a1a2a3_coefficients : array
+    flux_info : array
         An array of a1a2a3 coefficients for each tip in the network.
 
 
@@ -52,7 +47,7 @@ class FreeFEM:
 
         """
         self.equation = equation
-        self.a1a2a3_coefficients = []
+        self.flux_info = []
         
         # parts of the script
         self.__script_init = textwrap.dedent(
@@ -430,7 +425,7 @@ class FreeFEM:
         """Solve the PDE for the field around the network.
 
         Prepare a FreeFEM script, export it to a temporary file and run.
-        Then, import the a1a2a3 coefficients to `self.a1a2a3_coefficients`.
+        Then, import the a1a2a3 coefficients to `self.flux_info`.
 
         Parameters
         ----------
@@ -448,9 +443,9 @@ class FreeFEM:
         else:
             out_freefem = self.run_freefem_temp(script)
         ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
-        self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
+        self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         # with np.printoptions(formatter={'float': '{:.6e}'.format}):
-            # print('a1a2a3: \n', self.a1a2a3_coefficients)
+            # print('a1a2a3: \n', self.flux_info)
             
 
 class FreeFEM_ThickFingers:
@@ -461,7 +456,7 @@ class FreeFEM_ThickFingers:
     equation : int, default 0
         - 0: Laplace
         - 1: Poisson
-    a1a2a3_coefficients : array
+    flux_info : array
         An array of a1a2a3 coefficients for each tip in the network.
     finger_width : float, default 0.02
         The width of the fingers.
@@ -476,7 +471,7 @@ class FreeFEM_ThickFingers:
 
     """
 
-    def __init__(self, network, equation=0, finger_width=0.02, mobility_ratio=1e4, n_adapt=0):
+    def __init__(self, network, equation=0, finger_width=0.02, mobility_ratio=1e4, n_adapt=2):
         """Initialize FreeFEM.
 
         Parameters
@@ -495,10 +490,8 @@ class FreeFEM_ThickFingers:
         self.finger_width = finger_width
         self.mobility_ratio = mobility_ratio 
         self.n_adapt = n_adapt
-        self.angles = []
-        self.grad_abs = []
-        self.grad_abs_normal = []
-        
+        self.flux_info = []
+         
         # parts of the script
         self.__script_init = textwrap.dedent(
             """
@@ -589,10 +582,10 @@ class FreeFEM_ThickFingers:
             potential;
             // cout<<"First solve completed."<<endl;
             real firstRunTime=clock() - firstRunTime0;
-            dxu=dx(u);
-            dyu=dy(u);
-            du=(dxu^2+dyu^2)^0.5;
-            plot(du, wait=true, fill=true);
+            // dxu=dx(u);
+            // dyu=dy(u);
+            // du=(dxu^2+dyu^2)^0.5;
+            // plot(du, wait=true, fill=true);
             
             // Adaptation loop
             real adaptTime0=clock();
@@ -612,6 +605,8 @@ class FreeFEM_ThickFingers:
             // Calculating gradient
             dxu=dx(u);
             dyu=dy(u);
+            // du=(dxu^2+dyu^2)^0.5;
+            // plot(du, wait=true, fill=true);
             """
         ).format(n_adapt=self.n_adapt)
 
@@ -623,6 +618,11 @@ class FreeFEM_ThickFingers:
 
             cout.precision(12);
             cout << "kopytko ";
+            int ndof=0, n=0;
+            real totGrad=0;
+            real sumGrad=0, sumAng=0;
+            int avgWindow = 2;
+            real maxGrad=0, maxAngle=0;
             """
         )
 
@@ -651,7 +651,7 @@ class FreeFEM_ThickFingers:
         connections_bc = np.column_stack((connections, boundary_conditions))
         
         border_box, inside_buildmesh_box = \
-            FreeFEM.prepare_script_box(self, connections_bc, points, points_per_unit_len=1)
+            FreeFEM.prepare_script_box(self, connections_bc, points, points_per_unit_len=10)
         
         return border_box, inside_buildmesh_box
 
@@ -662,15 +662,33 @@ class FreeFEM_ThickFingers:
         
         tip_integration_template = textwrap.dedent(
             """
-            int ndof{i}=0, n{i}=0;
-            int1d(Th, {i}, qfe=qf1pE)( (ndof{i}++)*1.);
-            real[int] angles{i}(ndof{i}), gradAbsNormal{i}(ndof{i}), gradAbs{i}(ndof{i});
-            int1d(Th, {i}, qfe=qf1pE)( (angles{i}(n{i}++)=pi-atan2(y-{y0}, x-{x0}))*1.
-                                            +(gradAbs{i}(n{i})=(dxu^2+dyu^2)^0.5)*1.
-                                            +(gradAbsNormal{i}(n{i})=abs(dxu*N.x+dyu*N.y))*1.);
-            cout << "angles{i} "<<angles{i}<<"angles{i}end "<<endl;
-            cout << "gradAbs{i} "<<gradAbs{i}<<"gradAbs{i}end "<<endl;
-            cout << "gradAbsNormal{i} "<<gradAbsNormal{i}<<"gradAbsNormal{i}end "<<endl;
+            ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
+            int1d(Th, {i}, qfe=qf1pE)( (ndof++)*1.);
+            real[int] angles{i}(ndof), gradAbsNormal{i}(ndof), gradAbs{i}(ndof);
+            int1d(Th, {i}, qfe=qf1pE)( (angles{i}(n++)=atan2(y-{y0}, x-{x0}))*1.
+                                            +(gradAbs{i}(n)=(dxu^2+dyu^2)^0.5)*1.
+                                            +(gradAbsNormal{i}(n)=abs(dxu*N.x+dyu*N.y))*1.);
+            // cout << "angles{i} "<<angles{i}<<"angles{i}end "<<endl;
+            // cout << "gradAbs{i} "<<gradAbs{i}<<"gradAbs{i}end "<<endl;
+            // cout << "gradAbsNormal{i} "<<gradAbsNormal{i}<<"gradAbsNormal{i}end "<<endl;
+            
+            real[int] gradAbsNormalMvAvg{i}(ndof-avgWindow+1), anglesMvAvg{i}(ndof-avgWindow+1);
+            for (int i=0; i<=(ndof-avgWindow); i++){{
+                sumGrad=0;
+                sumAng=0;
+                for (int j=i; j<i+avgWindow; j++){{
+                    sumGrad += gradAbsNormal{i}[j];
+                    sumAng += angles{i}[j];
+                }}
+                	gradAbsNormalMvAvg{i}(i) = sumGrad / avgWindow;
+                	anglesMvAvg{i}(i) = sumAng / avgWindow;
+                	if (gradAbsNormalMvAvg{i}(i)>maxGrad){{
+                    maxGrad=gradAbsNormalMvAvg{i}(i);
+                    maxAngle=anglesMvAvg{i}(i);
+                }}
+            }}
+            totGrad =  int1d(Th, {i})( abs([dxu,dyu]'*[N.x,N.y]) );
+            cout << totGrad << "," << maxAngle << ",";
             """
             )
         
@@ -678,6 +696,8 @@ class FreeFEM_ThickFingers:
         inside_mobility = ""
         border_contour = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
+        script_mobility = self.__script_mobility
+        script_tip_integration = self.__script_tip_integration
         for i, branch in enumerate(network.branches):
             if branch.ID in network.box.seeds_connectivity[:,1]:
                 ind_seed = network.box.seeds_connectivity[network.box.seeds_connectivity[:,1]==branch.ID, 0]
@@ -688,7 +708,7 @@ class FreeFEM_ThickFingers:
                                       network.box.points[ind_seed-1])
                     
 
-                self.__script_mobility = self.__script_mobility + \
+                script_mobility = script_mobility + \
                             textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
                                 i=branch.ID, \
                                 x=branch.points[-1][0],
@@ -730,19 +750,21 @@ class FreeFEM_ThickFingers:
                 contour_left = np.vstack(( tip_left, contour_left ))    
                 
                 # semi-circular cap
+                tilt_shift = tip_right-skeleton[-1]
+                tilt_ang = np.arctan2(tilt_shift[1], tilt_shift[0])
                 border_contour = (
                     border_contour
-                    + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi);y={y0:.12g}+{f_w_half:.12g}*sin(t*pi); label={bc};}}\n".format(
+                    + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi+{phi0});y={y0:.12g}+{f_w_half:.12g}*sin(t*pi+{phi0}); label={bc};}}\n".format(
                         i=branch.ID, x0=skeleton[-1,0], y0=skeleton[-1,1], 
-                        f_w_half=self.finger_width/2, bc=1000+branch.ID
+                        f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
                     )
                 )
 
                 inside_buildmesh = (
-                    inside_buildmesh + " tip{i}(201) +".format(i=branch.ID)
+                    inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
                 )
                 
-                self.__script_tip_integration = self.__script_tip_integration + tip_integration_template.format( \
+                script_tip_integration = script_tip_integration + tip_integration_template.format( \
                                                 i=1000+branch.ID, 
                                                 x0=skeleton[-1,0], 
                                                 y0=skeleton[-1,1])
@@ -763,10 +785,10 @@ class FreeFEM_ThickFingers:
                     )
     
                     inside_buildmesh = (
-                        inside_buildmesh + " branch{i}connection{j}side{k}(10) +".format(i=branch.ID, j=j, k=k)
+                        inside_buildmesh + " branch{i}connection{j}side{k}(1) +".format(i=branch.ID, j=j, k=k)
                     )
         inside_buildmesh = inside_buildmesh[:-1]
-        self.__script_mobility = self.__script_mobility + textwrap.dedent(
+        script_mobility = script_mobility + textwrap.dedent(
             """
             fespace Vh0(Th, P0, periodic=PBC);
             Vh0 mobility = {mobilityOutside}*(region==indRegionOut) + {mobilityInside}*({inside_mobility});
@@ -790,12 +812,12 @@ class FreeFEM_ThickFingers:
             + "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
         )
 
-        script = self.__script_init + buildmesh + self.__script_mobility
+        script = self.__script_init + buildmesh + script_mobility
         if self.equation:
             script = script + self.__script_problem_Poisson
         else:
             script = script + self.__script_problem_Laplace
-        script = script + self.__script_adaptmesh + self.__script_tip_integration
+        script = script + self.__script_adaptmesh + script_tip_integration
 
         return script
     
@@ -803,7 +825,7 @@ class FreeFEM_ThickFingers:
         """Solve the PDE for the field around the network.
 
         Prepare a FreeFEM script, export it to a temporary file and run.
-        Then, import the a1a2a3 coefficients to `self.a1a2a3_coefficients`.
+        Then, import the a1a2a3 coefficients to `self.flux_info`.
 
         Parameters
         ----------
@@ -821,21 +843,12 @@ class FreeFEM_ThickFingers:
         else:
             out_freefem = FreeFEM.run_freefem_temp(self, script)
             
-        import_array = lambda key : np.fromstring(s_o[s_o.find(key.encode('ascii'))+len(key):\
-                                         s_o.find(key.encode('ascii')+b"end")], sep="\t")[1:]            
-        s_o = out_freefem.stdout
-        self.angles = []; self.grad_abs = []; self.grad_abs_normal = [];
-        for branch in network.active_branches:
-            tip_id = branch.ID+1000
-            self.angles.append(import_array("angles{}".format(tip_id)))
-            self.grad_abs.append(import_array("gradAbs{}".format(tip_id)))
-            self.grad_abs_normal.append(import_array("gradAbsNormal{}".format(tip_id)))
-            
-            order = np.argsort(self.angles[-1])
-            self.angles[-1] = moving_average(self.angles[-1][order])
-            self.grad_abs[-1] = moving_average(self.grad_abs[-1][order])
-            self.grad_abs_normal[-1] = moving_average(self.grad_abs_normal[-1][order])
+        flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
+        self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
+        # return s_o
+    
+    
         # ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
-        # self.a1a2a3_coefficients = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
+        # self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         # with np.printoptions(formatter={'float': '{:.6e}'.format}):
-            # print('a1a2a3: \n', self.a1a2a3_coefficients)
+            # print('a1a2a3: \n', self.flux_info)

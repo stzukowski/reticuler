@@ -1,0 +1,181 @@
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INITIALISATION
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+verbosity = 0;
+
+real time0=clock();
+
+// Adaptation around the tip
+func real tipfield( real X, real Y, real sigma)
+{
+real rr=((x-X)^2 + (y-Y)^2)^0.5;
+real err=0;
+if (rr>0.99*sigma & rr<1.01*sigma)
+    err=1;
+return err;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// BUILDING MESH
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+real buildTime0=clock();
+
+border box0(t=0, 1){x=2+t*(0);y=0+t*(2); label=999;}
+border box1(t=0, 1){x=2+t*(-2);y=2+t*(0); label=3;}
+border box2(t=0, 1){x=0+t*(0);y=2+t*(-2); label=998;}
+border box3(t=0, 1){x=0+t*(0.55);y=0+t*(0); label=1;}
+border box4(t=0, 1){x=0.55+t*(0.3);y=0+t*(0); label=1;}
+border box5(t=0, 1){x=0.85+t*(0.3);y=0+t*(0); label=1;}
+border box6(t=0, 1){x=1.15+t*(0.3);y=0+t*(0); label=1;}
+border box7(t=0, 1){x=1.45+t*(0.55);y=0+t*(0); label=1;}
+border tip0(t=0, 1){x=0.709985714581+0.15*cos(t*pi);y=0.0103094337096+0.15*sin(t*pi); label=1000;}
+border branch0connection0side0(t=0, 1){x=0.85+t*(-0.0423039291566);y=0+t*(-0.0944105182675); label=888;}
+border branch0connection1side0(t=0, 1){x=0.807696070843+t*(-0.0930644405942);y=-0.0944105182675+t*(-0.045208082318); label=888;}
+border branch0connection0side1(t=0, 1){x=0.705339798913+t*(-0.113035869756);y=0.160237468005+t*(-0.0458269497373); label=888;}
+border branch0connection1side1(t=0, 1){x=0.592303929157+t*(-0.0423039291566);y=0.114410518267+t*(-0.114410518267); label=888;}
+border tip1(t=0, 1){x=1.30999449358+0.15*cos(t*pi);y=0.0103318101792+0.15*sin(t*pi); label=1001;}
+border branch1connection0side0(t=0, 1){x=1.45+t*(-0.042188653419);y=0+t*(-0.0942914835852); label=888;}
+border branch1connection1side0(t=0, 1){x=1.40781134658+t*(-0.0928397003087);y=-0.0942914835852+t*(-0.0452941099989); label=888;}
+border branch1connection0side1(t=0, 1){x=1.3050173409+t*(-0.112828687477);y=0.160249213942+t*(-0.0459577303573); label=888;}
+border branch1connection1side1(t=0, 1){x=1.19218865342+t*(-0.042188653419);y=0.114291483585+t*(-0.114291483585); label=888;}
+func PBC=[[998,y],[999,y]];
+mesh Th = buildmesh( box0(2) + box1(2) + box2(2) + box3(1) + box4(1) + box5(1) + box6(1) + box7(1) + tip0(101) + branch0connection0side0(10) + branch0connection1side0(10) + branch0connection0side1(10) + branch0connection1side1(10) + tip1(101) + branch1connection0side0(10) + branch1connection1side0(10) + branch1connection0side1(10) + branch1connection1side1(10) , fixedborder=true);
+
+real buildTime=clock() - buildTime0;
+// plot(Th, wait=true);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DEFINING MOBILITY
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+int indRegionOut=Th(1.8,1.8).region;
+int indRegion0 = Th(0.7099857145810055, 0.010309433709632823).region;
+int indRegion1 = Th(1.309994493584218, 0.010331810179204636).region;
+fespace Vh0(Th, P0, periodic=PBC);
+Vh0 mobility = 1*(region==indRegionOut) + 10*(region==indRegion0 || region==indRegion1);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// DEFINING PROBLEM AND equation TO SOLVE
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+fespace Vh(Th,P2, periodic=PBC);
+Vh u,v,dxu,dyu,du;
+
+problem potential(u,v,solver=sparsesolver)=
+         int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
+                    // -int1d(Th,3)(v)  // constant flux
+                    +on(3,u=0) // constant field
+                    // -int2d(Th)(v) // rain in domain
+                    +on(1,u=1);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ADAPTING THE MESH AND SOLVING FOR THE FIELD
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+
+// First adaptation
+real firstAdaptTime0=clock();
+// Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
+// Th = adaptmesh(Th,1,nbvx=500000,hmax=0.05,nbsmooth=100,iso=true,ratio=1.8,periodic=PBC);
+real firstAdaptTime=clock() - firstAdaptTime0;
+// plot(Th, wait=true);
+
+// Solving the problem for the first time
+real firstRunTime0=clock();
+potential;
+// cout<<"First solve completed."<<endl;
+real firstRunTime=clock() - firstRunTime0;
+// dxu=dx(u);
+// dyu=dy(u);
+// du=(dxu^2+dyu^2)^0.5;
+// plot(du, wait=true, fill=true);
+
+// Adaptation loop
+real adaptTime0=clock();
+// cout << endl << endl << "Adaptation..." << endl;
+real error=0.01;
+for(int i=0;i<2;i++){
+Th=adaptmesh(Th, u, err=error, nbvx=500000, periodic=PBC, verbosity=0, nbsmooth=100,iso=true,ratio=1.8); // Adapting mesh according to the first solution
+u=u;
+error=error/2;
+potential; // Solving one more time with adapted mesh
+}
+// cout << "Problem solved." << endl;
+// plot(u, wait=true, fill=true);
+
+real adaptTime=clock() - adaptTime0;
+
+// Calculating gradient
+dxu=dx(u);
+dyu=dy(u);
+// du=(dxu^2+dyu^2)^0.5;
+// plot(du, wait=true, fill=true);
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// EXPORT RESULTS
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+
+cout.precision(12);
+cout << "kopytko ";
+int ndof=0, n=0;
+real totGrad=0;
+real sumGrad=0, sumAng=0;
+int avgWindow = 2;
+real maxGrad=0, maxAngle=0;
+
+ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
+int1d(Th, 1000, qfe=qf1pE)( (ndof++)*1.);
+real[int] angles1000(ndof), gradAbsNormal1000(ndof), gradAbs1000(ndof);
+int1d(Th, 1000, qfe=qf1pE)( (angles1000(n++)=atan2(y-0.010309433709632823, x-0.7099857145810055))*1.
+                                +(gradAbs1000(n)=(dxu^2+dyu^2)^0.5)*1.
+                                +(gradAbsNormal1000(n)=abs(dxu*N.x+dyu*N.y))*1.);
+// cout << "angles1000 "<<angles1000<<"angles1000end "<<endl;
+// cout << "gradAbs1000 "<<gradAbs1000<<"gradAbs1000end "<<endl;
+// cout << "gradAbsNormal1000 "<<gradAbsNormal1000<<"gradAbsNormal1000end "<<endl;
+
+real[int] gradAbsNormalMvAvg1000(ndof-avgWindow+1), anglesMvAvg1000(ndof-avgWindow+1);
+for (int i=0; i<=(ndof-avgWindow); i++){
+    sumGrad=0;
+    sumAng=0;
+    for (int j=i; j<i+avgWindow; j++){
+        sumGrad += gradAbsNormal1000[j];
+        sumAng += angles1000[j];
+    }
+    	gradAbsNormalMvAvg1000(i) = sumGrad / avgWindow;
+    	anglesMvAvg1000(i) = sumAng / avgWindow;
+    	if (gradAbsNormalMvAvg1000(i)>maxGrad){
+        maxGrad=gradAbsNormalMvAvg1000(i);
+        maxAngle=anglesMvAvg1000(i);
+    }
+}
+totGrad =  int1d(Th, 1000)( abs([dxu,dyu]'*[N.x,N.y]) );
+cout << totGrad << "," << maxAngle << ",";
+
+ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
+int1d(Th, 1001, qfe=qf1pE)( (ndof++)*1.);
+real[int] angles1001(ndof), gradAbsNormal1001(ndof), gradAbs1001(ndof);
+int1d(Th, 1001, qfe=qf1pE)( (angles1001(n++)=atan2(y-0.010331810179204636, x-1.309994493584218))*1.
+                                +(gradAbs1001(n)=(dxu^2+dyu^2)^0.5)*1.
+                                +(gradAbsNormal1001(n)=abs(dxu*N.x+dyu*N.y))*1.);
+// cout << "angles1001 "<<angles1001<<"angles1001end "<<endl;
+// cout << "gradAbs1001 "<<gradAbs1001<<"gradAbs1001end "<<endl;
+// cout << "gradAbsNormal1001 "<<gradAbsNormal1001<<"gradAbsNormal1001end "<<endl;
+
+real[int] gradAbsNormalMvAvg1001(ndof-avgWindow+1), anglesMvAvg1001(ndof-avgWindow+1);
+for (int i=0; i<=(ndof-avgWindow); i++){
+    sumGrad=0;
+    sumAng=0;
+    for (int j=i; j<i+avgWindow; j++){
+        sumGrad += gradAbsNormal1001[j];
+        sumAng += angles1001[j];
+    }
+    	gradAbsNormalMvAvg1001(i) = sumGrad / avgWindow;
+    	anglesMvAvg1001(i) = sumAng / avgWindow;
+    	if (gradAbsNormalMvAvg1001(i)>maxGrad){
+        maxGrad=gradAbsNormalMvAvg1001(i);
+        maxAngle=anglesMvAvg1001(i);
+    }
+}
+totGrad =  int1d(Th, 1001)( abs([dxu,dyu]'*[N.x,N.y]) );
+cout << totGrad << "," << maxAngle << ",";

@@ -7,6 +7,51 @@ Classes:
 
 import numpy as np
 
+def rotation_matrix(angle):
+    """Construct a matrix to rotate a vector by an ``angle``.
+
+    Parameters
+    ----------
+    angle : float
+
+    Returns
+    -------
+    array
+        An 2-2 array.
+
+    Examples
+    --------
+    >>> rot = rotation_matrix(angle)
+    >>> rotated_vector = np.dot(rot, vector)
+
+    """
+    return np.array(
+        [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
+    )
+
+def assign_dRs(network, dRs, bifurcation_angle):
+    """Assign ``dRs`` to each branch in ``network``."""
+    for i, branch in enumerate(network.active_branches):
+        if branch.is_bifurcating:
+            branch.dR = [
+                np.dot(
+                    rotation_matrix(-bifurcation_angle / 2), dRs[i]),
+                np.dot(rotation_matrix(
+                    bifurcation_angle / 2), dRs[i]),
+            ]
+        else:
+            branch.dR = dRs[i]
+            
+def move_test_tips(network, dRs):
+    """Move test tips (no bifurcations or killing).
+
+    Assign ``dRs`` to each branch in ``network.active_branches`` and extend them.
+
+    """
+    for i, branch in enumerate(network.active_branches):
+        branch.dR = dRs[i]
+        branch.extend()
+
 
 class ModifiedEulerMethod_Streamline:
     """A class to integrate tip trajectories with modified Euler's method and the streamline algorithm [Ref1]_.
@@ -70,7 +115,7 @@ class ModifiedEulerMethod_Streamline:
         distance_from_bif_thresh=None,
         max_approximation_step=3
     ):
-        """Initialize Streamline.
+        """Initialize ModifiedEulerMethod_Streamline.
 
         Parameters
         ----------
@@ -112,32 +157,10 @@ class ModifiedEulerMethod_Streamline:
         # max_approximation_step for the trajectory integration
         self.max_approximation_step = max_approximation_step
 
-    def __rotation_matrix(self, angle):
-        """Construct a matrix to rotate a vector by an ``angle``.
-
-        Parameters
-        ----------
-        angle : float
-
-        Returns
-        -------
-        array
-            An 2-2 array.
-
-        Examples
-        --------
-        >>> rot = self.__rotation_matrix(self, angle)
-        >>> rotated_vector = np.dot(rot, vector)
-
-        """
-        return np.array(
-            [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
-        )
-
     def __check_bifurcation_and_moving_conditions(self, network):
         """Check bifurcation and moving conditions."""
 
-        a1 = self.pde_solver.a1a2a3_coefficients[..., 0]
+        a1 = self.pde_solver.flux_info[..., 0]
         max_a1 = np.max(a1)
         # checking which branches are_moving
         # (first condition for low eta, second for high)
@@ -147,8 +170,8 @@ class ModifiedEulerMethod_Streamline:
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = network.active_branches.copy()
         for i, branch in enumerate(branches_to_iterate):
-            a1 = self.pde_solver.a1a2a3_coefficients[i, 0]
-            a3 = self.pde_solver.a1a2a3_coefficients[i, 2]
+            a1 = self.pde_solver.flux_info[i, 0]
+            a3 = self.pde_solver.flux_info[i, 2]
             if (
                 self.bifurcation_type
                 and branch.length() > self.distance_from_bif_thresh
@@ -215,19 +238,19 @@ class ModifiedEulerMethod_Streamline:
 
         """
         # running PDE solver
-        # self.pde_solver.a1a2a3_coefficients are updated in FreeFEM solver
+        # self.pde_solver.flux_info are updated in FreeFEM solver
         self.pde_solver.solve_PDE(network)
 
         if is_BEA_off:
             # normalize dr, so that the fastest tip moves over ds
-            dr_norm = np.max(self.pde_solver.a1a2a3_coefficients[..., 0] ** self.eta)
+            dr_norm = np.max(self.pde_solver.flux_info[..., 0] ** self.eta)
         else:
             # dr_norm = 1, ds <=> dt
             dr_norm = 1
         dRs_test = np.empty((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
-            a1 = self.pde_solver.a1a2a3_coefficients[i, 0]
-            a2 = self.pde_solver.a1a2a3_coefficients[i, 1]
+            a1 = self.pde_solver.flux_info[i, 0]
+            a2 = self.pde_solver.flux_info[i, 1]
             beta = a1 / a2
 
             # __streamline_extension formula is derived in the coordinate
@@ -236,33 +259,10 @@ class ModifiedEulerMethod_Streamline:
             tip_angle = np.pi / 2 - branch.tip_angle()
             dr = self.ds * a1**self.eta / dr_norm
             dRs_test[i] = np.dot(
-                self.__rotation_matrix(
+                rotation_matrix(
                     tip_angle), self.__streamline_extension(beta, dr)
             )
         return dRs_test
-
-    def __assign_dRs(self, network, dRs):
-        """Assign ``dRs`` to each branch in ``network``."""
-        for i, branch in enumerate(network.active_branches):
-            if branch.is_bifurcating:
-                branch.dR = [
-                    np.dot(
-                        self.__rotation_matrix(-self.bifurcation_angle / 2), dRs[i]),
-                    np.dot(self.__rotation_matrix(
-                        self.bifurcation_angle / 2), dRs[i]),
-                ]
-            else:
-                branch.dR = dRs[i]
-                
-    def __move_test_tips(self, network, dRs):
-        """Move test tips (no bifurcations or killing).
-
-        Assign ``dRs`` to each branch in ``network.active_branches`` and extend them.
-
-        """
-        for i, branch in enumerate(network.active_branches):
-            branch.dR = dRs[i]
-            branch.extend()
 
     def integrate(self, network, is_BEA_off=True):
         """Integrate tip trajectories with modified Euler's method.
@@ -273,15 +273,14 @@ class ModifiedEulerMethod_Streamline:
             An object of class Network.
         is_BEA_off : bool, default True
             A boolean condition if the Backward Evolution Algorithm is off.
-            If True ``a1a2a3_coefficients`` (from the tip position before extension)
-            are not returned.
+            If False `dt`=`self.ds`.
     
         Returns
         -------
         dt : float
             Time of growth at the current evolution step.
-        a1a2a3_coefficients_0 : array
-            An array of a_i coefficients for each tip in the network.
+        flux_info_0 : array
+            An array of a1a2a3 coefficients for each tip in the network.
     
         """
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
@@ -289,16 +288,16 @@ class ModifiedEulerMethod_Streamline:
         
         # in the BEA we want to move over dt as in the backward step,
         # so no normalization
-        a1a2a3_coefficients_0 = self.pde_solver.a1a2a3_coefficients.copy()
+        flux_info_0 = self.pde_solver.flux_info.copy()
             
         # checking if branches are_moving or each branch.is_bifurcating
         are_moving = self.__check_bifurcation_and_moving_conditions(network)
         dRs_0 = dRs_0[are_moving]
-        # print('a1, a2, a3:\n',self.pde_solver.a1a2a3_coefficients)
+        # print('a1, a2, a3:\n',self.pde_solver.flux_info)
     
         # moving test_system by dRs_0
         test_network = network.copy()
-        self.__move_test_tips(test_network, dRs_0)
+        move_test_tips(test_network, dRs_0)
     
         dRs_test = 0
         approximation_step = 0
@@ -324,21 +323,21 @@ class ModifiedEulerMethod_Streamline:
                 
             # moving test_system by dR
             test_network = network.copy()
-            self.__move_test_tips(test_network, dRs_test)
+            move_test_tips(test_network, dRs_test)
             
             # print('Forth loop, approximation step: {step}, epsilon = {eps}'.format(step=approximation_step, eps=epsilon) )
         if is_BEA_off:
             # normally division dX/a1^eta would give single dt
             # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
             # dt is not perfectly the same for different tips, so we take a mean
-            dt = np.mean( np.linalg.norm(dRs_test, axis=1) / self.pde_solver.a1a2a3_coefficients[...,0]**self.eta)
+            dt = np.mean( np.linalg.norm(dRs_test, axis=1) / self.pde_solver.flux_info[...,0]**self.eta)
         else: 
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        self.__assign_dRs(network, dRs_test)
+        assign_dRs(network, dRs_test, self.bifurcation_angle)
         
-        return dt, a1a2a3_coefficients_0
+        return dt, flux_info_0
     
     
 class ModifiedEulerMethod_ThickFingers:
@@ -399,7 +398,7 @@ class ModifiedEulerMethod_ThickFingers:
         finger_thickness=0.02,
         max_approximation_step=3
     ):
-        """Initialize Streamline.
+        """Initialize ModifiedEulerMethod_ThickFingers.
 
         Parameters
         ----------
@@ -424,6 +423,7 @@ class ModifiedEulerMethod_ThickFingers:
         self.bifurcation_type = bifurcation_type  # no bifurcations, a1, a3/a1, random
         self.bifurcation_thresh = bifurcation_thresh
         if bifurcation_thresh is None:
+            self.bifurcation_thresh = 0
             if self.bifurcation_type == 1:
                 self.bifurcation_thresh = 0.8  # velocity bifurcations
             if self.bifurcation_type == 2:  # random bifurcations
@@ -439,32 +439,10 @@ class ModifiedEulerMethod_ThickFingers:
         # max_approximation_step for the trajectory integration
         self.max_approximation_step = max_approximation_step
 
-    def __rotation_matrix(self, angle):
-        """Construct a matrix to rotate a vector by an ``angle``.
-
-        Parameters
-        ----------
-        angle : float
-
-        Returns
-        -------
-        array
-            An 2-2 array.
-
-        Examples
-        --------
-        >>> rot = self.__rotation_matrix(self, angle)
-        >>> rotated_vector = np.dot(rot, vector)
-
-        """
-        return np.array(
-            [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
-        )
-
     def __check_bifurcation_and_moving_conditions(self, network):
         """Check bifurcation and moving conditions."""
 
-        a1 = self.pde_solver.a1a2a3_coefficients[..., 0]
+        a1 = self.pde_solver.flux_info[..., 0]
         max_a1 = np.max(a1)
         # checking which branches are_moving
         # (first condition for low eta, second for high)
@@ -474,17 +452,14 @@ class ModifiedEulerMethod_ThickFingers:
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = network.active_branches.copy()
         for i, branch in enumerate(branches_to_iterate):
-            a1 = self.pde_solver.a1a2a3_coefficients[i, 0]
-            a3 = self.pde_solver.a1a2a3_coefficients[i, 2]
+            a1 = self.pde_solver.flux_info[i, 0]
             if (
                 self.bifurcation_type
                 and branch.length() > self.distance_from_bif_thresh
             ):
                 # the second condition above is used to avoid many bifurcations
                 # in almost one point which can occur while ds is very small
-                if (self.bifurcation_type == 1 and a1 > self.bifurcation_thresh) or (
-                    self.bifurcation_type == 2 and a3 / a1 < self.bifurcation_thresh
-                ):
+                if (self.bifurcation_type == 1 and a1 > self.bifurcation_thresh):
                     branch.is_bifurcating = True
                 elif self.bifurcation_type == 3:
                     p = self.bifurcation_thresh * (a1 / max_a1) ** self.eta
@@ -513,54 +488,25 @@ class ModifiedEulerMethod_ThickFingers:
 
         """
         # running PDE solver
-        # self.pde_solver.a1a2a3_coefficients are updated in FreeFEM solver
+        # self.pde_solver.flux_info are updated in FreeFEM solver
         self.pde_solver.solve_PDE(network)
 
         if is_BEA_off:
             # normalize dr, so that the fastest tip moves over ds
-            dr_norm = np.max(self.pde_solver.a1a2a3_coefficients[..., 0] ** self.eta)
+            dr_norm = np.max(self.pde_solver.flux_info[..., 0] ** self.eta)
         else:
             # dr_norm = 1, ds <=> dt
             dr_norm = 1
         dRs_test = np.empty((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
-            a1 = self.pde_solver.a1a2a3_coefficients[i, 0]
-            a2 = self.pde_solver.a1a2a3_coefficients[i, 1]
-            beta = a1 / a2
-
-            # __streamline_extension formula is derived in the coordinate
-            # system where the tip segment lies on a negative Y axis;
-            # hence, we rotate obtained dR vector to that system
-            tip_angle = np.pi / 2 - branch.tip_angle()
+            a1 = self.pde_solver.flux_info[i, 0]
+            angle = self.pde_solver.flux_info[i, 1] # angle between X axis and the highest gradient direction
             dr = self.ds * a1**self.eta / dr_norm
-            dRs_test[i] = np.dot(
-                self.__rotation_matrix(
-                    tip_angle), self.__streamline_extension(beta, dr)
-            )
+            dR = [dr, 0]
+            # rotation_matrix rotates in counter-clockwise direction, hence the minus
+            dRs_test[i] = np.dot(rotation_matrix(-angle), dR)
+            
         return dRs_test
-
-    def __assign_dRs(self, network, dRs):
-        """Assign ``dRs`` to each branch in ``network``."""
-        for i, branch in enumerate(network.active_branches):
-            if branch.is_bifurcating:
-                branch.dR = [
-                    np.dot(
-                        self.__rotation_matrix(-self.bifurcation_angle / 2), dRs[i]),
-                    np.dot(self.__rotation_matrix(
-                        self.bifurcation_angle / 2), dRs[i]),
-                ]
-            else:
-                branch.dR = dRs[i]
-                
-    def __move_test_tips(self, network, dRs):
-        """Move test tips (no bifurcations or killing).
-
-        Assign ``dRs`` to each branch in ``network.active_branches`` and extend them.
-
-        """
-        for i, branch in enumerate(network.active_branches):
-            branch.dR = dRs[i]
-            branch.extend()
 
     def integrate(self, network, is_BEA_off=True):
         """Integrate tip trajectories with modified Euler's method.
@@ -569,16 +515,12 @@ class ModifiedEulerMethod_ThickFingers:
         ----------
         network : Network
             An object of class Network.
-        is_BEA_off : bool, default True
-            A boolean condition if the Backward Evolution Algorithm is off.
-            If True ``a1a2a3_coefficients`` (from the tip position before extension)
-            are not returned.
     
         Returns
         -------
         dt : float
             Time of growth at the current evolution step.
-        a1a2a3_coefficients_0 : array
+        flux_info_0 : array
             An array of a_i coefficients for each tip in the network.
     
         """
@@ -587,16 +529,16 @@ class ModifiedEulerMethod_ThickFingers:
         
         # in the BEA we want to move over dt as in the backward step,
         # so no normalization
-        a1a2a3_coefficients_0 = self.pde_solver.a1a2a3_coefficients.copy()
+        flux_info_0 = self.pde_solver.flux_info.copy()
             
         # checking if branches are_moving or each branch.is_bifurcating
         are_moving = self.__check_bifurcation_and_moving_conditions(network)
         dRs_0 = dRs_0[are_moving]
-        # print('a1, a2, a3:\n',self.pde_solver.a1a2a3_coefficients)
+        # print('a1, a2, a3:\n',self.pde_solver.flux_info)
     
         # moving test_system by dRs_0
         test_network = network.copy()
-        self.__move_test_tips(test_network, dRs_0)
+        move_test_tips(test_network, dRs_0)
     
         dRs_test = 0
         approximation_step = 0
@@ -622,19 +564,19 @@ class ModifiedEulerMethod_ThickFingers:
                 
             # moving test_system by dR
             test_network = network.copy()
-            self.__move_test_tips(test_network, dRs_test)
+            move_test_tips(test_network, dRs_test)
             
             # print('Forth loop, approximation step: {step}, epsilon = {eps}'.format(step=approximation_step, eps=epsilon) )
         if is_BEA_off:
             # normally division dX/a1^eta would give single dt
             # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
             # dt is not perfectly the same for different tips, so we take a mean
-            dt = np.mean( np.linalg.norm(dRs_test, axis=1) / self.pde_solver.a1a2a3_coefficients[...,0]**self.eta)
+            dt = np.mean( np.linalg.norm(dRs_test, axis=1) / self.pde_solver.flux_info[...,0]**self.eta)
         else: 
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        self.__assign_dRs(network, dRs_test)
+        assign_dRs(network, dRs_test, self.bifurcation_angle)
         
-        return dt, a1a2a3_coefficients_0
+        return dt, flux_info_0
 

@@ -480,16 +480,27 @@ class System:
             },
         }
 
-        if type(self.extender).__name__ == "ModifiedEulerMethod_Streamline":
+        if type(self.extender).__name__ == "ModifiedEulerMethod_Streamline" or \
+            type(self.extender).__name__ == "ModifiedEulerMethod_ThickFingers":
             if type(self.extender.pde_solver).__name__ == "FreeFEM":
                 equation_legend = ["Laplace", "Poisson"]
                 export_solver = {
                     "type": type(self.extender.pde_solver).__name__,
                     "equation": equation_legend[self.extender.pde_solver.equation],
                 }
-
-            bifurcation_type_legend = [
-                "no bifurcations", "a1", "a3/a1", "random"]
+                bifurcation_type_legend = [
+                    "no bifurcations", "a1", "a3/a1", "random"]
+            elif type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
+                equation_legend = ["Laplace", "Poisson"]
+                export_solver = {
+                    "type": type(self.extender.pde_solver).__name__,
+                    "equation": equation_legend[self.extender.pde_solver.equation],
+                    "finger_width": self.extender.pde_solver.finger_width,
+                    "mobility_ratio":self.extender.pde_solver.mobility_ratio,
+                    "n_adapt": self.extender.pde_solver.n_adapt,
+                }
+                bifurcation_type_legend = [
+                    "no bifurcations", "a1", "random"]
             export_extender = {
                 "extender": {
                     "type": type(self.extender).__name__,
@@ -600,71 +611,89 @@ class System:
             branch_connectivity=branch_connectivity,
         )
 
-        try:
-            # Solver
-            json_solver = json_load["extender"]["pde_solver"]
-            if json_solver["type"] == "FreeFEM":
-                equation_legend = ["Laplace", "Poisson"]
-                equation = equation_legend.index(json_solver["equation"])
-                pde_solver = pde_solvers.FreeFEM(network, equation=equation)
-            # Extender
-            json_extender = json_load["extender"]
+        # try:
+        # Solver
+        json_solver = json_load["extender"]["pde_solver"]
+        if json_solver["type"] == "FreeFEM":
+            equation_legend = ["Laplace", "Poisson"]
+            equation = equation_legend.index(json_solver["equation"])
+            pde_solver = pde_solvers.FreeFEM(network, equation=equation)
+        elif json_solver["type"] == "FreeFEM_ThickFingers":
+            equation_legend = ["Laplace", "Poisson"]
+            equation = equation_legend.index(json_solver["equation"])
+            pde_solver = pde_solvers.FreeFEM_ThickFingers(network, 
+                                             equation=equation,
+                                             finger_width=json_solver["finger_width"],
+                                             mobility_ratio=json_solver["mobility_ratio"], 
+                                             n_adapt=json_solver["n_adapt"],
+                                             )
+        # Extender
+        json_extender = json_load["extender"]
+        if json_extender["type"] == "ModifiedEulerMethod_Streamline" or \
+            json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
+                
             if json_extender["type"] == "ModifiedEulerMethod_Streamline":
-                json_bifurcation = json_extender["bifurcations"]
                 bifurcation_type_legend = [
                     "no bifurcations", "a1", "a3/a1", "random"]
-                bifurcation_type = bifurcation_type_legend.index(
-                    json_bifurcation["type"])
-                extender = extenders.ModifiedEulerMethod_Streamline(
-                    pde_solver=pde_solver,
-                    eta=json_extender["eta"],
-                    ds=json_extender["ds"],
-                    bifurcation_type=bifurcation_type,
-                    bifurcation_thresh=json_bifurcation["threshold"],
-                    bifurcation_angle=json_bifurcation["angle"],
-                    inflow_thresh=json_extender["inflow_thresh"],
-                    distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
-                    max_approximation_step=json_extender["max_approximation_step"],
-                )
-    
-            # General
-            json_growth = json_load["growth"]
-            growth_type_legend = ["max step",
-                                  "max height", "max length", "max time"]
-            growth_thresh_type = growth_type_legend.index(
-                json_growth["threshold_type"])
-            growth_thresh = json_growth["threshold"]
-            dump_every = json_growth["dump_every"]
-    
-            json_growth_gauges = json_growth["growth_gauges"]
-            growth_gauges = np.array(
-                [
-                    json_growth_gauges["number_of_steps"],
-                    json_growth_gauges["height"],
-                    json_growth_gauges["network_length"],
-                    json_growth_gauges["time"],
-                ]
-            )
-    
-            system = cls(
-                network=network,
-                extender=extender,
-                growth_gauges=growth_gauges,
-                growth_thresh_type=growth_thresh_type,
-                growth_thresh=growth_thresh,
-                dump_every=dump_every,
-                exp_name=input_file,
-            )
-        except:
-            print("!WARNING! Error during importing - only `network` imported!")
-            pde_solver = pde_solvers.FreeFEM(network)
-            extender = extenders.ModifiedEulerMethod_Streamline(
-                pde_solver=pde_solver,)
-            system = cls(
-                network=network,
-                extender=extender,
-                exp_name=input_file,
-            )
+                extender_class = extenders.ModifiedEulerMethod_Streamline
+            elif json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
+                bifurcation_type_legend = [
+                    "no bifurcations", "a1", "random"]
+                extender_class = extenders.ModifiedEulerMethod_ThickFingers
+                
+            json_bifurcation = json_extender["bifurcations"]
+            bifurcation_type = bifurcation_type_legend.index(
+                json_bifurcation["type"])
+            extender = extender_class(
+                pde_solver=pde_solver,
+                eta=json_extender["eta"],
+                ds=json_extender["ds"],
+                bifurcation_type=bifurcation_type,
+                bifurcation_thresh=json_bifurcation["threshold"],
+                bifurcation_angle=json_bifurcation["angle"],
+                inflow_thresh=json_extender["inflow_thresh"],
+                distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
+                max_approximation_step=json_extender["max_approximation_step"],
+            )          
+
+        # General
+        json_growth = json_load["growth"]
+        growth_type_legend = ["max step",
+                              "max height", "max length", "max time"]
+        growth_thresh_type = growth_type_legend.index(
+            json_growth["threshold_type"])
+        growth_thresh = json_growth["threshold"]
+        dump_every = json_growth["dump_every"]
+
+        json_growth_gauges = json_growth["growth_gauges"]
+        growth_gauges = np.array(
+            [
+                json_growth_gauges["number_of_steps"],
+                json_growth_gauges["height"],
+                json_growth_gauges["network_length"],
+                json_growth_gauges["time"],
+            ]
+        )
+
+        system = cls(
+            network=network,
+            extender=extender,
+            growth_gauges=growth_gauges,
+            growth_thresh_type=growth_thresh_type,
+            growth_thresh=growth_thresh,
+            dump_every=dump_every,
+            exp_name=input_file,
+        )
+        # except:
+        #     print("!WARNING! Error during importing - only ``network`` imported!")
+        #     pde_solver = pde_solvers.FreeFEM(network)
+        #     extender = extenders.ModifiedEulerMethod_Streamline(
+        #         pde_solver=pde_solver,)
+        #     system = cls(
+        #         network=network,
+        #         extender=extender,
+        #         exp_name=input_file,
+        #     )
 
         return system
 
