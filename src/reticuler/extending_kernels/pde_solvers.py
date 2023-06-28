@@ -493,6 +493,8 @@ class FreeFEM_ThickFingers:
         self.flux_info = []
          
         # parts of the script
+        self.pbc = "" if network.box.boundary_conditions[0]==2 else ", periodic=PBC"
+        
         self.__script_init = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -534,7 +536,7 @@ class FreeFEM_ThickFingers:
             // DEFINING PROBLEM AND equation TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             
-            fespace Vh(Th,P2, periodic=PBC);
+            fespace Vh(Th,P2{pbc});
             Vh u,v,dxu,dyu,du;
             
             problem potential(u,v,solver=sparsesolver)=
@@ -544,14 +546,14 @@ class FreeFEM_ThickFingers:
                                 // -int2d(Th)(v) // rain in domain
                                 +on(1,u=1);
             """
-        )
+        ).format(pbc=self.pbc)
 
         self.__script_problem_Poisson = textwrap.dedent(
             """ 
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND equation TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            fespace Vh(Th,P2, periodic=PBC);
+            fespace Vh(Th,P2{pbc});
             Vh u,v,dxu,dyu,du;
 
             problem potential(u,v,solver=sparsesolver)=
@@ -562,7 +564,7 @@ class FreeFEM_ThickFingers:
                                 // -int2d(Th)(v) // rain in domain
                                 +on(1,u=1);            
             """
-        )
+        ).format(pbc=self.pbc)
 
         self.__script_adaptmesh = textwrap.dedent(
             """
@@ -573,7 +575,7 @@ class FreeFEM_ThickFingers:
             // First adaptation
             real firstAdaptTime0=clock();
             // Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
-            // Th = adaptmesh(Th,1,nbvx=500000,hmax=0.05,nbsmooth=100,iso=true,ratio=1.8,periodic=PBC);
+            // Th = adaptmesh(Th,1,nbvx=500000,hmax=0.05,nbsmooth=100,iso=true,ratio=1.8{pbc});
             real firstAdaptTime=clock() - firstAdaptTime0;
             // plot(Th, wait=true);
             
@@ -592,7 +594,7 @@ class FreeFEM_ThickFingers:
             // cout << endl << endl << "Adaptation..." << endl;
             real error=0.01;
             for(int i=0;i<{n_adapt};i++){{
-            Th=adaptmesh(Th, u, err=error, nbvx=500000, periodic=PBC, verbosity=0, nbsmooth=100,iso=true,ratio=1.8); // Adapting mesh according to the first solution
+            Th=adaptmesh(Th, u, err=error, nbvx=500000, verbosity=0, nbsmooth=100,iso=true,ratio=1.8{pbc}); // Adapting mesh according to the first solution
             u=u;
             error=error/2;
             potential; // Solving one more time with adapted mesh
@@ -608,7 +610,7 @@ class FreeFEM_ThickFingers:
             // du=(dxu^2+dyu^2)^0.5;
             // plot(du, wait=true, fill=true);
             """
-        ).format(n_adapt=self.n_adapt)
+        ).format(n_adapt=self.n_adapt, pbc=self.pbc)
 
         self.__script_tip_integration = textwrap.dedent(
             """
@@ -659,7 +661,7 @@ class FreeFEM_ThickFingers:
     def __prepare_script(self, network):
         """Return a full FreeFEM script with the `network` geometry."""
         pt_between = lambda pt1, pt2 : pt1 + (pt2-pt1)/np.linalg.norm(pt2-pt1)*self.finger_width/2
-        
+
         tip_integration_template = textwrap.dedent(
             """
             ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
@@ -693,7 +695,7 @@ class FreeFEM_ThickFingers:
             )
         
         
-        inside_mobility = ""
+        mobility_regions = ""
         border_contour = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
         script_mobility = self.__script_mobility
@@ -714,9 +716,24 @@ class FreeFEM_ThickFingers:
                                 x=branch.points[-1][0],
                                 y=branch.points[-1][1]
                                 ))
-                inside_mobility = inside_mobility + "region==indRegion{i} || ".format(i=branch.ID)
+                mobility_regions = mobility_regions + "region==indRegion{i} || ".format(i=branch.ID)
             
-            skeleton = branch.points
+            
+            # contour can intersect itself if finger_width>ds (distances between the points in the branch)
+            # hence, we select the points on the branch that are finger_width/2 apart from each other
+            skeleton = [branch.points[0]]
+            segment_lengths = np.linalg.norm(branch.points[1:]-branch.points[:-1], axis=1)
+            len_sum = 0
+            for i, seg in enumerate(segment_lengths):
+                len_sum = len_sum + seg
+                if len_sum>self.finger_width/2:
+                    len_sum = 0
+                    skeleton.append(branch.points[i])
+            if len(skeleton)>1:
+                skeleton[-1] = branch.points[-1]
+            else:
+                skeleton.append(branch.points[-1])
+            skeleton = np.array(skeleton)
             skeleton_shifts_up = (skeleton[1:]-skeleton[:-1]) # vectors between points: 0 -> 1, 1 -> 2, etc.
             skeleton_shifts_down = (skeleton[:-1]-skeleton[1:]) # vectors between points: 1 -> 0, 2 -> 1, etc.
         
@@ -749,17 +766,33 @@ class FreeFEM_ThickFingers:
                 contour_right = np.vstack(( contour_right, tip_right ))
                 contour_left = np.vstack(( tip_left, contour_left ))    
                 
-                # semi-circular cap
+                # semi-circular cap v1
+                # angle_tip = angles_down[-1]+np.pi/2
+                # angles_tip = np.linspace( angle_tip, angle_tip+np.pi,101)
+                # points = skeleton[-1] + self.finger_width/2*np.stack((np.cos(angles_tip), np.sin(angles_tip))).T
+                # for j, pair in enumerate(zip(points, points[1:])):               
+                #     border_contour = (
+                #         border_contour
+                #         + "border tip{i}connection{j}(t=0, 1){{x={x0:.12g}+t*({ax:.12g});y={y0:.12g}+t*({ay:.12g}); label={bc};}}\n".format(
+                #             i=branch.ID, j=j, bc=1000+branch.ID,
+                #             x0=pair[0][0], ax=pair[1][0] - pair[0][0], 
+                #             y0=pair[0][1], ay=pair[1][1] - pair[0][1]
+                #         )
+                #     )
+                #     inside_buildmesh = (
+                #         inside_buildmesh + " tip{i}connection{j}(1) +".format(i=branch.ID,j=j)
+                #     )
+                
+                # semi-circular cap v2
                 tilt_shift = tip_right-skeleton[-1]
                 tilt_ang = np.arctan2(tilt_shift[1], tilt_shift[0])
                 border_contour = (
                     border_contour
-                    + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi+{phi0});y={y0:.12g}+{f_w_half:.12g}*sin(t*pi+{phi0}); label={bc};}}\n".format(
+                    + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi+{phi0:.12g});y={y0:.12g}+{f_w_half:.12g}*sin(t*pi+{phi0:.12g}); label={bc};}}\n".format(
                         i=branch.ID, x0=skeleton[-1,0], y0=skeleton[-1,1], 
                         f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
                     )
                 )
-
                 inside_buildmesh = (
                     inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
                 )
@@ -772,15 +805,12 @@ class FreeFEM_ThickFingers:
             for k, points in enumerate([contour_right, contour_left]):
                 # building mesh for contours on the right and left of the finger
                 for j, pair in enumerate(zip(points, points[1:])):
-                    x0 = pair[0][0]
-                    y0 = pair[0][1]
-                    x1 = pair[1][0]
-                    y1 = pair[1][1]
-    
                     border_contour = (
                         border_contour
                         + "border branch{i}connection{j}side{k}(t=0, 1){{x={x0:.12g}+t*({ax:.12g});y={y0:.12g}+t*({ay:.12g}); label=888;}}\n".format(
-                            i=branch.ID, j=j, k=k, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0
+                            i=branch.ID, j=j, k=k, 
+                            x0=pair[0][0], ax=pair[1][0] - pair[0][0], 
+                            y0=pair[0][1], ay=pair[1][1] - pair[0][1]
                         )
                     )
     
@@ -790,9 +820,10 @@ class FreeFEM_ThickFingers:
         inside_buildmesh = inside_buildmesh[:-1]
         script_mobility = script_mobility + textwrap.dedent(
             """
-            fespace Vh0(Th, P0, periodic=PBC);
-            Vh0 mobility = {mobilityOutside}*(region==indRegionOut) + {mobilityInside}*({inside_mobility});
-            """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, inside_mobility = inside_mobility[:-4])
+            fespace Vh0(Th, P0{pbc});
+            Vh0 mobility = {mobilityOutside}*(region==indRegionOut) + {mobilityInside}*({mobility_regions});
+            """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, 
+                        mobility_regions = mobility_regions[:-4], pbc=self.pbc)
             )
 
         buildmesh = (
@@ -805,12 +836,15 @@ class FreeFEM_ThickFingers:
             )
             + self.__script_border_box
             + border_contour
-            + "func PBC=[[{left},y],[{right},y]];".format( left=LEFT_WALL_PBC, right=RIGHT_WALL_PBC)
-            + "\nmesh Th = buildmesh({inside_buildmesh}, fixedborder=true);\n".format(
-                inside_buildmesh=inside_buildmesh
             )
-            + "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
-        )
+        if network.box.boundary_conditions[0]!=2:
+            buildmesh = buildmesh + \
+                "func PBC=[[{left},y],[{right},y]];".format( left=LEFT_WALL_PBC, right=RIGHT_WALL_PBC)
+        buildmesh = buildmesh + \
+            "\nmesh Th = buildmesh({inside_buildmesh}, fixedborder=true);\n".format(
+                inside_buildmesh=inside_buildmesh
+            ) + \
+            "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
 
         script = self.__script_init + buildmesh + script_mobility
         if self.equation:

@@ -20,14 +20,6 @@ reticuler.extending\_kernels.pde\_solvers module
    :undoc-members:
    :show-inheritance:
 
-reticuler.extending\_kernels.trajectory\_integrators module
------------------------------------------------------------
-
-.. automodule:: reticuler.extending_kernels.trajectory_integrators
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Module contents
 ---------------
 

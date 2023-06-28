@@ -1,5 +1,6 @@
 """Command line script to plot a network"""
 
+import glob
 import argparse
 import json
 import textwrap
@@ -104,26 +105,45 @@ def main():
         ),
         default=[{}],
     )
+        
+    # Plot all files in the directory
+    parser.add_argument(
+        "-all",
+        "--plot_all",
+        action=argparse.BooleanOptionalAction,
+        help=textwrap.dedent(
+            """\
+            Flag indicating to plot networks from all the files in the directory.
+            """
+        ),
+    )
 
     # parse the arguments from standard input
     args = parser.parse_args()
-
-    # Import System from JSON file
-    system = System.import_json(input_file=args.input_file[0])
-
-    fig, ax = plt.subplots()
-    graphics.plot_tree(
-        ax,
-        network=system.network,
-        ylim=args.ylim[0],
-        xlim=args.xlim[0],
-        **args.plot_params[0]
-    )
-
-    if args.output_file is None:
-        fig.savefig(args.input_file[0] + args.output_extension[0], bbox_inches="tight")
+    
+    if args.plot_all:
+        file_names = glob.glob(args.input_file[0] + "*.json")
     else:
-        fig.savefig(args.output_file[0] + args.output_extension[0], bbox_inches="tight")
+        file_names = [ args.input_file[0]+".json" ]
+    
+    for file in file_names:
+        exp_name = file[:-5]
+        # Import System from JSON file
+        system = System.import_json(input_file=exp_name)
+    
+        fig, ax = plt.subplots()
+        graphics.plot_tree(
+            ax,
+            network=system.network,
+            ylim=args.ylim[0],
+            xlim=args.xlim[0],
+            **args.plot_params[0]
+        )
+    
+        if args.output_file is None:
+            fig.savefig(exp_name + args.output_extension[0], bbox_inches="tight")
+        else:
+            fig.savefig(args.output_file[0] + args.output_extension[0], bbox_inches="tight")
 
 
 if __name__ == "__main__":

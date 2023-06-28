@@ -152,7 +152,14 @@ def main():
         + textwrap.dedent(
             pde_solvers.FreeFEM.__doc__[
                 pde_solvers.FreeFEM.__doc__.find("equation")
-                - 4 : pde_solvers.FreeFEM.__doc__.find("a1a2a3_coefficients")
+                - 4 : pde_solvers.FreeFEM.__doc__.find("flux_info")
+            ]
+        )
+        + "2. FreeFEM_ThickFingers\n"
+        + textwrap.dedent(
+            pde_solvers.FreeFEM_ThickFingers.__doc__[
+                pde_solvers.FreeFEM_ThickFingers.__doc__.find("equation")
+                - 4 : pde_solvers.FreeFEM_ThickFingers.__doc__.find("flux_info")
             ]
         ),
         default=[{}],
@@ -193,6 +200,13 @@ def main():
                 extenders.ModifiedEulerMethod_Streamline.__doc__.find("eta")
                 - 4 : extenders.ModifiedEulerMethod_Streamline.__doc__.find("References")
             ]
+        )
+        + "1. ModifiedEulerMethod_ThickFingers\n"
+        + textwrap.dedent(
+            extenders.ModifiedEulerMethod_ThickFingers.__doc__[
+                extenders.ModifiedEulerMethod_ThickFingers.__doc__.find("eta")
+                - 4 : extenders.ModifiedEulerMethod_ThickFingers.__doc__.find("References")
+            ]
         ),
         default=[{}],
     )
@@ -226,11 +240,17 @@ def main():
         # Solver
         if args.pde_solver[0] == "FreeFEM":
             pde_solver = pde_solvers.FreeFEM(network, **args.pde_solver_params[0])
+        elif args.pde_solver[0] == "FreeFEM_ThickFingers":
+            pde_solver = pde_solvers.FreeFEM_ThickFingers(network, **args.pde_solver_params[0])            
         # Extender
         if args.extender[0] == "ModifiedEulerMethod_Streamline":
             extender = extenders.ModifiedEulerMethod_Streamline(
                 pde_solver=pde_solver, **args.extender_params[0]
             )
+        elif args.extender[0] == "ModifiedEulerMethod_ThickFingers":
+            extender = extenders.ModifiedEulerMethod_ThickFingers(
+                pde_solver=pde_solver, **args.extender_params[0]
+            )            
 
         # General
         system = System(
