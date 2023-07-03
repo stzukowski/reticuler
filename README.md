@@ -43,5 +43,6 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 [*Through history to growth dynamics: backward evolution of spatial networks*](https://doi.org/10.1038/s41598-022-24656-x), S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci. Rep. 12, 20407 (2022).
 [Materials](https://github.com/stzukowski/reticuler/tree/main/archive/papers/2022SciRep)
 
-### References
-[*Bifurcation dynamics of natural drainage networks*](https://doi.org/10.1098/rsta.2012.0365),  A. Petroff, O. Devauchelle, H. Seybold, and D. H. Rothman. Philos. Trans. Royal Soc. A 371, no. 2004 (2013): 20120365.
+The thin-finger growth algorithm used in this package was based on an earlier code described in the paper:
+<br />
+[*Bifurcation dynamics of natural drainage networks*](https://doi.org/10.1098/rsta.2012.0365),  A. Petroff, O. Devauchelle, H. Seybold, and D. H. Rothman. Philos. Trans. Royal Soc. A 371, 20120365 (2013)
