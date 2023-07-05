@@ -505,13 +505,16 @@ class FreeFEM_ThickFingers:
             real time0=clock();
             
             // Adaptation around the tip
-            func real tipfield( real X, real Y, real sigma)
+            func real tipfield( real[int] X, real[int] Y, int nTips, real R)
             {
-            real rr=((x-X)^2 + (y-Y)^2)^0.5;
-            real err=0;
-            if (rr>0.99*sigma & rr<1.01*sigma)
-                err=1;
-            return err;
+                real err=0, rr;
+                for(int i=0;i<nTips;i++)
+                {
+                    real rr=((x-X(i))^2 + (y-Y(i))^2)^0.5;
+                    if (rr>0.999*R & rr<1.001*R)
+                        err=1;
+                    return err;
+                }
             }
             """
         )
@@ -594,8 +597,9 @@ class FreeFEM_ThickFingers:
             // cout << endl << endl << "Adaptation..." << endl;
             real error=0.01;
             for(int i=0;i<{n_adapt};i++){{
-            Th=adaptmesh(Th, u, err=error, nbvx=500000, verbosity=0, nbsmooth=100,iso=true,ratio=1.8{pbc}); // Adapting mesh according to the first solution
+            Th=adaptmesh(Th, [u, 0.005*tipfield(X,Y,nbTips,{f_w_half})], err=error,nbvx=500000,verbosity=0,nbsmooth=100,iso=1,ratio=1.8,keepbackvertices=1{pbc}); // Adapting mesh according to the first solution
             u=u;
+            mobility=mobility;
             error=error/2;
             potential; // Solving one more time with adapted mesh
             }}
@@ -603,14 +607,8 @@ class FreeFEM_ThickFingers:
             // plot(u, wait=true, fill=true);
             
             real adaptTime=clock() - adaptTime0;
-            
-            // Calculating gradient
-            dxu=dx(u);
-            dyu=dy(u);
-            // du=(dxu^2+dyu^2)^0.5;
-            // plot(du, wait=true, fill=true);
             """
-        ).format(n_adapt=self.n_adapt, pbc=self.pbc)
+        ).format(n_adapt=self.n_adapt, pbc=self.pbc, f_w_half=self.finger_width/2)
 
         self.__script_tip_integration = textwrap.dedent(
             """
@@ -623,7 +621,7 @@ class FreeFEM_ThickFingers:
             int ndof=0, n=0;
             real totGrad=0;
             real sumGrad=0, sumAng=0;
-            int avgWindow = 2;
+            int avgWindow = 5;
             real maxGrad=0, maxAngle=0;
             """
         )
@@ -653,7 +651,7 @@ class FreeFEM_ThickFingers:
         connections_bc = np.column_stack((connections, boundary_conditions))
         
         border_box, inside_buildmesh_box = \
-            FreeFEM.prepare_script_box(self, connections_bc, points, points_per_unit_len=10)
+            FreeFEM.prepare_script_box(self, connections_bc, points, points_per_unit_len=0.5) # 10
         
         return border_box, inside_buildmesh_box
 
@@ -664,12 +662,22 @@ class FreeFEM_ThickFingers:
 
         tip_integration_template = textwrap.dedent(
             """
+            // Calculating gradient
+            dxu=dx(u);
+            dyu=dy(u);
+            // du=(dxu^2+dyu^2)^0.5;
+            // plot(du, wait=true, fill=true);
+            
+            // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
+            // https://ljll.math.upmc.fr/pipermail/freefempp/2009/000337.html
+            
             ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
             int1d(Th, {i}, qfe=qf1pE)( (ndof++)*1.);
             real[int] angles{i}(ndof), gradAbsNormal{i}(ndof), gradAbs{i}(ndof);
             int1d(Th, {i}, qfe=qf1pE)( (angles{i}(n++)=atan2(y-{y0}, x-{x0}))*1.
                                             +(gradAbs{i}(n)=(dxu^2+dyu^2)^0.5)*1.
                                             +(gradAbsNormal{i}(n)=abs(dxu*N.x+dyu*N.y))*1.);
+                   
             // cout << "angles{i} "<<angles{i}<<"angles{i}end "<<endl;
             // cout << "gradAbs{i} "<<gradAbs{i}<<"gradAbs{i}end "<<endl;
             // cout << "gradAbsNormal{i} "<<gradAbsNormal{i}<<"gradAbsNormal{i}end "<<endl;
@@ -693,7 +701,26 @@ class FreeFEM_ThickFingers:
             cout << totGrad << "," << maxAngle << ",";
             """
             )
-        
+        tip_information = textwrap.dedent(
+            """
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // TIP INFORMATION
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            
+            int nbTips={n_tips}; 
+            real[int] X(nbTips); 
+            real[int] Y(nbTips);
+            """.format(
+                n_tips=len(network.active_branches)
+            )
+        )
+        for i, branch in enumerate(network.active_branches):
+            tip_information = (
+                tip_information
+                + "\nX({j})={x:.12g};".format(j=i, x=branch.points[-1, 0])
+                + "\nY({j})={y:.12g};".format(j=i, y=branch.points[-1, 1])
+                )
+        tip_information = tip_information + "\n"        
         
         mobility_regions = ""
         border_contour = ""
@@ -797,11 +824,12 @@ class FreeFEM_ThickFingers:
                     inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
                 )
                 
-                script_tip_integration = script_tip_integration + tip_integration_template.format( \
-                                                i=1000+branch.ID, 
-                                                x0=skeleton[-1,0], 
-                                                y0=skeleton[-1,1])
-        
+                script_tip_integration = script_tip_integration + \
+                    tip_integration_template.format( \
+                        i=1000+branch.ID, 
+                        x0=skeleton[-1,0], y0=skeleton[-1,1],
+                        phi0=tilt_ang,f_w_half=self.finger_width/2)
+                
             for k, points in enumerate([contour_right, contour_left]):
                 # building mesh for contours on the right and left of the finger
                 for j, pair in enumerate(zip(points, points[1:])):
@@ -846,7 +874,7 @@ class FreeFEM_ThickFingers:
             ) + \
             "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
 
-        script = self.__script_init + buildmesh + script_mobility
+        script = self.__script_init + buildmesh + script_mobility + tip_information
         if self.equation:
             script = script + self.__script_problem_Poisson
         else:
@@ -879,10 +907,12 @@ class FreeFEM_ThickFingers:
             
         flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
         self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
+        
         # return s_o
     
     
         # ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
         # self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
-        # with np.printoptions(formatter={'float': '{:.6e}'.format}):
-            # print('a1a2a3: \n', self.flux_info)
+        with np.printoptions(formatter={'float': '{:.6g}'.format}):
+            # print('flux_info: \n', self.flux_info)
+            print('angle: \n', self.flux_info*180/np.pi)
