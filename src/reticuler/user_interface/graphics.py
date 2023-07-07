@@ -32,7 +32,7 @@ cm2inch = 1 / 2.54
 golden = (1 + 5**0.5) / 2
 
 
-def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
+def plot_tree(ax, network, ylim=None, xlim=None, **kwargs_tree_plot):
     """Plot a tree with optional arguments from \*\*kwargs_tree, and a black box.
 
     Parameters
@@ -63,11 +63,12 @@ def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
         line = branch.points
         if np.max(line[:, 1]) > y_max:
             y_max = 1.05*np.max(line[:, 1])
-        ax.plot(*line.T, **options_tree_plot)
+        ax.plot(*line.T, **options_tree_plot, marker='.', ms=5)
     # PLOT BOX
     points_to_plot = network.box.points[network.box.connections]
     for pts in points_to_plot:
         ax.plot(*pts.T, linewidth=options_tree_plot["linewidth"] * 2, color="0")
+    x_max = np.max(points_to_plot[...,0])
 
     ax.axis("off")
     # colouring background
@@ -75,6 +76,7 @@ def plot_tree(ax, network, ylim=None, xlim=2.0, **kwargs_tree_plot):
     ax.patch.set_zorder(-1)
     ax.set_facecolor("#def1ff")
     ax.set_aspect("equal")
+    xlim = x_max if xlim is None else xlim
     ax.set_xlim(0, xlim)
     ylim = y_max if ylim is None else ylim
     ax.set_ylim(0, ylim)    

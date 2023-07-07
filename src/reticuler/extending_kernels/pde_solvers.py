@@ -72,7 +72,7 @@ class FreeFEM:
             }
             
             // Adaptation around the tip
-            func real tipfield( real[int] X, real[int] Y,real sigma,int nTips)
+            func real tipfield( real[int] X, real[int] Y, real sigma, int nTips)
             {
             real err=0;
             for(int i=0;i<nTips;i++)
@@ -471,7 +471,7 @@ class FreeFEM_ThickFingers:
 
     """
 
-    def __init__(self, network, equation=0, finger_width=0.02, mobility_ratio=1e4, n_adapt=2):
+    def __init__(self, network, equation=0, finger_width=0.02, mobility_ratio=1e4):
         """Initialize FreeFEM.
 
         Parameters
@@ -489,7 +489,6 @@ class FreeFEM_ThickFingers:
         self.equation = equation
         self.finger_width = finger_width
         self.mobility_ratio = mobility_ratio 
-        self.n_adapt = n_adapt
         self.flux_info = []
          
         # parts of the script
@@ -507,14 +506,28 @@ class FreeFEM_ThickFingers:
             // Adaptation around the tip
             func real tipfield( real[int] X, real[int] Y, int nTips, real R)
             {
-                real err=0, rr;
+                real err=0.;
                 for(int i=0;i<nTips;i++)
                 {
                     real rr=((x-X(i))^2 + (y-Y(i))^2)^0.5;
-                    if (rr>0.999*R & rr<1.001*R)
-                        err=1;
-                    return err;
+                    if (rr>0.999*R & rr<1.001*R){
+                        err+=1.;
+                        }
                 }
+            	return err;
+            }
+            
+            // Counting vertices on the tips
+            func int[int] countNvOnTips( mesh th, int[int] tLabels, int nTips)
+            {
+                int[int] nvOnTips(nTips);
+                for(int i=0;i<nTips;++i)
+                {
+                    int ndof=0;
+                    int1d(th, tLabels(i), qfe=qf1pE)( (ndof++)*1.);
+                    nvOnTips(i) = ndof;
+                };
+                return nvOnTips;
             }
             """
         )
@@ -575,54 +588,93 @@ class FreeFEM_ThickFingers:
             // ADAPTING THE MESH AND SOLVING FOR THE FIELD
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
 
-            // First adaptation
-            real firstAdaptTime0=clock();
-            // Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
-            // Th = adaptmesh(Th,1,nbvx=500000,hmax=0.05,nbsmooth=100,iso=true,ratio=1.8{pbc});
-            real firstAdaptTime=clock() - firstAdaptTime0;
-            // plot(Th, wait=true);
+            // int iTip=0;
+            // real x0Th=X(iTip)-2*tipR, y0Th=Y(iTip)-2*tipR, x1Th=X(iTip)+2*tipR, y1Th=Y(iTip)+2*tipR;
+            // plot(Th, wait=true, bb=[[x0Th, y0Th],[x1Th, y1Th]]);
             
             // Solving the problem for the first time
             real firstRunTime0=clock();
             potential;
             // cout<<"First solve completed."<<endl;
             real firstRunTime=clock() - firstRunTime0;
-            // dxu=dx(u);
-            // dyu=dy(u);
-            // du=(dxu^2+dyu^2)^0.5;
-            // plot(du, wait=true, fill=true);
             
             // Adaptation loop
             real adaptTime0=clock();
             // cout << endl << endl << "Adaptation..." << endl;
             real error=0.01;
-            for(int i=0;i<{n_adapt};i++){{
-            Th=adaptmesh(Th, [u, 0.005*tipfield(X,Y,nbTips,{f_w_half})], err=error,nbvx=500000,verbosity=0,nbsmooth=100,iso=1,ratio=1.8,keepbackvertices=1{pbc}); // Adapting mesh according to the first solution
-            u=u;
-            mobility=mobility;
-            error=error/2;
-            potential; // Solving one more time with adapted mesh
+            int adaptCounter=0;
+            int[int] nvOnTips = countNvOnTips(Th, tipLabels, nbTips);
+            while(nvOnTips.min < 70 || adaptCounter<1)
+            {{
+                // cout << "Adaptation step: " << adaptCounter;
+                // cout << ", nvOnTip.min = " << nvOnTips.min << endl;
+                // plot(Th, wait=true, bb=[[x0Th, y0Th],[x1Th, y1Th]]);
+                Th=adaptmesh(Th, [u, 0.005*tipfield(X,Y,nbTips,tipR)],err=error,nbvx=500000,verbosity=0,nbsmooth=100,iso=1,ratio=1.8,keepbackvertices=1{pbc}); // Adapting mesh according to the first solution
+                u=u;
+                mobility=mobility;
+                error=error/2;
+                potential; // Solving one more time with adapted mesh
+                nvOnTips = countNvOnTips(Th, tipLabels, nbTips);
+                adaptCounter++;
             }}
+            cout << "Adaptation step: " << adaptCounter;
+            cout << ", nvOnTip.min = " << nvOnTips.min << endl;
+            // plot(Th, wait=true, bb=[[x0Th, y0Th],[x1Th, y1Th]]);
             // cout << "Problem solved." << endl;
             // plot(u, wait=true, fill=true);
             
             real adaptTime=clock() - adaptTime0;
             """
-        ).format(n_adapt=self.n_adapt, pbc=self.pbc, f_w_half=self.finger_width/2)
+        ).format(pbc=self.pbc)
 
         self.__script_tip_integration = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // EXPORT RESULTS
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
-
+            // CALCULATE FLUXES AND EXPORT RESULTS
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            
+            // Calculating gradient
+            dxu=dx(u);
+            dyu=dy(u);
+            // du=(dxu^2+dyu^2)^0.5;
+            // plot(du, wait=true, fill=true);
+            
+            // Deteremining the flux coming to the tip
+            // More on reading the field values in specific points:
+            // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
+            // https://ljll.math.upmc.fr/pipermail/freefempp/2009/000337.html
+            int avgWindow = 5;
             cout.precision(12);
             cout << "kopytko ";
-            int ndof=0, n=0;
-            real totGrad=0;
-            real sumGrad=0, sumAng=0;
-            int avgWindow = 5;
-            real maxGrad=0, maxAngle=0;
+            for(int k=0;k<nbTips;k++)
+            {
+                int ndof=nvOnTips(k), n=0;
+                real[int] angles(ndof), gradAbsNormal(ndof);
+                int1d(Th, tipLabels(k), qfe=qf1pE)( (angles(n++)=atan2(y-Y(k), x-X(k)))*1.
+                                                +(gradAbsNormal(n)=abs(dxu*N.x+dyu*N.y))*1.);
+                // cout<<"tip"<<tipLabels(k)<<endl;
+                // cout<<"angles "<<angles<<endl;
+                // cout<<"gradAbsNormal "<<gradAbsNormal<<endl;
+                // cout<<"tip"<<tipLabels(k)<<"end"<<endl;
+                
+                real maxGrad=0, maxAngle=pi/2;
+                real[int] gradAbsNormalMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
+                for (int i=0; i<=(ndof-avgWindow); i++){
+                    real sumGrad=0, sumAng=0;
+                    for (int j=i; j<i+avgWindow; j++){
+                        sumGrad += gradAbsNormal[j];
+                        sumAng += angles[j];
+                    }
+                    gradAbsNormalMvAvg(i) = sumGrad / avgWindow;
+                    anglesMvAvg(i) = sumAng / avgWindow;
+                    if (gradAbsNormalMvAvg(i)>maxGrad){
+                        maxGrad=gradAbsNormalMvAvg(i);
+                        maxAngle=anglesMvAvg(i);
+                    }
+                }
+                real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
+                cout << totGrad << "," << maxAngle << ",";
+            }            
             """
         )
 
@@ -660,74 +712,39 @@ class FreeFEM_ThickFingers:
         """Return a full FreeFEM script with the `network` geometry."""
         pt_between = lambda pt1, pt2 : pt1 + (pt2-pt1)/np.linalg.norm(pt2-pt1)*self.finger_width/2
 
-        tip_integration_template = textwrap.dedent(
-            """
-            // Calculating gradient
-            dxu=dx(u);
-            dyu=dy(u);
-            // du=(dxu^2+dyu^2)^0.5;
-            // plot(du, wait=true, fill=true);
-            
-            // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
-            // https://ljll.math.upmc.fr/pipermail/freefempp/2009/000337.html
-            
-            ndof=0; n=0; maxGrad=0; maxAngle=pi/2;
-            int1d(Th, {i}, qfe=qf1pE)( (ndof++)*1.);
-            real[int] angles{i}(ndof), gradAbsNormal{i}(ndof), gradAbs{i}(ndof);
-            int1d(Th, {i}, qfe=qf1pE)( (angles{i}(n++)=atan2(y-{y0}, x-{x0}))*1.
-                                            +(gradAbs{i}(n)=(dxu^2+dyu^2)^0.5)*1.
-                                            +(gradAbsNormal{i}(n)=abs(dxu*N.x+dyu*N.y))*1.);
-                   
-            // cout << "angles{i} "<<angles{i}<<"angles{i}end "<<endl;
-            // cout << "gradAbs{i} "<<gradAbs{i}<<"gradAbs{i}end "<<endl;
-            // cout << "gradAbsNormal{i} "<<gradAbsNormal{i}<<"gradAbsNormal{i}end "<<endl;
-            
-            real[int] gradAbsNormalMvAvg{i}(ndof-avgWindow+1), anglesMvAvg{i}(ndof-avgWindow+1);
-            for (int i=0; i<=(ndof-avgWindow); i++){{
-                sumGrad=0;
-                sumAng=0;
-                for (int j=i; j<i+avgWindow; j++){{
-                    sumGrad += gradAbsNormal{i}[j];
-                    sumAng += angles{i}[j];
-                }}
-                	gradAbsNormalMvAvg{i}(i) = sumGrad / avgWindow;
-                	anglesMvAvg{i}(i) = sumAng / avgWindow;
-                	if (gradAbsNormalMvAvg{i}(i)>maxGrad){{
-                    maxGrad=gradAbsNormalMvAvg{i}(i);
-                    maxAngle=anglesMvAvg{i}(i);
-                }}
-            }}
-            totGrad =  int1d(Th, {i})( abs([dxu,dyu]'*[N.x,N.y]) );
-            cout << totGrad << "," << maxAngle << ",";
-            """
-            )
         tip_information = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // TIP INFORMATION
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             
-            int nbTips={n_tips}; 
+            real tipR={f_w_half};
+            int nbTips={n_tips};
+            int[int] tipLabels(nbTips);
+            int[int] indRegions(nbTips);
             real[int] X(nbTips); 
             real[int] Y(nbTips);
             """.format(
+                f_w_half = self.finger_width/2,
                 n_tips=len(network.active_branches)
             )
         )
+        mobility_regions = ""
         for i, branch in enumerate(network.active_branches):
             tip_information = (
                 tip_information
+                + "\ntipLabels({j})={bc};".format(j=i, bc=1000+branch.ID)
                 + "\nX({j})={x:.12g};".format(j=i, x=branch.points[-1, 0])
                 + "\nY({j})={y:.12g};".format(j=i, y=branch.points[-1, 1])
                 )
-        tip_information = tip_information + "\n"        
+        tip_information = tip_information + "\n"               
         
         mobility_regions = ""
+        script_mobility = self.__script_mobility                                                  
         border_contour = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
-        script_mobility = self.__script_mobility
-        script_tip_integration = self.__script_tip_integration
         for i, branch in enumerate(network.branches):
+            print(i)
             if branch.ID in network.box.seeds_connectivity[:,1]:
                 ind_seed = network.box.seeds_connectivity[network.box.seeds_connectivity[:,1]==branch.ID, 0]
                 # box (boundary)
@@ -736,16 +753,11 @@ class FreeFEM_ThickFingers:
                 box_pt_left = pt_between(network.box.points[ind_seed], \
                                       network.box.points[ind_seed-1])
                     
-
                 script_mobility = script_mobility + \
-                            textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
-                                i=branch.ID, \
-                                x=branch.points[-1][0],
-                                y=branch.points[-1][1]
-                                ))
+                    textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
+                        i=branch.ID, x=branch.points[-1][0], y=branch.points[-1][1] ))
                 mobility_regions = mobility_regions + "region==indRegion{i} || ".format(i=branch.ID)
-            
-            
+                    
             # contour can intersect itself if finger_width>ds (distances between the points in the branch)
             # hence, we select the points on the branch that are finger_width/2 apart from each other
             skeleton = [branch.points[0]]
@@ -755,12 +767,13 @@ class FreeFEM_ThickFingers:
                 len_sum = len_sum + seg
                 if len_sum>self.finger_width/2:
                     len_sum = 0
-                    skeleton.append(branch.points[i])
+                    skeleton.append(branch.points[i+1])
             if len(skeleton)>1:
                 skeleton[-1] = branch.points[-1]
             else:
                 skeleton.append(branch.points[-1])
             skeleton = np.array(skeleton)
+            print("skeleton: ", skeleton)
             skeleton_shifts_up = (skeleton[1:]-skeleton[:-1]) # vectors between points: 0 -> 1, 1 -> 2, etc.
             skeleton_shifts_down = (skeleton[:-1]-skeleton[1:]) # vectors between points: 1 -> 0, 2 -> 1, etc.
         
@@ -792,24 +805,7 @@ class FreeFEM_ThickFingers:
                 
                 contour_right = np.vstack(( contour_right, tip_right ))
                 contour_left = np.vstack(( tip_left, contour_left ))    
-                
-                # semi-circular cap v1
-                # angle_tip = angles_down[-1]+np.pi/2
-                # angles_tip = np.linspace( angle_tip, angle_tip+np.pi,101)
-                # points = skeleton[-1] + self.finger_width/2*np.stack((np.cos(angles_tip), np.sin(angles_tip))).T
-                # for j, pair in enumerate(zip(points, points[1:])):               
-                #     border_contour = (
-                #         border_contour
-                #         + "border tip{i}connection{j}(t=0, 1){{x={x0:.12g}+t*({ax:.12g});y={y0:.12g}+t*({ay:.12g}); label={bc};}}\n".format(
-                #             i=branch.ID, j=j, bc=1000+branch.ID,
-                #             x0=pair[0][0], ax=pair[1][0] - pair[0][0], 
-                #             y0=pair[0][1], ay=pair[1][1] - pair[0][1]
-                #         )
-                #     )
-                #     inside_buildmesh = (
-                #         inside_buildmesh + " tip{i}connection{j}(1) +".format(i=branch.ID,j=j)
-                #     )
-                
+               
                 # semi-circular cap v2
                 tilt_shift = tip_right-skeleton[-1]
                 tilt_ang = np.arctan2(tilt_shift[1], tilt_shift[0])
@@ -823,13 +819,16 @@ class FreeFEM_ThickFingers:
                 inside_buildmesh = (
                     inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
                 )
-                
-                script_tip_integration = script_tip_integration + \
-                    tip_integration_template.format( \
-                        i=1000+branch.ID, 
-                        x0=skeleton[-1,0], y0=skeleton[-1,1],
-                        phi0=tilt_ang,f_w_half=self.finger_width/2)
-                
+            
+            print(contour_right)
+            print(contour_left)
+            # import matplotlib.pyplot as plt
+            # plt.plot(*contour_right.T, '.-')
+            # plt.plot(*contour_left.T, '.-')
+            # points_to_plot = network.box.points[network.box.connections]
+            # for pts in points_to_plot:
+            #     plt.plot(*pts.T, color="0")
+            
             for k, points in enumerate([contour_right, contour_left]):
                 # building mesh for contours on the right and left of the finger
                 for j, pair in enumerate(zip(points, points[1:])):
@@ -874,12 +873,12 @@ class FreeFEM_ThickFingers:
             ) + \
             "\nreal buildTime=clock() - buildTime0;\n// plot(Th, wait=true);\n"
 
-        script = self.__script_init + buildmesh + script_mobility + tip_information
+        script = self.__script_init + buildmesh + tip_information + script_mobility
         if self.equation:
             script = script + self.__script_problem_Poisson
         else:
             script = script + self.__script_problem_Laplace
-        script = script + self.__script_adaptmesh + script_tip_integration
+        script = script + self.__script_adaptmesh + self.__script_tip_integration
 
         return script
     
@@ -902,17 +901,14 @@ class FreeFEM_ThickFingers:
         script = self.__prepare_script(network)
         if system() == "Windows":
             out_freefem = FreeFEM.run_freefem(self, script) # useful for debugging
+            # print(out_freefem.stdout)
         else:
             out_freefem = FreeFEM.run_freefem_temp(self, script)
+            print(out_freefem.stdout)
             
         flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
         self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
         
-        # return s_o
-    
-    
-        # ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
-        # self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         with np.printoptions(formatter={'float': '{:.6g}'.format}):
             # print('flux_info: \n', self.flux_info)
-            print('angle: \n', self.flux_info*180/np.pi)
+            print('angle: \n', self.flux_info[...,1]*180/np.pi)

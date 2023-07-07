@@ -79,7 +79,7 @@ def main():
                             default = 2
                             """
         ),
-        default=[2],
+        default=[None],
     )
     parser.add_argument(
         "--plot_params",

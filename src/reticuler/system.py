@@ -497,7 +497,6 @@ class System:
                     "equation": equation_legend[self.extender.pde_solver.equation],
                     "finger_width": self.extender.pde_solver.finger_width,
                     "mobility_ratio":self.extender.pde_solver.mobility_ratio,
-                    "n_adapt": self.extender.pde_solver.n_adapt,
                 }
                 bifurcation_type_legend = [
                     "no bifurcations", "a1", "random"]
@@ -624,8 +623,7 @@ class System:
                 pde_solver = pde_solvers.FreeFEM_ThickFingers(network, 
                                                  equation=equation,
                                                  finger_width=json_solver["finger_width"],
-                                                 mobility_ratio=json_solver["mobility_ratio"], 
-                                                 n_adapt=json_solver["n_adapt"],
+                                                 mobility_ratio=json_solver["mobility_ratio"],
                                                  )
             # Extender
             json_extender = json_load["extender"]
