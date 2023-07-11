@@ -473,9 +473,9 @@ class BackwardSystem:
                     self.system.trajectory_integrator.integrate(
                         extender=self.system.extender,
                         network=test_network,
+                        step=self.system.growth_gauges[0],
                         is_BEA_off=False
                 )
-                test_network.move_tips(step=self.system.growth_gauges[0])
 
             # compare the network before and after the backward-forward steps
             self.__compare_networks(

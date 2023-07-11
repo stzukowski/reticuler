@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from reticuler.system import System
 from reticuler.user_interface import graphics
 
-# %%
 def main():
     parser = argparse.ArgumentParser(
         description="Plot a network.", formatter_class=argparse.RawTextHelpFormatter
@@ -56,6 +55,7 @@ def main():
 
     # Plotting options
     parser.add_argument(
+        "-Y",
         "--ylim",
         type=float,
         nargs=1,
@@ -69,6 +69,7 @@ def main():
         default=[None],
     )
     parser.add_argument(
+        "-X",
         "--xlim",
         type=float,
         nargs=1,
@@ -116,7 +117,49 @@ def main():
             Flag indicating to plot networks from all the files in the directory.
             """
         ),
+    )    
+       
+    # Animate the growth
+    parser.add_argument(
+        "-anim",
+        "--animate",
+        action=argparse.BooleanOptionalAction,
+        help=textwrap.dedent(
+            """\
+            Flag indicating to animate the growth of a network.
+            """
+        ),
     )
+    # Animate the growth
+    parser.add_argument(
+        "-rot",
+        "--rot_angle",        
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+            An angle by which the final animation will be rotated.
+            default = 0
+            """
+        ),
+        default=[None],
+    )          
+    parser.add_argument(
+        "-speed",
+        "--speed_factor",
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+            A speed factor by which the animation will be accelerated.
+            default = 1 (animation length = 4s)
+            """
+        ),
+        default=[None],
+    )        
+        
 
     # parse the arguments from standard input
     args = parser.parse_args()
@@ -131,19 +174,35 @@ def main():
         # Import System from JSON file
         system = System.import_json(input_file=exp_name)
     
-        fig, ax = plt.subplots()
-        graphics.plot_tree(
-            ax,
-            network=system.network,
-            ylim=args.ylim[0],
-            xlim=args.xlim[0],
-            **args.plot_params[0]
-        )
-    
-        if args.output_file is None:
-            fig.savefig(exp_name + args.output_extension[0], bbox_inches="tight")
+        if args.animate:
+            # animation!
+            ani = graphics.animate_tree(
+                system0=system,
+                ylim=args.ylim[0],
+                xlim=args.xlim[0],
+                rot_angle=args.rot_angle[0],
+                **args.plot_params[0]
+            )
+            ani.save(filename="test.avi", writer="ffmpeg")
+            if args.output_file is None:
+                ani.save(exp_name + ".avi", writer="ffmpeg")
+            else:
+                ani.save(args.output_file[0] + ".avi", writer="ffmpeg")
         else:
-            fig.savefig(args.output_file[0] + args.output_extension[0], bbox_inches="tight")
+            fig, ax = plt.subplots()
+            graphics.plot_tree(
+                ax,
+                network=system.network,
+                ylim=args.ylim[0],
+                xlim=args.xlim[0],
+                speed_factor=args.speed_factor[0],
+                **args.plot_params[0]
+            )
+        
+            if args.output_file is None:
+                fig.savefig(exp_name + args.output_extension[0], bbox_inches="tight")
+            else:
+                fig.savefig(args.output_file[0] + args.output_extension[0], bbox_inches="tight", dpi=400)
 
 
 if __name__ == "__main__":

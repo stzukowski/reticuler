@@ -31,10 +31,14 @@ def clip_to_step(system, max_step):
         else:
             branch.points = branch.points[~to_trash]
             branch.steps = branch.steps[~to_trash]
+            mask = system.network.branch_connectivity[:,0]!=branch.ID
+            if (system.network.branch_connectivity[~mask,1]==-1).any():
+                system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
             
+    system.timestamps = system.timestamps[:(max_step+1)]
     system.growth_gauges[0] = max_step
     system.growth_gauges[1], system.growth_gauges[2] = system.network.height_and_length()
-    system.growth_gauges[3] = 0
+    system.growth_gauges[3] = system.timestamps[-1]
 
 
 def clip_to_length(system, max_length):

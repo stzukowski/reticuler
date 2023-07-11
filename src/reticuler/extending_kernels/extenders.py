@@ -28,19 +28,6 @@ def rotation_matrix(angle):
     return np.array(
         [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
     )
-
-def assign_dRs(network, dRs, bifurcation_angle):
-    """Assign ``dRs`` to each branch in ``network``."""
-    for i, branch in enumerate(network.active_branches):
-        if branch.is_bifurcating:
-            branch.dR = [
-                np.dot(
-                    rotation_matrix(-bifurcation_angle / 2), dRs[i]),
-                np.dot(rotation_matrix(
-                    bifurcation_angle / 2), dRs[i]),
-            ]
-        else:
-            branch.dR = dRs[i]
             
 def move_test_tips(network, dRs):
     """Move test tips (no bifurcations or killing).
@@ -264,7 +251,7 @@ class ModifiedEulerMethod_Streamline:
             )
         return dRs_test
 
-    def integrate(self, network, is_BEA_off=True):
+    def integrate(self, network, step, is_BEA_off=True):
         """Integrate tip trajectories with modified Euler's method.
     
         Parameters
@@ -335,7 +322,7 @@ class ModifiedEulerMethod_Streamline:
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        assign_dRs(network, dRs_test, self.bifurcation_angle)
+        network.move_tips(dRs_test, step)
         
         return dt, flux_info_0
     
@@ -508,7 +495,28 @@ class ModifiedEulerMethod_ThickFingers:
             
         return dRs_test
 
-    def integrate(self, network, is_BEA_off=True):
+    def __breakthrough_protocole(self, network, step):
+        """Check if one of the branches is reaching the outlet."""        
+        y_outlet = np.max(network.box.points[:,1])
+        for branch in network.active_branches:
+            if branch.points[-1,1] > y_outlet - \
+                (self.pde_solver.finger_width/2 + 2*self.ds):
+                    # find the point on the border and update border box script
+                tip_pt = branch.points[-1]
+                breakthrough_pt = np.array([tip_pt[0], y_outlet])
+                
+                branch.points = np.vstack( (branch.points, [breakthrough_pt]) )
+                branch.steps = np.append(branch.steps, 2*[step])
+                network.active_branches.remove(branch)
+                network.add_connection([branch.ID, -1])
+                
+                self.pde_solver.script_border_box, \
+                    self.pde_solver.script_inside_buildmesh_box = \
+                        self.pde_solver.prepare_script_box(network)
+                
+                
+
+    def integrate(self, network, step, is_BEA_off=True):
         """Integrate tip trajectories with modified Euler's method.
     
         Parameters
@@ -576,7 +584,8 @@ class ModifiedEulerMethod_ThickFingers:
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        assign_dRs(network, dRs_test, self.bifurcation_angle)
+        network.move_tips(dRs_test, step)
+        self.__breakthrough_protocole(network, step)
         
         return dt, flux_info_0
 

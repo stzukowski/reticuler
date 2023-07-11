@@ -13,7 +13,7 @@ from platform import system
 from tempfile import NamedTemporaryFile
 import textwrap
 
-from reticuler.system import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET
+from reticuler.system import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET, CONSTANT_FLUX
 
 class FreeFEM:
     """PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.
@@ -532,7 +532,7 @@ class FreeFEM_ThickFingers:
             """
         )
         
-        self.__script_border_box, self.__script_inside_buildmesh_box = \
+        self.script_border_box, self.script_inside_buildmesh_box = \
             self.prepare_script_box(network)
         
         self.__script_mobility = textwrap.dedent(
@@ -540,11 +540,8 @@ class FreeFEM_ThickFingers:
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING MOBILITY
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            
-            int indRegionOut=Th({x_outside},{y_outside}).region;""").format(
-                x_outside=network.box.points[1,0]*0.9,
-                y_outside=network.box.points[1,1]*0.9
-                )
+            """
+            )
         
         self.__script_problem_Laplace = textwrap.dedent(
             """
@@ -679,22 +676,30 @@ class FreeFEM_ThickFingers:
         )
 
     def prepare_script_box(self, network):
-        """Return parts of the FreeFEM script with the geometry of the `network.box`."""
+        """Return parts of the FreeFEM script with the geometry of the ``network.box``."""
+        pt_between = lambda pt1, pt2 : pt1 + (pt2-pt1)/np.linalg.norm(pt2-pt1)*self.finger_width/2
         
         points = network.box.points.copy()
         boundary_conditions = network.box.boundary_conditions.copy()
         for i, seed_ind in enumerate(network.box.seeds_connectivity[:,0]):
-            point_seed = network.box.points[seed_ind]
-            point_left = network.box.points[seed_ind-1]
-            point_right = network.box.points[(seed_ind+1) % len(network.box.points)]
-            v1 = point_left - point_seed
-            v1 = point_seed + v1 / np.linalg.norm(v1) * self.finger_width/2
-            v2 = point_right - point_seed
-            v2 = point_seed + v2 / np.linalg.norm(v2) * self.finger_width/2
+            seed_pt = network.box.points[seed_ind]
+            left_pt = network.box.points[seed_ind-1]
+            right_pt = network.box.points[(seed_ind+1) % len(network.box.points)]
+            v1 = pt_between(seed_pt, left_pt)
+            v2 = pt_between(seed_pt, right_pt)
             
             points[seed_ind+i] = v1
             points = np.insert(points, seed_ind+i+1, v2, axis=0)
-            boundary_conditions = np.insert(boundary_conditions, seed_ind+i+1, 1)
+            boundary_conditions = np.insert(boundary_conditions, seed_ind+i+1, DIRICHLET)
+        
+        br_conn = network.branch_connectivity
+        ind_bt = np.where(br_conn[:,1]==-1)[0]
+        if ind_bt.size:
+            breakthrough_pt = network.branches[br_conn[ind_bt[0],0]].points[-1]
+            v1 = pt_between(breakthrough_pt, network.box.points[1])
+            v2 = pt_between(breakthrough_pt, network.box.points[2])
+            points = np.insert(points, 2, [v1, v2], axis=0)
+            boundary_conditions = np.insert(boundary_conditions, 1, 2*[CONSTANT_FLUX])
     
         connections = np.vstack(
                         [np.arange(len(points)), np.roll(
@@ -707,10 +712,114 @@ class FreeFEM_ThickFingers:
         
         return border_box, inside_buildmesh_box
 
+    def finger_contour(self, branch, network, 
+                       script_mobility="", mobility_regions="", 
+                       border_contour="", inside_buildmesh=""):
+        """Return contour of the ``branch`` and parts of the scripts associated with it."""
+        pt_between = lambda pt1, pt2 : pt1 + (pt2-pt1)/np.linalg.norm(pt2-pt1)*self.finger_width/2
+        
+        if branch.ID in network.box.seeds_connectivity[:,1]:
+            ind_seed = network.box.seeds_connectivity[network.box.seeds_connectivity[:,1]==branch.ID, 0]
+            # box (boundary)
+            box_pt_right = pt_between(network.box.points[ind_seed], \
+                                  network.box.points[(ind_seed+1) % len(network.box.points)])
+            box_pt_left = pt_between(network.box.points[ind_seed], \
+                                  network.box.points[ind_seed-1])
+                
+            script_mobility = script_mobility + \
+                textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
+                    i=branch.ID, x=branch.points[-1][0], y=branch.points[-1][1] ))
+            mobility_regions = mobility_regions + "region==indRegion{i} || ".format(i=branch.ID)
+                
+        # contour can intersect itself if finger_width>ds (distances between the points in the branch)
+        # hence, we select the points on the branch that are finger_width/2 apart from each other
+        skeleton = [branch.points[0]]
+        segment_lengths = np.linalg.norm(branch.points[1:]-branch.points[:-1], axis=1)
+        len_sum = 0
+        for i, seg in enumerate(segment_lengths):
+            len_sum = len_sum + seg
+            if len_sum>self.finger_width/4:
+                len_sum = 0
+                skeleton.append(branch.points[i+1])
+        if len(skeleton)>1:
+            skeleton[-1] = branch.points[-1]
+        else:
+            skeleton.append(branch.points[-1])
+        skeleton = np.array(skeleton)
+        skeleton_shifts_up = (skeleton[1:]-skeleton[:-1]) # vectors between points: 0 -> 1, 1 -> 2, etc.
+        skeleton_shifts_down = (skeleton[:-1]-skeleton[1:]) # vectors between points: 1 -> 0, 2 -> 1, etc.
+    
+        # angles between X axis and segments going up from points 0, 1, ..., n-1
+        angles_up = np.arctan2(skeleton_shifts_up[:,1], skeleton_shifts_up[:,0]) 
+        # angles between X axis and segments going down from points 1, 2, ..., n
+        angles_down = np.arctan2(skeleton_shifts_down[:,1], skeleton_shifts_down[:,0])
+        # note: the lists with angles are shifted (angles at point 1 are: angles_down[0] and angles_up[1]
+        full_angles_right = (angles_down[:-1] + angles_up[1:])/2
+        full_angles_left = full_angles_right + np.pi
+    
+        contour_right = skeleton[1:-1] + self.finger_width/2 * \
+                        np.stack((np.cos(full_angles_right), np.sin(full_angles_right))).T
+        contour_right = np.vstack(( box_pt_right, contour_right ))
+        
+        contour_left = skeleton[1:-1] + self.finger_width/2 * \
+                        np.stack((np.cos(full_angles_left), np.sin(full_angles_left))).T
+        # order from the end to the start:
+        contour_left = np.vstack(( np.flip(contour_left, axis=0), box_pt_left ))
+        
+        contour_tip = np.empty((0,2))
+        if len(network.branch_connectivity)==0 or \
+            branch.ID not in network.branch_connectivity[:,0]:
+            # if the branch is a dead end -> tip with a semi-circular cap
+            angle_tip_right = angles_down[-1] + np.pi/2
+            angle_tip_left = angle_tip_right + np.pi
+            tip_right = skeleton[-1] + self.finger_width/2 * \
+                            np.array([np.cos(angle_tip_right), np.sin(angle_tip_right)])
+            tip_left = skeleton[-1] + self.finger_width/2 * \
+                    np.array([np.cos(angle_tip_left), np.sin(angle_tip_left)])
+            
+            contour_right = np.vstack(( contour_right, tip_right ))
+            contour_left = np.vstack(( tip_left, contour_left ))    
+           
+            # semi-circular cap v2
+            tilt_shift = tip_right-skeleton[-1]
+            tilt_ang = np.arctan2(tilt_shift[1], tilt_shift[0])
+            
+            angles = np.linspace(0,np.pi,50)+tilt_ang
+            contour_tip = np.stack((skeleton[-1,0]+self.finger_width/2*np.cos(angles),
+                                    skeleton[-1,1]+self.finger_width/2*np.sin(angles))).T
+            
+            border_contour = (
+                border_contour
+                + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi+{phi0:.12g});y={y0:.12g}+{f_w_half:.12g}*sin(t*pi+{phi0:.12g}); label={bc};}}\n".format(
+                    i=branch.ID, x0=skeleton[-1,0], y0=skeleton[-1,1], 
+                    f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
+                )
+            )
+            inside_buildmesh = (
+                inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
+            )
+            
+        if network.branch_connectivity[network.branch_connectivity[:,1]==-1,0]==branch.ID:
+            breakthrough_pt = branch.points[-1]
+            v1 = pt_between(breakthrough_pt, network.box.points[1])
+            v2 = pt_between(breakthrough_pt, network.box.points[2])
+            contour_right = np.vstack(( contour_right, v1 ))
+            contour_left = np.vstack(( v2, contour_left ))  
+                
+        # print(contour_right)
+        # print(contour_left)
+        # import matplotlib.pyplot as plt
+        # plt.plot(*contour_right.T, '.-')
+        # plt.plot(*contour_left.T, '.-')
+        # points_to_plot = network.box.points[network.box.connections]
+        # for pts in points_to_plot:
+        #     plt.plot(*pts.T, color="0")
+        
+        return contour_right, contour_tip, contour_left
+        
     
     def __prepare_script(self, network):
         """Return a full FreeFEM script with the `network` geometry."""
-        pt_between = lambda pt1, pt2 : pt1 + (pt2-pt1)/np.linalg.norm(pt2-pt1)*self.finger_width/2
 
         tip_information = textwrap.dedent(
             """
@@ -742,92 +851,11 @@ class FreeFEM_ThickFingers:
         mobility_regions = ""
         script_mobility = self.__script_mobility                                                  
         border_contour = ""
-        inside_buildmesh = self.__script_inside_buildmesh_box
+        inside_buildmesh = self.script_inside_buildmesh_box
         for i, branch in enumerate(network.branches):
-            print(i)
-            if branch.ID in network.box.seeds_connectivity[:,1]:
-                ind_seed = network.box.seeds_connectivity[network.box.seeds_connectivity[:,1]==branch.ID, 0]
-                # box (boundary)
-                box_pt_right = pt_between(network.box.points[ind_seed], \
-                                      network.box.points[(ind_seed+1) % len(network.box.points)])
-                box_pt_left = pt_between(network.box.points[ind_seed], \
-                                      network.box.points[ind_seed-1])
-                    
-                script_mobility = script_mobility + \
-                    textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
-                        i=branch.ID, x=branch.points[-1][0], y=branch.points[-1][1] ))
-                mobility_regions = mobility_regions + "region==indRegion{i} || ".format(i=branch.ID)
-                    
-            # contour can intersect itself if finger_width>ds (distances between the points in the branch)
-            # hence, we select the points on the branch that are finger_width/2 apart from each other
-            skeleton = [branch.points[0]]
-            segment_lengths = np.linalg.norm(branch.points[1:]-branch.points[:-1], axis=1)
-            len_sum = 0
-            for i, seg in enumerate(segment_lengths):
-                len_sum = len_sum + seg
-                if len_sum>self.finger_width/2:
-                    len_sum = 0
-                    skeleton.append(branch.points[i+1])
-            if len(skeleton)>1:
-                skeleton[-1] = branch.points[-1]
-            else:
-                skeleton.append(branch.points[-1])
-            skeleton = np.array(skeleton)
-            print("skeleton: ", skeleton)
-            skeleton_shifts_up = (skeleton[1:]-skeleton[:-1]) # vectors between points: 0 -> 1, 1 -> 2, etc.
-            skeleton_shifts_down = (skeleton[:-1]-skeleton[1:]) # vectors between points: 1 -> 0, 2 -> 1, etc.
-        
-            # angles between X axis and segments going up from points 0, 1, ..., n-1
-            angles_up = np.arctan2(skeleton_shifts_up[:,1], skeleton_shifts_up[:,0]) 
-            # angles between X axis and segments going down from points 1, 2, ..., n
-            angles_down = np.arctan2(skeleton_shifts_down[:,1], skeleton_shifts_down[:,0])
-            # note: the lists with angles are shifted (angles at point 1 are: angles_down[0] and angles_up[1]
-            full_angles_right = (angles_down[:-1] + angles_up[1:])/2
-            full_angles_left = full_angles_right + np.pi
-        
-            contour_right = skeleton[1:-1] + self.finger_width/2 * \
-                            np.stack((np.cos(full_angles_right), np.sin(full_angles_right))).T
-            contour_right = np.vstack(( box_pt_right, contour_right ))
-            
-            contour_left = skeleton[1:-1] + self.finger_width/2 * \
-                            np.stack((np.cos(full_angles_left), np.sin(full_angles_left))).T
-            # order from the end to the start:
-            contour_left = np.vstack(( np.flip(contour_left, axis=0), box_pt_left ))
-            
-            if len(network.branch_connectivity)==0 or branch.ID not in network.branch_connectivity[:,0]:
-                # if the branch is a dead end -> tip with a semi-circular cap
-                angle_tip_right = angles_down[-1] + np.pi/2
-                angle_tip_left = angle_tip_right + np.pi
-                tip_right = skeleton[-1] + self.finger_width/2 * \
-                                np.array([np.cos(angle_tip_right), np.sin(angle_tip_right)])
-                tip_left = skeleton[-1] + self.finger_width/2 * \
-                        np.array([np.cos(angle_tip_left), np.sin(angle_tip_left)])
-                
-                contour_right = np.vstack(( contour_right, tip_right ))
-                contour_left = np.vstack(( tip_left, contour_left ))    
-               
-                # semi-circular cap v2
-                tilt_shift = tip_right-skeleton[-1]
-                tilt_ang = np.arctan2(tilt_shift[1], tilt_shift[0])
-                border_contour = (
-                    border_contour
-                    + "border tip{i}(t=0, 1){{x={x0:.12g}+{f_w_half:.12g}*cos(t*pi+{phi0:.12g});y={y0:.12g}+{f_w_half:.12g}*sin(t*pi+{phi0:.12g}); label={bc};}}\n".format(
-                        i=branch.ID, x0=skeleton[-1,0], y0=skeleton[-1,1], 
-                        f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
-                    )
-                )
-                inside_buildmesh = (
-                    inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
-                )
-            
-            print(contour_right)
-            print(contour_left)
-            # import matplotlib.pyplot as plt
-            # plt.plot(*contour_right.T, '.-')
-            # plt.plot(*contour_left.T, '.-')
-            # points_to_plot = network.box.points[network.box.connections]
-            # for pts in points_to_plot:
-            #     plt.plot(*pts.T, color="0")
+            contour_right, _, contour_left  = self.finger_contour(branch, network, \
+                                                                  script_mobility, mobility_regions, \
+                                                                  border_contour, inside_buildmesh)
             
             for k, points in enumerate([contour_right, contour_left]):
                 # building mesh for contours on the right and left of the finger
@@ -844,11 +872,12 @@ class FreeFEM_ThickFingers:
                     inside_buildmesh = (
                         inside_buildmesh + " branch{i}connection{j}side{k}(1) +".format(i=branch.ID, j=j, k=k)
                     )
+                    
         inside_buildmesh = inside_buildmesh[:-1]
         script_mobility = script_mobility + textwrap.dedent(
             """
             fespace Vh0(Th, P0{pbc});
-            Vh0 mobility = {mobilityOutside}*(region==indRegionOut) + {mobilityInside}*({mobility_regions});
+            Vh0 mobility = {mobilityOutside}*!({mobility_regions}) + {mobilityInside}*({mobility_regions});
             """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, 
                         mobility_regions = mobility_regions[:-4], pbc=self.pbc)
             )
@@ -861,7 +890,7 @@ class FreeFEM_ThickFingers:
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             """
             )
-            + self.__script_border_box
+            + self.script_border_box
             + border_contour
             )
         if network.box.boundary_conditions[0]!=2:
