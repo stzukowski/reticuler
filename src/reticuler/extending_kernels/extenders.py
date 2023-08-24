@@ -28,16 +28,6 @@ def rotation_matrix(angle):
     return np.array(
         [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
     )
-            
-def move_test_tips(network, dRs):
-    """Move test tips (no bifurcations or killing).
-
-    Assign ``dRs`` to each branch in ``network.active_branches`` and extend them.
-
-    """
-    for i, branch in enumerate(network.active_branches):
-        branch.dR = dRs[i]
-        branch.extend()
 
 
 class ModifiedEulerMethod_Streamline:
@@ -284,7 +274,7 @@ class ModifiedEulerMethod_Streamline:
     
         # moving test_system by dRs_0
         test_network = network.copy()
-        move_test_tips(test_network, dRs_0)
+        test_network.move_tips(self, dRs_0)
     
         dRs_test = 0
         approximation_step = 0
@@ -310,7 +300,7 @@ class ModifiedEulerMethod_Streamline:
                 
             # moving test_system by dR
             test_network = network.copy()
-            move_test_tips(test_network, dRs_test)
+            test_network.move_tips(self, dRs_test)
             
             # print('Forth loop, approximation step: {step}, epsilon = {eps}'.format(step=approximation_step, eps=epsilon) )
         if is_BEA_off:
@@ -322,7 +312,7 @@ class ModifiedEulerMethod_Streamline:
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        network.move_tips(dRs_test, step)
+        network.move_tips(self, dRs_test, step, is_testing=False)
         
         return dt, flux_info_0
     
@@ -529,7 +519,7 @@ class ModifiedEulerMethod_ThickFingers:
         dt : float
             Time of growth at the current evolution step.
         flux_info_0 : array
-            An array of a_i coefficients for each tip in the network.
+            pde_solver.flux_info at the initial position of the network
     
         """
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
@@ -546,7 +536,7 @@ class ModifiedEulerMethod_ThickFingers:
     
         # moving test_system by dRs_0
         test_network = network.copy()
-        move_test_tips(test_network, dRs_0)
+        test_network.move_tips(self, dRs_0)
     
         dRs_test = 0
         approximation_step = 0
@@ -572,7 +562,7 @@ class ModifiedEulerMethod_ThickFingers:
                 
             # moving test_system by dR
             test_network = network.copy()
-            move_test_tips(test_network, dRs_test)
+            test_network.move_tips(self, dRs_test)
             
             # print('Forth loop, approximation step: {step}, epsilon = {eps}'.format(step=approximation_step, eps=epsilon) )
         if is_BEA_off:
@@ -584,7 +574,7 @@ class ModifiedEulerMethod_ThickFingers:
             dt = self.ds
         
         # print('dRs: ', dRs_test)
-        network.move_tips(dRs_test, step)
+        network.move_tips(self, dRs_test, step, is_testing=False)
         self.__breakthrough_protocole(network, step)
         
         return dt, flux_info_0

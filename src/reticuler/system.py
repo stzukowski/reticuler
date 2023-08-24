@@ -351,34 +351,24 @@ class Network:
         self.branch_connectivity = np.vstack(
                 (self.branch_connectivity, connection))
 
-    def move_tips(self, dRs, step):
-        """Move tips (with bifurcations and killing).
-
-        Parameters
-        ----------
-        dRs : array
-            Shifts of the tips.
-        step : int, default 0
-            The current evolution step.
-
-        Returns
-        -------
-        None.
-
-        """
+    def move_tips(self, extender, dRs, step=0, is_testing=True):
+        """Move tips (with bifurcations and killing if is_testing==False)."""
 
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = self.active_branches.copy()
         for i, branch in enumerate(branches_to_iterate):
-            if branch.is_bifurcating:
+            if is_testing or not branch.is_bifurcating:
+                branch.dR = dRs[i]
+                branch.extend()
+            else:
                 print("! Branch {ID} bifurcated !".format(ID=branch.ID))
                 max_branch_id = len(self.branches) - 1
 
                 branch.dR = [
                     np.dot(
-                        rotation_matrix(-self.extender.bifurcation_angle / 2), dRs[i]),
+                        rotation_matrix(-extender.bifurcation_angle / 2), dRs[i]),
                     np.dot(rotation_matrix(
-                        self.extender.bifurcation_angle / 2), dRs[i]),
+                        extender.bifurcation_angle / 2), dRs[i]),
                 ]
                 for j, dR in enumerate(branch.dR):
                     points = np.array(
@@ -391,10 +381,7 @@ class Network:
                     self.branches.append(branch_new)
                     self.active_branches.append(branch_new)
                     self.add_connection([branch.ID, branch_new.ID])
-                self.active_branches.remove(branch)
-            else:
-                branch.dR = dRs[i]
-                branch.extend()
+                self.active_branches.remove(branch)                
 
 
 class System:
@@ -620,91 +607,91 @@ class System:
             branch_connectivity=branch_connectivity,
         )
 
-        # try:
-        # Solver
-        json_solver = json_load["extender"]["pde_solver"]
-        if json_solver["type"] == "FreeFEM":
-            equation_legend = ["Laplace", "Poisson"]
-            equation = equation_legend.index(json_solver["equation"])
-            pde_solver = pde_solvers.FreeFEM(network, equation=equation)
-        elif json_solver["type"] == "FreeFEM_ThickFingers":
-            equation_legend = ["Laplace", "Poisson"]
-            equation = equation_legend.index(json_solver["equation"])
-            pde_solver = pde_solvers.FreeFEM_ThickFingers(network, 
-                                             equation=equation,
-                                             finger_width=json_solver["finger_width"],
-                                             mobility_ratio=json_solver["mobility_ratio"],
-                                             )
-        # Extender
-        json_extender = json_load["extender"]
-        if json_extender["type"] == "ModifiedEulerMethod_Streamline" or \
-            json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
-                
-            if json_extender["type"] == "ModifiedEulerMethod_Streamline":
-                bifurcation_type_legend = [
-                    "no bifurcations", "a1", "a3/a1", "random"]
-                extender_class = extenders.ModifiedEulerMethod_Streamline
-            elif json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
-                bifurcation_type_legend = [
-                    "no bifurcations", "a1", "random"]
-                extender_class = extenders.ModifiedEulerMethod_ThickFingers
-                
-            json_bifurcation = json_extender["bifurcations"]
-            bifurcation_type = bifurcation_type_legend.index(
-                json_bifurcation["type"])
-            extender = extender_class(
-                pde_solver=pde_solver,
-                eta=json_extender["eta"],
-                ds=json_extender["ds"],
-                bifurcation_type=bifurcation_type,
-                bifurcation_thresh=json_bifurcation["threshold"],
-                bifurcation_angle=json_bifurcation["angle"],
-                inflow_thresh=json_extender["inflow_thresh"],
-                distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
-                max_approximation_step=json_extender["max_approximation_step"],
-            )          
-
-        # General
-        json_growth = json_load["growth"]
-        growth_type_legend = ["max step",
-                              "max height", "max length", "max time"]
-        growth_thresh_type = growth_type_legend.index(
-            json_growth["threshold_type"])
-        growth_thresh = json_growth["threshold"]
-        dump_every = json_growth["dump_every"]
-        timestamps = np.asarray(json_growth["timestamps"])
-
-        json_growth_gauges = json_growth["growth_gauges"]
-        growth_gauges = np.array(
-            [
-                json_growth_gauges["number_of_steps"],
-                json_growth_gauges["height"],
-                json_growth_gauges["network_length"],
-                json_growth_gauges["time"],
-            ]
-        )
-
-        system = cls(
-            network=network,
-            extender=extender,
-            timestamps=timestamps,
-            growth_gauges=growth_gauges,
-            growth_thresh_type=growth_thresh_type,
-            growth_thresh=growth_thresh,
-            dump_every=dump_every,
-            exp_name=input_file,
-        )
-        # except Exception as error:
-        #     print(type(error).__name__, ": ", error)
-        #     print("!WARNING! Only ``network`` imported! (the rest is default)")
-        #     pde_solver = pde_solvers.FreeFEM(network)
-        #     extender = extenders.ModifiedEulerMethod_Streamline(
-        #         pde_solver=pde_solver,)
-        #     system = cls(
-        #         network=network,
-        #         extender=extender,
-        #         exp_name=input_file,
-        #     )
+        try:
+            # Solver
+            json_solver = json_load["extender"]["pde_solver"]
+            if json_solver["type"] == "FreeFEM":
+                equation_legend = ["Laplace", "Poisson"]
+                equation = equation_legend.index(json_solver["equation"])
+                pde_solver = pde_solvers.FreeFEM(network, equation=equation)
+            elif json_solver["type"] == "FreeFEM_ThickFingers":
+                equation_legend = ["Laplace", "Poisson"]
+                equation = equation_legend.index(json_solver["equation"])
+                pde_solver = pde_solvers.FreeFEM_ThickFingers(network, 
+                                                 equation=equation,
+                                                 finger_width=json_solver["finger_width"],
+                                                 mobility_ratio=json_solver["mobility_ratio"],
+                                                 )
+            # Extender
+            json_extender = json_load["extender"]
+            if json_extender["type"] == "ModifiedEulerMethod_Streamline" or \
+                json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
+                    
+                if json_extender["type"] == "ModifiedEulerMethod_Streamline":
+                    bifurcation_type_legend = [
+                        "no bifurcations", "a1", "a3/a1", "random"]
+                    extender_class = extenders.ModifiedEulerMethod_Streamline
+                elif json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
+                    bifurcation_type_legend = [
+                        "no bifurcations", "a1", "random"]
+                    extender_class = extenders.ModifiedEulerMethod_ThickFingers
+                    
+                json_bifurcation = json_extender["bifurcations"]
+                bifurcation_type = bifurcation_type_legend.index(
+                    json_bifurcation["type"])
+                extender = extender_class(
+                    pde_solver=pde_solver,
+                    eta=json_extender["eta"],
+                    ds=json_extender["ds"],
+                    bifurcation_type=bifurcation_type,
+                    bifurcation_thresh=json_bifurcation["threshold"],
+                    bifurcation_angle=json_bifurcation["angle"],
+                    inflow_thresh=json_extender["inflow_thresh"],
+                    distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
+                    max_approximation_step=json_extender["max_approximation_step"],
+                )          
+    
+            # General
+            json_growth = json_load["growth"]
+            growth_type_legend = ["max step",
+                                  "max height", "max length", "max time"]
+            growth_thresh_type = growth_type_legend.index(
+                json_growth["threshold_type"])
+            growth_thresh = json_growth["threshold"]
+            dump_every = json_growth["dump_every"]
+            timestamps = np.asarray(json_growth["timestamps"])
+    
+            json_growth_gauges = json_growth["growth_gauges"]
+            growth_gauges = np.array(
+                [
+                    json_growth_gauges["number_of_steps"],
+                    json_growth_gauges["height"],
+                    json_growth_gauges["network_length"],
+                    json_growth_gauges["time"],
+                ]
+            )
+    
+            system = cls(
+                network=network,
+                extender=extender,
+                timestamps=timestamps,
+                growth_gauges=growth_gauges,
+                growth_thresh_type=growth_thresh_type,
+                growth_thresh=growth_thresh,
+                dump_every=dump_every,
+                exp_name=input_file,
+            )
+        except Exception as error:
+            print(type(error).__name__, ": ", error)
+            print("!WARNING! Only ``network`` imported! (the rest is default)")
+            pde_solver = pde_solvers.FreeFEM(network)
+            extender = extenders.ModifiedEulerMethod_Streamline(
+                pde_solver=pde_solver,)
+            system = cls(
+                network=network,
+                extender=extender,
+                exp_name=input_file,
+            )
 
         return system
 

@@ -28,14 +28,15 @@ def clip_to_step(system, max_step):
                 system.network.active_branches.remove(branch)
             if branch in system.network.sleeping_branches:
                 system.network.sleeping_branches.remove(branch)
-        else:
+        elif sum(to_trash):
             branch.points = branch.points[~to_trash]
             branch.steps = branch.steps[~to_trash]
             mask = system.network.branch_connectivity[:,0]!=branch.ID
             if (system.network.branch_connectivity[~mask,1]==-1).any():
                 system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
+                system.network.active_branches.append(branch)
             
-    system.timestamps = system.timestamps[:(max_step+1)]
+    system.timestamps = system.timestamps[:int(max_step+1)]
     system.growth_gauges[0] = max_step
     system.growth_gauges[1], system.growth_gauges[2] = system.network.height_and_length()
     system.growth_gauges[3] = system.timestamps[-1]
@@ -49,8 +50,8 @@ def clip_to_length(system, max_length):
             length_throughout_evolution[branch.steps[1:]] + \
             np.linalg.norm(branch.points[1:]-branch.points[:-1], axis=1)
     length_throughout_evolution = np.cumsum(length_throughout_evolution)
-    
-    clip_to_step(system, sum(length_throughout_evolution<max_length))
+    max_step = sum(length_throughout_evolution<max_length)
+    clip_to_step(system, max_step)
 
 def clip_to_height(system, max_height):
     all_points_steps = np.zeros(3)
@@ -58,8 +59,12 @@ def clip_to_height(system, max_height):
     for branch in branches_to_iterate:
         all_points_steps = np.vstack( ( all_points_steps, branch.points_steps() ) )
     all_points_steps = all_points_steps[1:]
+    max_step = int(np.min(all_points_steps[all_points_steps[:,1]>max_height, 2]))
+    clip_to_step(system, max_step)
     
-    clip_to_step(system, np.min(all_points_steps[all_points_steps[:,1]>max_height, 2]))
+def clip_to_time(system, max_time):
+    max_step = sum(system.timestamps<max_time)
+    clip_to_step(system, max_step)
     
 def clip_to_BEA_step(system, backward_system, max_BEA_step):
     branches_to_iterate = backward_system.system.network.branches.copy()

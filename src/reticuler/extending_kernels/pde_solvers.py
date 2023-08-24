@@ -6,6 +6,7 @@ Classes:
 """
 
 import numpy as np
+import scipy
 import subprocess
 import os.path
 import os
@@ -457,7 +458,8 @@ class FreeFEM_ThickFingers:
         - 0: Laplace
         - 1: Poisson
     flux_info : array
-        An array of a1a2a3 coefficients for each tip in the network.
+        A 2-n array with total flux and angle of highest flux direction 
+        for each tip in the network.
     finger_width : float, default 0.02
         The width of the fingers.
     mobility_ratio : float, default 1e4
@@ -646,31 +648,32 @@ class FreeFEM_ThickFingers:
             for(int k=0;k<nbTips;k++)
             {
                 int ndof=nvOnTips(k), n=0;
-                real[int] angles(ndof), gradAbsNormal(ndof);
+                real[int] angles(ndof), fluxes(ndof); // angles with X axis
                 int1d(Th, tipLabels(k), qfe=qf1pE)( (angles(n++)=atan2(y-Y(k), x-X(k)))*1.
-                                                +(gradAbsNormal(n)=abs(dxu*N.x+dyu*N.y))*1.);
+                                                +(fluxes(n)=abs(dxu*N.x+dyu*N.y))*1.);
                 // cout<<"tip"<<tipLabels(k)<<endl;
-                // cout<<"angles "<<angles<<endl;
-                // cout<<"gradAbsNormal "<<gradAbsNormal<<endl;
-                // cout<<"tip"<<tipLabels(k)<<"end"<<endl;
-                
-                real maxGrad=0, maxAngle=pi/2;
-                real[int] gradAbsNormalMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
-                for (int i=0; i<=(ndof-avgWindow); i++){
-                    real sumGrad=0, sumAng=0;
-                    for (int j=i; j<i+avgWindow; j++){
-                        sumGrad += gradAbsNormal[j];
-                        sumAng += angles[j];
-                    }
-                    gradAbsNormalMvAvg(i) = sumGrad / avgWindow;
-                    anglesMvAvg(i) = sumAng / avgWindow;
-                    if (gradAbsNormalMvAvg(i)>maxGrad){
-                        maxGrad=gradAbsNormalMvAvg(i);
-                        maxAngle=anglesMvAvg(i);
-                    }
-                }
+                cout<<"angles"<<tipLabels(k)<<angles<<"angles"<<tipLabels(k)<<"end"<<endl;
+                cout<<"fluxes"<<tipLabels(k)<<fluxes<<"fluxes"<<tipLabels(k)<<"end"<<endl;
                 real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
-                cout << totGrad << "," << maxAngle << ",";
+            	 cout<<"tot_flux"<<tipLabels(k)<<"1 "<<totGrad<<"tot_flux"<<tipLabels(k)<<"end"<<endl;
+                
+                // real maxGrad=0, maxAngle=pi/2;
+                // real[int] fluxesMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
+                // for (int i=0; i<=(ndof-avgWindow); i++){
+                    // real sumGrad=0, sumAng=0;
+                    // for (int j=i; j<i+avgWindow; j++){
+                        // sumGrad += fluxes[j];
+                        // sumAng += angles[j];
+                    // }
+                    // fluxesMvAvg(i) = sumGrad / avgWindow;
+                    // anglesMvAvg(i) = sumAng / avgWindow;
+                    // if (fluxesMvAvg(i)>maxGrad){
+                        // maxGrad=fluxesMvAvg(i);
+                        // maxAngle=anglesMvAvg(i);
+                    // }
+                // }
+                // real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
+                // cout << totGrad << "," << maxAngle << ",";
             }            
             """
         )
@@ -799,13 +802,13 @@ class FreeFEM_ThickFingers:
                 inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
             )
             
-        if network.branch_connectivity[network.branch_connectivity[:,1]==-1,0]==branch.ID:
+        if (network.branch_connectivity[network.branch_connectivity[:,1]==-1,0]==branch.ID).any():
             breakthrough_pt = branch.points[-1]
             v1 = pt_between(breakthrough_pt, network.box.points[1])
             v2 = pt_between(breakthrough_pt, network.box.points[2])
             contour_right = np.vstack(( contour_right, v1 ))
             contour_left = np.vstack(( v2, contour_left ))  
-                
+
         # print(contour_right)
         # print(contour_left)
         # import matplotlib.pyplot as plt
@@ -815,7 +818,8 @@ class FreeFEM_ThickFingers:
         # for pts in points_to_plot:
         #     plt.plot(*pts.T, color="0")
         
-        return contour_right, contour_tip, contour_left
+        return contour_right, contour_tip, contour_left, \
+            script_mobility, mobility_regions, border_contour, inside_buildmesh
         
     
     def __prepare_script(self, network):
@@ -853,9 +857,12 @@ class FreeFEM_ThickFingers:
         border_contour = ""
         inside_buildmesh = self.script_inside_buildmesh_box
         for i, branch in enumerate(network.branches):
-            contour_right, _, contour_left  = self.finger_contour(branch, network, \
-                                                                  script_mobility, mobility_regions, \
-                                                                  border_contour, inside_buildmesh)
+            contour_right, _, contour_left, \
+                script_mobility, mobility_regions, \
+                    border_contour, inside_buildmesh = \
+                        self.finger_contour(branch, network, \
+                                            script_mobility, mobility_regions, \
+                                                border_contour, inside_buildmesh)
             
             for k, points in enumerate([contour_right, contour_left]):
                 # building mesh for contours on the right and left of the finger
@@ -915,7 +922,7 @@ class FreeFEM_ThickFingers:
         """Solve the PDE for the field around the network.
 
         Prepare a FreeFEM script, export it to a temporary file and run.
-        Then, import the a1a2a3 coefficients to `self.flux_info`.
+        Then, import the results to `self.flux_info`.
 
         Parameters
         ----------
@@ -933,11 +940,45 @@ class FreeFEM_ThickFingers:
             # print(out_freefem.stdout)
         else:
             out_freefem = FreeFEM.run_freefem_temp(self, script)
-            print(out_freefem.stdout)
+            # print(out_freefem.stdout)
             
-        flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
-        self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
+        # flux_info calculated in FreeFem:
+        # flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b'kopytko')+7:], sep=",")
+        # self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
         
+        # determining flux_info here:
+        import_array = lambda key : np.fromstring(out_freefem.stdout[\
+                                            out_freefem.stdout.find(key.encode('ascii'))+len(key):\
+                                            out_freefem.stdout.find(key.encode('ascii')+b"end")], \
+                                                  sep="\t")[1:]
+ 
+        angles=[]; fluxes=[]; 
+        self.flux_info = np.zeros((len(network.active_branches), 2))
+        for i, branch in enumerate(network.active_branches):
+            tip_label = 1000+branch.ID
+            angles.append(import_array("angles{}".format(tip_label)))
+            fluxes.append(import_array("fluxes{}".format(tip_label))) 
+            ind_cut = np.where(np.diff(angles[-1])<0)[0]
+            if ind_cut.size:
+                angles[-1][ind_cut[0]+1:] = angles[-1][ind_cut[0]+1:] + 2*np.pi
+            order = np.argsort(angles[-1])
+            angles[-1] = angles[-1][order]
+            fluxes[-1] = fluxes[-1][order]
+            
+            # gaussian convolution
+            # (https://stackoverflow.com/questions/22291567/smooth-data-and-find-maximum)
+            f = scipy.interpolate.interp1d(angles[-1], fluxes[i])
+            xx = np.linspace(angles[-1][0], angles[-1][-1], 1000)
+            yy = f(xx)
+            window = scipy.signal.windows.gaussian(100, 1000)
+            smoothed = scipy.signal.convolve(yy, window/window.sum(), \
+                                             mode='same')
+            
+            # Total flux:
+            self.flux_info[i,0] = import_array("tot_flux{}".format(tip_label))
+            # Highest gradiend direction (angle with X axis)
+            self.flux_info[i,1] = xx[np.argmax(smoothed)]
+            
         with np.printoptions(formatter={'float': '{:.6g}'.format}):
             # print('flux_info: \n', self.flux_info)
-            print('angle: \n', self.flux_info[...,1]*180/np.pi)
+            print('angles: \n', self.flux_info[...,1]*180/np.pi)

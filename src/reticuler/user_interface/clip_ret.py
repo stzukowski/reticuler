@@ -106,6 +106,20 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "-T",
+        "--time",
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+                            Maximum time in the evolution. If filled clips to time.
+                            default = None
+                            """
+        ),
+        default=None,
+    )        
+    parser.add_argument(
         "-BEA",
         "--BEA_step",
         type=float,
@@ -137,6 +151,8 @@ def main():
         clippers.clip_to_length(system, args.length[0])
     elif args.height is not None:
         clippers.clip_to_height(system, args.height[0])
+    elif args.time is not None:
+        clippers.clip_to_time(system, args.time[0])        
     elif args.BEA_step is not None:
         backward_system = BackwardSystem.import_json(input_file=args.input_file_BEA[0], system=system)
         clippers.clip_to_BEA_step(system, backward_system, max_BEA_step=args.BEA_step[0])

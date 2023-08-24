@@ -270,7 +270,7 @@ def main():
 
     if args.final_plot:
         fig, ax = plt.subplots()
-        graphics.plot_tree(ax, network=system.network)
+        graphics.plot_tree(ax, system=system)
         fig.savefig(system.exp_name + ".jpg", bbox_inches="tight")
 
 

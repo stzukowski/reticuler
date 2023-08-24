@@ -180,10 +180,10 @@ def main():
                 system0=system,
                 ylim=args.ylim[0],
                 xlim=args.xlim[0],
+                speed_factor=args.speed_factor[0],
                 rot_angle=args.rot_angle[0],
                 **args.plot_params[0]
             )
-            ani.save(filename="test.avi", writer="ffmpeg")
             if args.output_file is None:
                 ani.save(exp_name + ".avi", writer="ffmpeg")
             else:
@@ -192,17 +192,18 @@ def main():
             fig, ax = plt.subplots()
             graphics.plot_tree(
                 ax,
-                network=system.network,
+                system=system,
                 ylim=args.ylim[0],
                 xlim=args.xlim[0],
-                speed_factor=args.speed_factor[0],
                 **args.plot_params[0]
             )
         
             if args.output_file is None:
-                fig.savefig(exp_name + args.output_extension[0], bbox_inches="tight")
+                fig.savefig(exp_name + args.output_extension[0], 
+                            bbox_inches="tight", dpi=400)
             else:
-                fig.savefig(args.output_file[0] + args.output_extension[0], bbox_inches="tight", dpi=400)
+                fig.savefig(args.output_file[0] + args.output_extension[0], 
+                            bbox_inches="tight", dpi=400)
 
 
 if __name__ == "__main__":
