@@ -491,7 +491,19 @@ class ModifiedEulerMethod_ThickFingers:
         for branch in network.active_branches:
             if branch.points[-1,1] > y_outlet - \
                 (self.pde_solver.finger_width/2 + 2*self.ds):
-                    # find the point on the border and update border box script
+                print("! Branch {ID} is reaching the outlet !".format(ID=branch.ID))
+                
+                # # decreasing step size while approaching BT:
+                # # (+tab the rest of the loop)
+                # if self.ds>=1e-5:
+                    # self.ds = self.ds / 10
+                    # print("! Branch {ID} is reaching the outlet ! ds = {ds}".format(ID=branch.ID, ds=self.ds))
+                # else:
+                    # print("! Branch {ID} breakthrough !".format(ID=branch.ID))
+                    # self.ds = 0.01
+                
+                # (+/-tab below)
+                # find the point on the border and update border box script
                 tip_pt = branch.points[-1]
                 breakthrough_pt = np.array([tip_pt[0], y_outlet])
                 
