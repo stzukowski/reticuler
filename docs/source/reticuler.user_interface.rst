@@ -52,6 +52,14 @@ reticuler.user\_interface.reticulate\_back module
    :undoc-members:
    :show-inheritance:
 
+reticuler.user\_interface.script\_ret module
+--------------------------------------------
+
+.. automodule:: reticuler.user_interface.script_ret
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
