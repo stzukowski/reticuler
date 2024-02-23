@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.transforms as transforms
-from reticuler.extending_kernels.extenders import rotation_matrix
+from reticuler.extending_kernels.pde_solvers import rotation_matrix
 from reticuler.user_interface import clippers
 
 plt.rcParams.update(
@@ -37,7 +37,7 @@ golden = (1 + 5**0.5) / 2
 
 
 def plot_tree(ax, system, 
-              rot_angle=None, isThick=None, 
+              rot_angle=None, is_thick=None, 
               ylim=None, xlim=None, **kwargs_tree_plot):
     """Plot a tree with optional arguments from \*\*kwargs_tree, and a black box.
 
@@ -63,8 +63,8 @@ def plot_tree(ax, system,
     options_tree_plot = {"color": "#0066CC", "linewidth": 1.25}
     options_tree_plot.update(kwargs_tree_plot)
     rot_angle = 0 if rot_angle is None else rot_angle
-    isThick = type(system.extender.pde_solver).__name__=="FreeFEM_ThickFingers" \
-                        if isThick is None else isThick
+    is_thick = type(system.extender.pde_solver).__name__=="FreeFEM_ThickFingers" \
+                        if is_thick is None else is_thick
 
     base = ax.transData
     rot = transforms.Affine2D().rotate_deg(-rot_angle)
@@ -78,10 +78,10 @@ def plot_tree(ax, system,
     y_max = 2
     for branch in system.network.branches:
         line = branch.points
-        if np.max(line[:, 1]) > y_max:
+        if np.max(line[:, 1])*1.05 > y_max:
             y_max = 1.05*np.max(line[:, 1])
         # ax.plot(*line.T, **options_tree_plot)
-        if not isThick:
+        if not is_thick:
             ax.plot(*line.T, **options_tree_plot, transform=rot+base)
         else:   
             contours  = system.extender.pde_solver.finger_contour(branch, system.network)

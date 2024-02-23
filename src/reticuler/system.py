@@ -15,13 +15,13 @@ import copy
 import json
 import importlib.metadata
 
-from .extending_kernels import extenders, pde_solvers
-from .extending_kernels.extenders import rotation_matrix
+from reticuler.extending_kernels import extenders, pde_solvers
 
 # Labels for boundary conditions
 DIRICHLET = 1
 NEUMANN = 2
 CONSTANT_FLUX = 3
+DIRICHLET_OUTLET = 4
 RIGHT_WALL_PBC = 999
 LEFT_WALL_PBC = 998
 
@@ -53,6 +53,10 @@ class Branch:
         Chronological order (tip is the last point).
     steps : array
         A 1-n array with evolution steps at which corresponding points were added.
+    BC : int, default 0
+        The boundary condition on fingers, when solving the equations for the field.
+        0 - Dirichlet (phi=0)
+        4 - Dirichlet outlet (phi=1)
     dR : array or 0, default 0
         A 1-2 array of tip progression ([dx, dy]).
     is_bifurcating : bool, default False
@@ -61,7 +65,7 @@ class Branch:
 
     """
 
-    def __init__(self, ID, points, steps):
+    def __init__(self, ID, points, steps, BC=DIRICHLET):
         """Initialize Branch.
 
         Parameters
@@ -79,13 +83,21 @@ class Branch:
 
         self.points = points  # in order of creation
         self.steps = steps  # at which step of the evolution the point was added
-
+        self.BC = BC # boundary condition
+        
         self.dR = 0
         self.is_bifurcating = False
 
-    def extend(self):
+    def extend(self, step=0):
         """Add a new point to ``self.points`` (progressed tip)."""
-        self.points = np.vstack((self.points, self.points[-1] + self.dR))
+        if np.linalg.norm(self.dR) < 9e-5:
+            print("! Extremely small dR, tip {} not extended but shifted !".format(self.ID))
+            tip_versor = self.points[-1] - self.points[-2]
+            tip_versor = tip_versor / np.linalg.norm(tip_versor)
+            self.points[-1] = self.points[-1] + tip_versor * self.dR
+        else:
+            self.points = np.vstack((self.points, self.points[-1] + self.dR))
+            self.steps = np.append(self.steps, step)
 
     def length(self):
         """Return length of the Branch."""
@@ -171,13 +183,15 @@ class Box:
         Parameters
         ----------
         initial_condition : int, default 0
-            IC = 0 or 1. Rectangular box of dimensions ``width`` x ``height``,
+            IC = 0, 1, 2, 3. Rectangular box of dimensions ``width`` x ``height``,
             absorbing bottom wall, reflecting left and right, and:
                 - IC = 0: constant flux on top (Laplacian case)
                 - IC = 1: reflective top (Poissonian case)
-                - IC = 2: IC=1 + PBC right and left wall
+                - IC = 2: as IC=0 + PBC right and left wall
+                - IC = 3: as IC=0, but Dirichlet BC on top
+                - IC = 4: jellyfish (an octant) with a trifork
         kwargs_construct:
-            IC = 0, 1 or 2
+            IC = 0, 1, 2, 3
                 seeds_x : array, default [0.5]
                     A 1-n array of x positions at the bottom boundary (y=0).
                 initial_lengths : array, default [0.01]
@@ -202,41 +216,81 @@ class Box:
         box = cls()
 
         # Rectangular box of specified width and height
-        # IC==0: Constant flux on top (Laplace)
-        # IC==1: Neumann on top (Poisson)
-        if initial_condition == 0 or initial_condition == 1 or initial_condition == 2:
+        if initial_condition == 0 or initial_condition == 1 or \
+            initial_condition == 2 or initial_condition == 3:
             options_construct = {
                 "seeds_x": [0.5],
                 "initial_lengths": [0.01],
+                "branch_BCs": [DIRICHLET],
                 "height": 50.0,
                 "width": 2.0,
             }
             options_construct.update(kwargs_construct)
+            options_construct["seeds_x"]=np.array(options_construct["seeds_x"])
+            if not len(options_construct["initial_lengths"])==len(options_construct["seeds_x"]):
+                options_construct["initial_lengths"] = (
+                    np.ones(len(options_construct["seeds_x"]))
+                    * options_construct["initial_lengths"][0]
+                )
+            if not len(options_construct["branch_BCs"])==len(options_construct["seeds_x"]):
+                options_construct["branch_BCs"] = (
+                    np.ones(len(options_construct["seeds_x"]))
+                    * options_construct["branch_BCs"][0]
+                )
+            options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])
+            
+            
+            # right boundary
             box.__add_points(
                 [
                     [options_construct["width"], 0],
-                    [options_construct["width"], options_construct["height"]],
-                    [0, options_construct["height"]],
-                    [0, 0],
+                    [options_construct["width"], options_construct["height"]]
                 ]
             )
-            
-            # seeds at the boundary
-            box.seeds_connectivity = np.column_stack(
-                (
-                    len(box.points) +
-                    np.arange(len(options_construct["seeds_x"])),
-                    np.arange(len(options_construct["seeds_x"])),
-                )
-            )
+            # seeds at the top boundary
+            mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_OUTLET
             box.__add_points(
                 np.vstack(
                     [
-                        options_construct["seeds_x"],
-                        np.zeros(len(options_construct["seeds_x"])),
+                        options_construct["seeds_x"][mask_seeds_from_outlet],
+                        options_construct["height"]*\
+                            np.ones(sum(mask_seeds_from_outlet)),
                     ]
                 ).T
             )
+            # left boundary
+            box.__add_points(
+                [
+                    [0, options_construct["height"]],
+                    [0, 0]
+                ]
+            )
+            # seeds at the bottom boundary
+            box.__add_points(
+                np.vstack(
+                    [
+                        options_construct["seeds_x"][~mask_seeds_from_outlet],
+                        np.zeros(sum(~mask_seeds_from_outlet)),
+                    ]
+                ).T
+            )
+            box.seeds_connectivity = np.column_stack(
+                (
+                    2 +
+                    np.arange(sum(mask_seeds_from_outlet)),
+                    np.arange(sum(mask_seeds_from_outlet)),
+                )
+            )
+            box.seeds_connectivity = np.row_stack(
+                (box.seeds_connectivity,
+                np.column_stack(
+                    (
+                        len(box.points) - sum(~mask_seeds_from_outlet) +
+                        np.arange(sum(~mask_seeds_from_outlet)),
+                        sum(mask_seeds_from_outlet) + np.arange(sum(~mask_seeds_from_outlet)),
+                    )
+                )
+            ))
 
             connections_to_add = np.vstack(
                 [np.arange(len(box.points)), np.roll(
@@ -249,7 +303,7 @@ class Box:
             )
 
             # right, left, top Neumann:
-            box.boundary_conditions[0:3] = NEUMANN
+            box.boundary_conditions[0:3+sum(mask_seeds_from_outlet)] = NEUMANN
             # or top constant flux:
             if initial_condition == 0:
                 box.boundary_conditions[1] = CONSTANT_FLUX
@@ -257,26 +311,147 @@ class Box:
                 box.boundary_conditions[1] = CONSTANT_FLUX
                 box.boundary_conditions[0] = RIGHT_WALL_PBC
                 box.boundary_conditions[2] = LEFT_WALL_PBC
+            if initial_condition == 3:
+                box.boundary_conditions[1:2+sum(mask_seeds_from_outlet)] = DIRICHLET_OUTLET
 
             # Creating initial branches
             branches = []
-            if len(options_construct["initial_lengths"]) == 1:
-                options_construct["initial_lengths"] = (
-                    np.ones(len(options_construct["seeds_x"]))
-                    * options_construct["initial_lengths"][0]
-                )
             for i, x in enumerate(options_construct["seeds_x"]):
-                branches.append(
-                    Branch(
-                        ID=i,
-                        points=np.array(
-                            [[x, 0], [x, options_construct["initial_lengths"][i]]]
-                        ),
-                        steps=np.array([0, 0]),
-                    )
+                BC = options_construct["branch_BCs"][i]
+                if BC==DIRICHLET:                    
+                    branch = Branch(
+                            ID=i,
+                            points=np.array(
+                                [[x, 0], [x, options_construct["initial_lengths"][i]]]
+                            ),
+                            steps=np.array([0, 0]),
+                        )
+                elif BC==DIRICHLET_OUTLET:
+                   branch = Branch(
+                           ID=i,
+                           points=np.array(
+                               [[x, options_construct["height"]], \
+                                [x, options_construct["height"]-options_construct["initial_lengths"][i]]]
+                           ),
+                           steps=np.array([0, 0]),
+                           BC=BC
+                       )
+                branches.append(branch)
+            
+            active_branches = branches.copy()
+            branch_connectivity = None
+                
+        # Jellyfish
+        elif initial_condition == 4:
+            def cyl2cart(r, theta):
+                # theta measured from the negative Y axis
+                return [R0+r*np.sin(theta), R0-r*np.cos(theta)]
+            angular_width = 2*np.pi / 8
+            R0 = 5 # mm
+            r0 = 0.4 * R0
+            h0 = R0 - r0
+                
+            # right boundary
+            box.__add_points(
+                [
+                    cyl2cart(R0, angular_width/2)
+                ]
+            )
+            # stomach
+            box.__add_points(
+                np.vstack( cyl2cart(r0, np.linspace(angular_width/2, -angular_width/2, 11)) ).T
+            )
+            # seeds at the bottom boundary
+            # '17' in linspace makes sure that the seed canals can be put at theta=3/4 angular_width, 1/2 angular_width and 1/4 angular_width
+            box.__add_points(
+                np.vstack( cyl2cart(R0, np.linspace(-angular_width/2,angular_width/2, 17)) ).T
+            )
+            box.seeds_connectivity = np.column_stack(
+                (
+                    [20, 16, 24, 14, 18, 22, 26], # works if above in angle linspace we keep 11 and 17
+                    np.arange(7),
                 )
+            )
 
-        return box, branches
+            # Connections and BCs
+            connections_to_add = np.vstack(
+                [np.arange(len(box.points)), np.roll(
+                    np.arange(len(box.points)), -1)]
+            ).T
+            box.__add_connection(
+                connections_to_add,
+                boundary_conditions=DIRICHLET
+                * np.ones(len(connections_to_add), dtype=int),
+            )
+            # right, left Neumann:
+            box.boundary_conditions[0] = NEUMANN
+            box.boundary_conditions[11] = NEUMANN
+            # top Dirichlet
+            box.boundary_conditions[1:11] = DIRICHLET_OUTLET
+
+
+
+            # Creating initial branches
+            branches = []
+            active_branches = []
+            
+            # interradial canal
+            branch = Branch(
+                    ID=0,
+                    points=np.vstack(cyl2cart(np.linspace(R0, r0, 13), 0)).T,
+                    steps=np.zeros(13),
+                ) # points must include r0+h0/3
+            branches.append(branch)
+
+            # trifork left
+            t = np.linspace(angular_width/8, np.pi/2,20)
+            r1 = np.sqrt( (2*R0*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
+            x = R0 - r1 * np.cos(t)
+            y = 2/3*h0 * np.sin(t)
+            branch = Branch(
+                    ID=1,
+                    points=np.vstack((box.points[16],np.vstack((x,y)).T)),
+                    steps=np.zeros(20+1),
+                )
+            branches.append(branch)
+            
+            # trifork right
+            t = np.linspace(np.pi-angular_width/8, np.pi/2,20)
+            r1 = np.sqrt( (2*R0*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
+            x = R0 - r1 * np.cos(t)
+            y = 2/3*h0 * np.sin(t)
+            branch = Branch(
+                    ID=2,
+                    points=np.vstack((box.points[24],np.vstack((x,y)).T)),
+                    steps=np.zeros(20+1),
+                )
+            branches.append(branch)
+            
+            for i, theta in enumerate(np.arange(-3/8,3.1/8,1/4)*angular_width):
+                branch = Branch(
+                        ID=3+i,
+                        points=np.vstack(cyl2cart(np.array([R0, R0-0.1]), theta)).T,
+                        steps=np.array([0, 0])
+                    )
+                branches.append(branch)       
+                active_branches.append(branch)
+                
+            branch_connectivity = np.array([[0,-1],[1,0],[2,0]])
+            
+
+            # #%%
+            
+            # plt.plot(*np.vstack( cyl2cart(r0, np.linspace(angular_width/2, -angular_width/2, 11)) ), '.-')
+            # plt.plot(*np.vstack( cyl2cart(R0, np.linspace(angular_width/2, -angular_width/2, 17)) ), '.-')
+            # plt.gca().set_aspect(1)
+            
+            # t = np.linspace(np.pi/2, np.pi-angular_width/8,20)
+            # r1 = np.sqrt( (2*R0*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
+            # x = R0 - r1 * np.cos(t)
+            # y = 2/3*h0 * np.sin(t)
+            # plt.plot(x,y,'.-')
+                       
+        return box, branches, active_branches, branch_connectivity
 
 
 class Network:
@@ -350,39 +525,91 @@ class Network:
         """Add connection to self.branch_connectivity."""
         self.branch_connectivity = np.vstack(
                 (self.branch_connectivity, connection))
+        
+    def reconnect(self, extender, step):
+        """Find potential anastomoses and reconnect."""       
+        
+        if type(extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
+            reconnection_distance = extender.pde_solver.finger_width + 2*extender.pde_solver.ds
+        else:
+            reconnection_distance = 2*extender.pde_solver.ds
+            
+        all_points = np.empty((0,4)) # branch.ID, pt. ind., x, y
+        for branch in self.branches:
+            all_points = np.vstack(( all_points, \
+                np.column_stack( ( np.ones(len(branch.points)-1)*branch.ID,
+                                  np.arange(len(branch.points)-1),
+                                  branch.points[1:] )
+                                )
+                ) )
+        
+        y_outlet = np.max(self.box.points[:,1])
+        for branch in self.active_branches:
+            
+            # BREAKTHROUGH
+            if branch.points[-1,1] > y_outlet - reconnection_distance:
+                # decreasing step size while approaching BT - remove False in if and uncomment extender.ds=... in else)
+                if False and extender.pde_solver.ds>=1e-5:
+                    extender.ds = extender.pde_solver.ds / 10
+                    print("! Branch {ID} is reaching the outlet ! ds = {ds}".format(ID=branch.ID, ds=self.ds))
+                else:
+                    print("! Branch {ID} breakthrough !".format(ID=branch.ID))
+                    # extender.ds = 0.01
+                    # find the point on the border and update border box script
+                    tip_pt = branch.points[-1]
+                    breakthrough_pt = np.array([tip_pt[0], y_outlet])
+                    
+                    branch.points = np.vstack( (branch.points, [breakthrough_pt]) )
+                    branch.steps = np.append(branch.steps, [step])
+                    self.active_branches.remove(branch)
+                    self.add_connection([branch.ID, -1])
+                    
+                    extender.pde_solver.script_border_box, \
+                        extender.pde_solver.script_inside_buildmesh_box = \
+                            extender.pde_solver.prepare_script_box(self)
+            
+            # RECONNECTION
+            mask = np.ones(len(all_points), dtype=bool)            
+            far_from_tip = sum(np.cumsum(np.flip(np.linalg.norm(branch.points[1:]-branch.points[:-1], axis=1)))>reconnection_distance)
+            mask_branch = np.logical_and(all_points[:,0]==branch.ID, all_points[:,1]>=far_from_tip-1)
+            mask[mask_branch] = False
+            # print(np.linalg.norm(all_points[~mask, 2:] - branch.points[-1], axis=1))
+            
+            distances = np.linalg.norm(all_points[mask, 2:] - branch.points[-1], axis=1)
+            ind_min = np.argmin(distances)
+            
+            if distances[ind_min] < reconnection_distance:
+                branch2_id, point_ind = all_points[mask][ind_min,:2]
+                point_xy = all_points[mask][ind_min,2:]
+                
+                branch.points = np.vstack( (branch.points, [point_xy]) )
+                branch.steps = np.append(branch.steps, [step])
+                self.active_branches.remove(branch)
+                self.add_connection([branch.ID, branch2_id])
 
-    def move_tips(self, extender, dRs, step=0, is_testing=True):
+    def move_tips(self, extender, step=0):
         """Move tips (with bifurcations and killing if is_testing==False)."""
 
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = self.active_branches.copy()
         for i, branch in enumerate(branches_to_iterate):
-            if is_testing or not branch.is_bifurcating:
-                branch.dR = dRs[i]
-                branch.extend()
+            if branch.dR.ndim==1:
+                branch.extend(step)
             else:
-                print("! Branch {ID} bifurcated !".format(ID=branch.ID))
                 max_branch_id = len(self.branches) - 1
-
-                branch.dR = [
-                    np.dot(
-                        rotation_matrix(-extender.bifurcation_angle / 2), dRs[i]),
-                    np.dot(rotation_matrix(
-                        extender.bifurcation_angle / 2), dRs[i]),
-                ]
                 for j, dR in enumerate(branch.dR):
                     points = np.array(
                         [branch.points[-1], branch.points[-1] + dR])
                     branch_new = Branch(
                         ID=max_branch_id + j + 1,
+                        BC=branch.BC,
                         points=points,
-                        steps=np.array([step - 1]),
+                        steps=np.array([step - 1, step]),
                     )
                     self.branches.append(branch_new)
                     self.active_branches.append(branch_new)
                     self.add_connection([branch.ID, branch_new.ID])
-                self.active_branches.remove(branch)                
-
+                self.active_branches.remove(branch)
 
 class System:
     """A class containing all the elements to run a network simulation.
@@ -425,7 +652,7 @@ class System:
         Parameters
         ----------
         network : Network
-        extender : function
+        extender : Extender from extending_kernels.extenders
         growth_gauges : array, default array([0.,0.,0.,0.])
         growth_thresh_type : int, default 0
         growth_thresh : float, default 5
@@ -476,41 +703,40 @@ class System:
             },
         }
 
-        if type(self.extender).__name__ == "ModifiedEulerMethod_Streamline" or \
-            type(self.extender).__name__ == "ModifiedEulerMethod_ThickFingers":
+        if type(self.extender).__name__ == "ModifiedEulerMethod":
             if type(self.extender.pde_solver).__name__ == "FreeFEM":
-                equation_legend = ["Laplace", "Poisson"]
                 export_solver = {
                     "type": type(self.extender.pde_solver).__name__,
-                    "equation": equation_legend[self.extender.pde_solver.equation],
+                    "description": "Equation legend: 0-Laplace, 1-Poisson. Bifurcation legend: 0-no bifurcations, 1-a1, 2-a3/a1, 3-random.",
+                    "equation": self.extender.pde_solver.equation,
+                    "eta": self.extender.pde_solver.eta,
+                    "ds": self.extender.pde_solver.ds,
+                    "bifurcation_type": self.extender.pde_solver.bifurcation_type,
+                    "bifurcation_thresh": self.extender.pde_solver.bifurcation_thresh,
+                    "bifurcation_angle": self.extender.pde_solver.bifurcation_angle,
+                    "inflow_thresh": self.extender.pde_solver.inflow_thresh,
+                    "distance_from_bif_thresh": self.extender.pde_solver.distance_from_bif_thresh,
                 }
-                bifurcation_type_legend = [
-                    "no bifurcations", "a1", "a3/a1", "random"]
             elif type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
-                equation_legend = ["Laplace", "Poisson"]
                 export_solver = {
                     "type": type(self.extender.pde_solver).__name__,
-                    "equation": equation_legend[self.extender.pde_solver.equation],
+                    "description": "Equation legend: 0-Laplace, 1-Poisson. Bifurcation legend: 0-no bifurcations, 1-a1, 2-random.",
+                    "equation": self.extender.pde_solver.equation,
+                    "eta": self.extender.pde_solver.eta,
+                    "ds": self.extender.pde_solver.ds,
                     "finger_width": self.extender.pde_solver.finger_width,
                     "mobility_ratio":self.extender.pde_solver.mobility_ratio,
+                    "bifurcation_type": self.extender.pde_solver.bifurcation_type,
+                    "bifurcation_thresh": self.extender.pde_solver.bifurcation_thresh,
+                    "bifurcation_angle": self.extender.pde_solver.bifurcation_angle,
+                    "inflow_thresh": self.extender.pde_solver.inflow_thresh,
+                    "distance_from_bif_thresh": self.extender.pde_solver.distance_from_bif_thresh,
                 }
-                bifurcation_type_legend = [
-                    "no bifurcations", "a1", "random"]
             export_extender = {
                 "extender": {
                     "type": type(self.extender).__name__,
-                    "eta": self.extender.eta,
-                    "ds": self.extender.ds,
-                    "bifurcations": {
-                        "type": bifurcation_type_legend[
-                            self.extender.bifurcation_type
-                        ],
-                        "threshold": self.extender.bifurcation_thresh,
-                        "angle": self.extender.bifurcation_angle,
-                    },
-                    "inflow_thresh": self.extender.inflow_thresh,
-                    "distance_from_bif_thresh": self.extender.distance_from_bif_thresh,
                     "max_approximation_step": self.extender.max_approximation_step,
+                    "is_reconnecting": self.extender.is_reconnecting,
                     "pde_solver": {**export_solver},
                 }
             }
@@ -606,70 +832,46 @@ class System:
             sleeping_branches=sleeping_branches,
             branch_connectivity=branch_connectivity,
         )
+        # General
+        json_growth = json_load["growth"]
+        growth_type_legend = ["max step",
+                              "max height", "max length", "max time"]
+        growth_thresh_type = growth_type_legend.index(
+            json_growth["threshold_type"])
+        growth_thresh = json_growth["threshold"]
+        dump_every = json_growth["dump_every"]
+        timestamps = np.asarray(json_growth["timestamps"])
+
+        json_growth_gauges = json_growth["growth_gauges"]
+        growth_gauges = np.array(
+            [
+                json_growth_gauges["number_of_steps"],
+                json_growth_gauges["height"],
+                json_growth_gauges["network_length"],
+                json_growth_gauges["time"],
+            ]
+        )
 
         try:
-            # Solver
-            json_solver = json_load["extender"]["pde_solver"]
-            if json_solver["type"] == "FreeFEM":
-                equation_legend = ["Laplace", "Poisson"]
-                equation = equation_legend.index(json_solver["equation"])
-                pde_solver = pde_solvers.FreeFEM(network, equation=equation)
-            elif json_solver["type"] == "FreeFEM_ThickFingers":
-                equation_legend = ["Laplace", "Poisson"]
-                equation = equation_legend.index(json_solver["equation"])
-                pde_solver = pde_solvers.FreeFEM_ThickFingers(network, 
-                                                 equation=equation,
-                                                 finger_width=json_solver["finger_width"],
-                                                 mobility_ratio=json_solver["mobility_ratio"],
-                                                 )
-            # Extender
+            # Extender and solver
             json_extender = json_load["extender"]
-            if json_extender["type"] == "ModifiedEulerMethod_Streamline" or \
-                json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
+            if json_extender["type"] == "ModifiedEulerMethod":  
+                # Solver
+                json_solver = json_load["extender"]["pde_solver"]
+                if json_solver["type"] == "FreeFEM":
+                    pde_solver_class = pde_solvers.FreeFEM
+                elif json_solver["type"] == "FreeFEM_ThickFingers":
+                    pde_solver_class = pde_solvers.FreeFEM_ThickFingers
                     
-                if json_extender["type"] == "ModifiedEulerMethod_Streamline":
-                    bifurcation_type_legend = [
-                        "no bifurcations", "a1", "a3/a1", "random"]
-                    extender_class = extenders.ModifiedEulerMethod_Streamline
-                elif json_extender["type"] == "ModifiedEulerMethod_ThickFingers":
-                    bifurcation_type_legend = [
-                        "no bifurcations", "a1", "random"]
-                    extender_class = extenders.ModifiedEulerMethod_ThickFingers
-                    
-                json_bifurcation = json_extender["bifurcations"]
-                bifurcation_type = bifurcation_type_legend.index(
-                    json_bifurcation["type"])
-                extender = extender_class(
+                json_solver.pop("type")
+                json_solver.pop("description")
+                pde_solver = pde_solver_class(network, **json_solver)
+                # Extender
+                extender = extenders.ModifiedEulerMethod(
                     pde_solver=pde_solver,
-                    eta=json_extender["eta"],
-                    ds=json_extender["ds"],
-                    bifurcation_type=bifurcation_type,
-                    bifurcation_thresh=json_bifurcation["threshold"],
-                    bifurcation_angle=json_bifurcation["angle"],
-                    inflow_thresh=json_extender["inflow_thresh"],
-                    distance_from_bif_thresh=json_extender["distance_from_bif_thresh"],
+                    is_reconnecting=json_extender["is_reconnecting"],
                     max_approximation_step=json_extender["max_approximation_step"],
                 )          
-    
-            # General
-            json_growth = json_load["growth"]
-            growth_type_legend = ["max step",
-                                  "max height", "max length", "max time"]
-            growth_thresh_type = growth_type_legend.index(
-                json_growth["threshold_type"])
-            growth_thresh = json_growth["threshold"]
-            dump_every = json_growth["dump_every"]
-            timestamps = np.asarray(json_growth["timestamps"])
-    
-            json_growth_gauges = json_growth["growth_gauges"]
-            growth_gauges = np.array(
-                [
-                    json_growth_gauges["number_of_steps"],
-                    json_growth_gauges["height"],
-                    json_growth_gauges["network_length"],
-                    json_growth_gauges["time"],
-                ]
-            )
     
             system = cls(
                 network=network,
@@ -683,13 +885,18 @@ class System:
             )
         except Exception as error:
             print(type(error).__name__, ": ", error)
-            print("!WARNING! Only ``network`` imported! (the rest is default)")
+            print("!WARNING! Extender/PDE solver not imported.")
             pde_solver = pde_solvers.FreeFEM(network)
-            extender = extenders.ModifiedEulerMethod_Streamline(
+            extender = extenders.ModifiedEulerMethod(
                 pde_solver=pde_solver,)
             system = cls(
                 network=network,
                 extender=extender,
+                timestamps=timestamps,
+                growth_gauges=growth_gauges,
+                growth_thresh_type=growth_thresh_type,
+                growth_thresh=growth_thresh,
+                dump_every=dump_every,
                 exp_name=input_file,
             )
 
@@ -697,8 +904,7 @@ class System:
 
     def __update_growth_gauges(self, dt):
         """Update growth gauges."""
-        self.growth_gauges[1], self.growth_gauges[2] = self.network.height_and_length(
-        )
+        self.growth_gauges[1], self.growth_gauges[2] = self.network.height_and_length()
         self.growth_gauges[3] = self.growth_gauges[3] + dt
         self.timestamps = np.append( self.timestamps, self.growth_gauges[3] )
 
@@ -708,23 +914,20 @@ class System:
         print("Network length: {l:.3f}".format(l=self.growth_gauges[2]))
         print("Evolution time: {t:.3f}".format(t=self.growth_gauges[3]))
 
-        for branch in self.network.active_branches:
-            branch.steps = np.append(branch.steps, self.growth_gauges[0])
-            # branch.timestamps = np.append( branch.timestamps, self.growth_gauges[3] )
-
     def evolve(self):
         """Run the simulation.
 
         Run the simulation in a while loop until ``self.growth_thresh`` is not reached.
-        Print real time that the simulation took.
-
+        
         Returns
         -------
         None.
 
         """
+        self.export_json()
         start_clock = time.time()
-        while self.growth_gauges[self.growth_thresh_type] < self.growth_thresh:
+        while self.growth_gauges[self.growth_thresh_type] < self.growth_thresh \
+                and len(self.network.active_branches) > 0:
             self.growth_gauges[0] = self.growth_gauges[0] + 1
             print(
                 "\n-------------------   Growth step: {step:.0f}   -------------------\n".format(
@@ -737,14 +940,17 @@ class System:
                                                  step=self.growth_gauges[0])
             
             self.__update_growth_gauges(out_growth[0])
-
+            print("Computation time: {clock:.2f}h".format(
+                    clock=(time.time() - start_clock)/3600
+                )
+            )
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()
 
         self.export_json()
+        print("\n End of the simulation")
 
-        print(
-            "\n End of the simulation. Time: {clock:.2f}s".format(
-                clock=time.time() - start_clock
-            )
-        )
+if __name__ == "__main__":
+    box, branches, active_branches = Box.construct(
+        initial_condition=4
+    )

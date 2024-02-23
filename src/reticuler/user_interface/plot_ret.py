@@ -185,9 +185,9 @@ def main():
                 **args.plot_params[0]
             )
             if args.output_file is None:
-                ani.save(exp_name + ".avi", writer="ffmpeg")
+                ani.save(exp_name + ".avi", writer="ffmpeg", dpi=600)
             else:
-                ani.save(args.output_file[0] + ".avi", writer="ffmpeg")
+                ani.save(args.output_file[0] + ".avi", writer="ffmpeg", dpi=600)
         else:
             fig, ax = plt.subplots()
             graphics.plot_tree(

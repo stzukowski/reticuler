@@ -174,9 +174,9 @@ def main():
         help=textwrap.dedent(
             """\
             Extender
-            default = ModifiedEulerMethod_Streamline"""
+            default = ModifiedEulerMethod"""
         ),
-        default=["ModifiedEulerMethod_Streamline"],
+        default=["ModifiedEulerMethod"],
     )
     parser.add_argument(
         "--extender_params",
@@ -194,18 +194,11 @@ def main():
             
             """
         )
-        + "1. ModifiedEulerMethod_Streamline\n"
+        + "1. ModifiedEulerMethod\n"
         + textwrap.dedent(
-            extenders.ModifiedEulerMethod_Streamline.__doc__[
-                extenders.ModifiedEulerMethod_Streamline.__doc__.find("eta")
-                - 4 : extenders.ModifiedEulerMethod_Streamline.__doc__.find("References")
-            ]
-        )
-        + "1. ModifiedEulerMethod_ThickFingers\n"
-        + textwrap.dedent(
-            extenders.ModifiedEulerMethod_ThickFingers.__doc__[
-                extenders.ModifiedEulerMethod_ThickFingers.__doc__.find("eta")
-                - 4 : extenders.ModifiedEulerMethod_ThickFingers.__doc__.find("References")
+            extenders.ModifiedEulerMethod.__doc__[
+                extenders.ModifiedEulerMethod.__doc__.find("eta")
+                - 4 : extenders.ModifiedEulerMethod.__doc__.find("References")
             ]
         ),
         default=[{}],
@@ -230,27 +223,26 @@ def main():
         # Prepare the System from scratch
 
         # Box
-        box, branches = Box.construct(
+        box, branches, active_branches, branch_connectivity = Box.construct(
             initial_condition=args.initial_condition[0], **args.kwargs_box[0]
         )
 
         # Network
-        network = Network(box=box, branches=branches, active_branches=branches.copy())
-
-        # Solver
-        if args.pde_solver[0] == "FreeFEM":
-            pde_solver = pde_solvers.FreeFEM(network, **args.pde_solver_params[0])
-        elif args.pde_solver[0] == "FreeFEM_ThickFingers":
-            pde_solver = pde_solvers.FreeFEM_ThickFingers(network, **args.pde_solver_params[0])            
+        network = Network(box=box, branches=branches, 
+                          active_branches=active_branches, 
+                          branch_connectivity=branch_connectivity)
+          
         # Extender
-        if args.extender[0] == "ModifiedEulerMethod_Streamline":
-            extender = extenders.ModifiedEulerMethod_Streamline(
+        if args.extender[0] == "ModifiedEulerMethod":
+            # Solver
+            if args.pde_solver[0] == "FreeFEM":
+                pde_solver = pde_solvers.FreeFEM(network, **args.pde_solver_params[0])
+            elif args.pde_solver[0] == "FreeFEM_ThickFingers":
+                pde_solver = pde_solvers.FreeFEM_ThickFingers(network, **args.pde_solver_params[0])  
+            
+            extender = extenders.ModifiedEulerMethod(
                 pde_solver=pde_solver, **args.extender_params[0]
-            )
-        elif args.extender[0] == "ModifiedEulerMethod_ThickFingers":
-            extender = extenders.ModifiedEulerMethod_ThickFingers(
-                pde_solver=pde_solver, **args.extender_params[0]
-            )            
+            )          
 
         # General
         system = System(
