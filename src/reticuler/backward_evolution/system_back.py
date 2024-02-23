@@ -8,6 +8,7 @@ Classes:
 """
 
 import time
+import copy
 import datetime
 import numpy as np
 import importlib.metadata
@@ -32,10 +33,10 @@ class BackwardBranch:
         Chronological order of growth (tip is the last point).
     nums_left : array
         A 1-n array with the number of points left in the forward branch at the current BEA step.
-        Used to clip reconstruct the state of the network during BEA.
+        Used to reconstruct the state of the network during BEA.
     steps : array
         A 1-n array with BEA steps at which corresponding points were added.
-    a1a2a3_coefficients : array
+    flux_info : array
         A 3-n array with a1,a2,a3 coefficients in a point after backward step.
     overshoot : array
         A 1-n array with overshoot after virtual forward step.
@@ -67,7 +68,7 @@ class BackwardBranch:
 
         # arrays with BEA metrics are two elements shorter than points/steps
         # we don't collect metrics at the first and the last point of the initial branch
-        self.a1a2a3_coefficients = np.empty((0,3), dtype=float)
+        self.flux_info = np.empty((0,3), dtype=float)
         self.overshoot = []
         self.angular_deflection = []
         
@@ -89,7 +90,7 @@ class BackwardBifurcations:
     ----------
     mother_IDs : array
         A 1-n array with all IDs of the mother branchs of the bifurcations.
-    a1a2a3_coefficients : array
+    flux_info : array
         A 3-n array with a1,a2,a3 coefficients in each bifurcation point 
         after two branches reached it.
     length_mismatch : array
@@ -117,7 +118,7 @@ class BackwardBifurcations:
         """
         self.mother_IDs = mother_IDs
         
-        self.a1a2a3_coefficients = np.zeros((len(mother_IDs), 3))
+        self.flux_info = np.zeros((len(mother_IDs), 3))
         self.length_mismatch = np.zeros((len(mother_IDs), 1))
         
         # flag: 0-not reached, 1-reached once, 2-reached twice, 3-data saved
@@ -125,7 +126,7 @@ class BackwardBifurcations:
     
     def bif_info(self):
         """Return a 6-n array with bifurcation info (mother_ID, a1, a2, a3, length mismatch, flag)."""
-        return np.column_stack((self.mother_IDs, self.a1a2a3_coefficients, self.length_mismatch, self.flags))
+        return np.column_stack((self.mother_IDs, self.flux_info, self.length_mismatch, self.flags))
 
 class BackwardSystem:
     """A class containing all the elements to run the Backward Evolution Algorithm.
@@ -185,9 +186,9 @@ class BackwardSystem:
 
         # forward/backward branch ID is its index in backward_branches
         self.backward_branches, self.backward_bifurcations = self.import_branches(self.system.network)
-        self.system.extender.eta = self.trimmer.eta
-        self.system.extender.bifurcation_type = 0
-        self.system.extender.inflow_thresh = 0
+        self.system.extender.pde_solver.eta = self.trimmer.eta
+        self.system.extender.pde_solver.bifurcation_type = 0
+        self.system.extender.pde_solver.inflow_thresh = 0
         
         self.dump_every = dump_every
         self.exp_name = system.exp_name+'_back'
@@ -223,7 +224,7 @@ class BackwardSystem:
                 backward_branch.points = points_numsleft_steps[:, :2]
                 backward_branch.nums_left = np.array(points_numsleft_steps[:, 2], dtype=int)
                 backward_branch.steps = np.array(points_numsleft_steps[:, 3], dtype=int)
-                backward_branch.a1a2a3_coefficients = np.asarray(json_branch["a1a2a3_coefficients"])
+                backward_branch.flux_info = np.asarray(json_branch["flux_info"])
                 backward_branch.overshoot = np.asarray(json_branch["overshoot"])
                 backward_branch.angular_deflection = np.asarray(json_branch["angular_deflection"])
 
@@ -232,7 +233,7 @@ class BackwardSystem:
         # BackwardBifurcations
         bif_info = np.asarray(json_load["backward_bifurcations"]["bif_info"])
         backward_bifurcations = BackwardBifurcations(np.array(bif_info[:,0],dtype=int))
-        backward_bifurcations.a1a2a3_coefficients = bif_info[:, 1:4]
+        backward_bifurcations.flux_info = bif_info[:, 1:4]
         backward_bifurcations.length_mismatch = bif_info[:, 4]
         backward_bifurcations.flags = np.array(bif_info[:,5], dtype=int)
 
@@ -314,7 +315,7 @@ class BackwardSystem:
                     "ID": branch.ID,
                     "mother_ID": branch.mother_ID,
                     "points_numsleft_steps": branch.points_numsleft_steps(),
-                    "a1a2a3_coefficients": branch.a1a2a3_coefficients,
+                    "flux_info": branch.flux_info,
                     "overshoot": branch.overshoot,
                     "angular_deflection": branch.angular_deflection,
                 }
@@ -327,7 +328,7 @@ class BackwardSystem:
             json.dump(to_export, f, ensure_ascii=False,
                       indent=4, cls=NumpyEncoder)
 
-    def __import_branches(self, network):
+    def import_branches(self, network):
         """Reorganizing and importing branches from the networks.
         
         Parameters
@@ -379,8 +380,12 @@ class BackwardSystem:
         backward_bifurcations = BackwardBifurcations(np.unique(mother_IDs))
 
         return backward_branches, backward_bifurcations
+    
+    def copy(self):
+        """Return a deepcopy of the BacwkardSystem."""
+        return copy.deepcopy(self)
 
-    def __compare_networks(self, initial_network, backward_network, test_network, a1a2a3_coefficients):
+    def __compare_networks(self, initial_network, backward_network, test_network, flux_info):
         """Gathering BEA metrics.
         
         Parameters
@@ -390,7 +395,7 @@ class BackwardSystem:
             Network after backward step.
         test_network : Network
             Network after backward-forward step.
-        a1a2a3_coefficients : array
+        flux_info : array
             A 3-n array with a1,a2,a3 coefficients after backward step.
 
         Returns
@@ -407,7 +412,7 @@ class BackwardSystem:
             # if we've reached the bifurcation point for the second time
             if self.backward_bifurcations.flags[bifurcation_ind]==2:
                 self.backward_bifurcations.flags[bifurcation_ind] = 3
-                self.backward_bifurcations.a1a2a3_coefficients[bifurcation_ind] = a1a2a3_coefficients[i]
+                self.backward_bifurcations.flux_info[bifurcation_ind] = flux_info[i]
                 # length_mismatch is saved in the trimmer after first visit in the bifurcation point
         
             # if we haven't reached the bifurcation point
@@ -425,12 +430,14 @@ class BackwardSystem:
     
                 # overshoot
                 backward_branch.overshoot = np.append(backward_branch.overshoot, \
-                                                      np.linalg.norm(test_point - initial_point))
+                                                      np.linalg.norm(test_point - initial_point) / \
+                                                          np.linalg.norm(initial_point - back_point))
+                    
                 # angular deflection
                 backward_branch.angular_deflection = np.append(backward_branch.angular_deflection, \
                                                                real_angle-test_angle)
                 # a1, a2, a3 coefficients
-                backward_branch.a1a2a3_coefficients = np.vstack((backward_branch.a1a2a3_coefficients, a1a2a3_coefficients[i]))
+                backward_branch.flux_info = np.vstack((backward_branch.flux_info, flux_info[i]))
                 
     def run_BEA(self):
         """Run the Backward Evolution Algorithm.
@@ -453,6 +460,7 @@ class BackwardSystem:
             print("Date and time: ", datetime.datetime.now())
 
             ##### BACKWARD STEPS #####
+            print("Backward steps")
             for i in range(self.back_forth_steps_thresh):
                 initial_network, self.system.network, \
                 self.backward_branches, self.backward_bifurcations, \
@@ -466,21 +474,22 @@ class BackwardSystem:
                 continue
 
             ##### FORWARD STEPS #####
+            print("----- Forward steps -----")
             test_network = self.system.network.copy()
             for i in range(self.back_forth_steps_thresh):
-                self.system.extender.ds = backward_dts[i]
-                _, a1a2a3_coefficients = \
-                    self.system.trajectory_integrator.integrate(
-                        extender=self.system.extender,
-                        network=test_network,
-                        step=self.system.growth_gauges[0],
-                        is_BEA_off=False
-                )
+                self.system.extender.pde_solver.ds = backward_dts[i]
+                _, flux_info = self.system.extender.integrate(network=test_network, \
+                                     step=self.system.growth_gauges[0], is_dr_normalized=False) # dt, flux_info
+
 
             # compare the network before and after the backward-forward steps
             self.__compare_networks(
-                initial_network, self.system.network, test_network, a1a2a3_coefficients)
+                initial_network, self.system.network, test_network, flux_info)
 
+            print("Computation time: {clock:.2f}h".format(
+                    clock=(time.time() - start_clock)/3600
+                )
+            )
             if not self.BEA_step % self.dump_every:
                 self.export_json()
                 # self.system.export_json()
@@ -488,8 +497,4 @@ class BackwardSystem:
         self.export_json()
         # self.system.export_json()
 
-        print(
-            "\n End of the Backward Evolution Algorithm. Time: {clock:.2f}s".format(
-                clock=time.time() - start_clock
-            )
-        )        
+        print("\n End of the Backward Evolution Algorithm.")        

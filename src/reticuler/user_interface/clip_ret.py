@@ -155,7 +155,7 @@ def main():
         clippers.clip_to_time(system, args.time[0])        
     elif args.BEA_step is not None:
         backward_system = BackwardSystem.import_json(input_file=args.input_file_BEA[0], system=system)
-        clippers.clip_to_BEA_step(system, backward_system, max_BEA_step=args.BEA_step[0])
+        clippers.clip_to_BEA_step(backward_system, max_BEA_step=args.BEA_step[0])
         
         if args.output_file_BEA is None:
             backward_system.exp_name = args.input_file_BEA[0]+"_clipped"

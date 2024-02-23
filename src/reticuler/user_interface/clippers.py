@@ -59,36 +59,42 @@ def clip_to_height(system, max_height):
     for branch in branches_to_iterate:
         all_points_steps = np.vstack( ( all_points_steps, branch.points_steps() ) )
     all_points_steps = all_points_steps[1:]
-    max_step = int(np.min(all_points_steps[all_points_steps[:,1]>max_height, 2]))
-    clip_to_step(system, max_step)
+    inds_above = all_points_steps[all_points_steps[:,1]>max_height,2]
+    if len(inds_above):
+        max_step = int(np.min(inds_above))
+        clip_to_step(system, max_step)
     
 def clip_to_time(system, max_time):
     max_step = sum(system.timestamps<max_time)
     clip_to_step(system, max_step)
     
-def clip_to_BEA_step(system, backward_system, max_BEA_step):
+def clip_to_BEA_step(backward_system, max_BEA_step):
+    def update_bifs():
+        ind_bifurcation = backward_system.backward_bifurcations.mother_IDs==backward_branch.mother_ID
+        flag = backward_system.backward_bifurcations.flags[ind_bifurcation]
+        if  flag == 3:
+            backward_system.backward_bifurcations.flags[ind_bifurcation] = 4
+            backward_system.backward_bifurcations.flux_info[ind_bifurcation,...] = 0
+        elif 0 < flag < 3:
+            backward_system.backward_bifurcations.flags[ind_bifurcation] = 4
+        elif flag == 4:
+            backward_system.backward_bifurcations.flags[ind_bifurcation] = 0
+            backward_system.backward_bifurcations.length_mismatch[ind_bifurcation] = 0
+    
     branches_to_iterate = backward_system.system.network.branches.copy()
-    # active_inds = np.empty(len(branches_to_iterate), dtype=int)
-    # sleeping_inds = np.empty(len(branches_to_iterate), dtype=int)
     max_BEA_step_found = 0
+    max_forward_step_found = 0
     for i, forward_branch in enumerate(branches_to_iterate):
         backward_branch = backward_system.backward_branches[forward_branch.ID]
-        # active_inds[i] = backward_branch.active_ind
-        # sleeping_inds[i] = backward_branch.sleeping_ind
         if len(backward_branch.steps):
             ind_backward = np.sum(backward_branch.steps<=max_BEA_step)-1
             if ind_backward<0:
                 # branch hasn't been trimmed at all -- delete BEA results
-                backward_system.backward_branches[forward_branch.ID] =\
+                backward_system.backward_branches[forward_branch.ID] = \
                     BackwardBranch(backward_branch.ID, backward_branch.mother_ID)
                 # and update backward_bifurcations
-                ind_bifurcation = backward_system.backward_bifurcations.mother_IDs==backward_branch.mother_ID
-                if backward_system.backward_bifurcations.flags[ind_bifurcation] == 3:
-                    backward_system.backward_bifurcations.flags[ind_bifurcation] = 1
-                    backward_system.backward_bifurcations.a1a2a3_coefficients[ind_bifurcation,...] = 0
-                elif backward_system.backward_bifurcations.flags[ind_bifurcation] < 3:
-                    backward_system.backward_bifurcations.flags[ind_bifurcation] = 0
-                    backward_system.backward_bifurcations.length_mismatch[ind_bifurcation] = 0
+                update_bifs()
+                max_forward_step_found = max( max_forward_step_found, max(forward_branch.steps) )
             else:
                 max_BEA_step_found = max(max_BEA_step_found, \
                                          min(max_BEA_step, backward_branch.steps[ind_backward]))
@@ -107,22 +113,22 @@ def clip_to_BEA_step(system, backward_system, max_BEA_step):
                     backward_branch.points = backward_branch.points[:ind_backward+1]
                     backward_branch.nums_left = backward_branch.nums_left[:ind_backward+1]
                     backward_branch.steps = backward_branch.steps[:ind_backward+1]
-                    backward_branch.a1a2a3_coefficients = backward_branch.a1a2a3_coefficients[:ind_backward+1]
+                    backward_branch.flux_info = backward_branch.flux_info[:ind_backward+1]
                     backward_branch.overshoot = backward_branch.overshoot[:ind_backward+1]
                     backward_branch.angular_deflection = backward_branch.angular_deflection[:ind_backward+1]
                     # and update backward_bifurcations
-                    ind_bifurcation = backward_system.backward_bifurcations.mother_IDs==backward_branch.mother_ID
-                    if backward_system.backward_bifurcations.flags[ind_bifurcation] == 3:
-                        backward_system.backward_bifurcations.flags[ind_bifurcation] = 1
-                        backward_system.backward_bifurcations.a1a2a3_coefficients[ind_bifurcation,...] = 0
-                    elif backward_system.backward_bifurcations.flags[ind_bifurcation] == 1:
-                        backward_system.backward_bifurcations.flags[ind_bifurcation] = 0
-                        backward_system.backward_bifurcations.length_mismatch[ind_bifurcation] = 0
+                    update_bifs()
                     # print(backward_branch.active_ind)
+                    max_forward_step_found = max( max_forward_step_found, max(forward_branch.steps) )
+    backward_system.system.timestamps = backward_system.system.timestamps[:max_forward_step_found+1]
+    backward_system.system.growth_gauges[0] = max_forward_step_found
+    backward_system.system.growth_gauges[1], \
+        backward_system.system.growth_gauges[2] = backward_system.system.network.height_and_length()
+    backward_system.system.growth_gauges[3] = backward_system.system.timestamps[-1]
+
+    backward_system.backward_bifurcations.flags[backward_system.backward_bifurcations.flags==4] = 1
     backward_system.import_branches(backward_system.system.network)
-    backward_system.BEA_step = max_BEA_step_found
-    # backward_system.system.network.active_branches = [branches_to_iterate[i] for i in np.argsort(active_inds)[np.sort(active_inds)>-1]]
-    # backward_system.system.network.sleeping_branches = [branches_to_iterate[i] for i in np.argsort(sleeping_inds)[np.sort(sleeping_inds)>-1]]
+    backward_system.BEA_step = int(max_BEA_step_found)
     
 
 if __name__ == "__main__":
