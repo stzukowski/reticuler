@@ -8,7 +8,7 @@ include = ["reticuler*"]  # package names should match these glob patterns (["*"
 
 [project]
 name = "reticuler"
-version = "3.0"
+version = "2.1"
 authors = [
 	{name="Stanisław Żukowski"},
 	{email="zukowski.st@gmail.com"}
@@ -25,6 +25,8 @@ classifiers = [
 dependencies = [
     "numpy >= 1.23",
     "matplotlib >= 3.6",
+	"scipy >= 1.11.4",
+	"shapely >= 2.0.3",
 	]
 
 [project.urls]
