@@ -8,7 +8,7 @@ include = ["reticuler*"]  # package names should match these glob patterns (["*"
 
 [project]
 name = "reticuler"
-version = "3.2"
+version = "3.3"
 authors = [
 	{name="Stanisław Żukowski"},
 	{email="zukowski.st@gmail.com"}
