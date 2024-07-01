@@ -1,0 +1,551 @@
+-- FreeFem++ v4.6 (Mon Dec 19 19:26:30 CET 2022 - git no git)
+ Load: lg_fem lg_mesh lg_mesh3 eigenvalue 
+    1 : 
+    2 : real time1=clock();
+    3 : 
+    4 : verbosity=0;
+    5 : int nAdapt=0;
+    6 : int nSteps=50;
+    7 : real mobilityInside;
+    8 : real mobilityOutside = 1;
+    9 : real W = 3.3333333333333335;
+   10 : real H = 10.;
+   11 : real L = 6;
+   12 : real l;
+   13 : real xLow = 1.1111111111111112;
+   14 : real xHigh = 2.2222222222222223;
+   15 : real fWidth = 0.22222222222222224;
+   16 : 
+   17 : // Mesh labels
+   18 : int bottom=99;
+   19 : int top=98; //could be anything such that !=0 and bottom!=top
+   20 : int right=97;
+   21 : int left=96;
+   22 : int finger=95;
+   23 : int tipLeft=94;
+   24 : int tipRight=93;
+   25 : func PBC=[[left,y],[right,y]];
+   26 : 
+   27 : for(int k=2;k<10;k++){
+   28 : 	L = H - 10.^(1.-k*1.);
+   29 : 	
+   30 : 	// Arrays with results
+   31 : 	real[int, int] mobilityArr(nSteps, nSteps), hLow(nSteps, nSteps), fluxLeft(nSteps, nSteps), fluxRight(nSteps, nSteps);
+   32 : 	func int borderInt (real a) {return int(a*20)+1;}
+   33 : 	// Loop over hLow
+   34 : 	real startingHeight = fWidth/2+0.05;
+   35 : 	for(int j=0;j<nSteps;j++){
+   36 : 		cout<<"Step: "<<j+1<<"/"<<nSteps<<endl; 
+   37 : 		// hLow
+   38 : 		l = startingHeight + 1.*j/(nSteps-1) * (L-startingHeight-0.05);
+   39 : 		
+   40 : 
+   41 : 		// Contour of the domain -- rectangle
+   42 : 		border C01(t=0, H){x=W; y=t; label=right;} // PBCdic boundary conditions
+   43 : 		border C02(t=W, 0){x=t; y=H; label=top;} // Flux of the field from the top
+   44 : 		border C03(t=H, 0){x=0; y=t;  label=left;} // PBCdic boundary conditions
+   45 : 		border C040(t=0, (xLow-fWidth/2)){x=t; y=0; label=bottom;}
+   46 : 		border C041(t=(xLow-fWidth/2), (xLow+fWidth/2)){x=t; y=0; label=bottom;}
+   47 : 		border C042(t=(xLow+fWidth/2), (xHigh-fWidth/2)){x=t; y=0; label=bottom;}
+   48 : 		border C043(t=(xHigh-fWidth/2), (xHigh+fWidth/2)){x=t; y=0; label=bottom;}
+   49 : 		border C044(t=(xHigh+fWidth/2), W){x=t; y=0; label=bottom;}
+   50 : 		// Low finger
+   51 : 		border C10(t=0., 1){x=xLow+fWidth/2; y=(l-fWidth/2)*t;label=finger;}
+   52 : 		border C111(t=0., 0.5){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipRight;}
+   53 : 		border C112(t=0.5, 1){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipLeft;}
+   54 : 		border C12(t=0., 1){x=xLow-fWidth/2; y=(l-fWidth/2)*(1-t);label=finger;}
+   55 : 		// High finger
+   56 : 		border C20(t=0., 1){x=xHigh+fWidth/2; y=(L-fWidth/2)*t;label=finger;}
+   57 : 		border C21(t=0., 1){x=xHigh+fWidth/2*cos(t*pi); y=(L-fWidth/2)+fWidth/2*sin(t*pi);label=finger;}
+   58 : 		border C22(t=0., 1){x=xHigh-fWidth/2; y=(L-fWidth/2)*(1-t);label=finger;}
+   59 : 
+   60 : 		mesh Th=buildmesh( C01(borderInt(H)) + C02(borderInt(W)) + C03(borderInt(H))
+   61 : 								+ C040(borderInt((xLow-fWidth/2))) + C041(borderInt(fWidth))
+   62 : 								+ C042(borderInt((xHigh-xLow-fWidth))) + C043(borderInt(fWidth)) + C044(borderInt((W-xHigh-fWidth/2)))
+   63 : 								+ C10(borderInt(l)) + C111(100)+C112(100) + C12(borderInt(l))
+   64 : 								+ C20(borderInt(L)) + C21(100) + C22(borderInt(L)), fixedborder=true);
+   65 : 		// plot(Th, wait=true);
+   66 : 		
+   67 : 		// Loop over mobility
+   68 : 		for(int i=0;i<nSteps;i++){
+   69 : 			
+   70 : 			mobilityInside = 10.^(8.*i/(nSteps-1));
+   71 : 			mobilityArr(i, j) = mobilityInside;
+   72 : 			hLow(i, j) = l;
+   73 : 
+   74 : 			// Mobility
+   75 : 			int nLow = Th(xLow, 0.01).region, nHigh= Th(xHigh,0.01).region, nOutside=Th(W/100.,0.99*H).region; 
+   76 : 			fespace Vh0(Th, P0, periodic=PBC);
+   77 : 			Vh0 mobility = mobilityOutside*(region==nOutside) + mobilityInside*(region==nLow|| region==nHigh );
+   78 : 
+   79 : 
+   80 : 			// Defining problem to solve
+   81 : 			fespace Vh(Th, P1, periodic=PBC);
+   82 : 			Vh u, v;
+   83 : 			problem Laplace(u, v) = int2d(Th)(mobility*(dx(u)*dx(v)+ dy(u)*dy(v)) )
+   84 : 												+on(top, u=0) // constant field
+   85 : 											// -int1d(Th,top)(v) // constant flux
+   86 : 												+on(bottom, u=1);
+   87 : 
+   88 : 			// Solving the equation
+   89 : 			real error=0.01;
+   90 : 			Laplace;
+   91 : 			for(int i=0;i<nAdapt;i++){
+   92 : 			// Adapting mesh according to the first solution
+   93 : 			Th=adaptmesh(Th, u, err=error, nbvx=500000, periodic=PBC, verbosity=0, keepbackvertices=1); // hmax=0.01, 
+   94 : 			u=u;
+   95 : 			error=error/2;
+   96 : 			Laplace; // Solving one more time with adapted mesh
+   97 : 			}
+   98 : 
+   99 : 			// Calculating gradient
+  100 : 			Vh dxu=dx(u);
+  101 : 			Vh dyu=dy(u);
+  102 : 
+  103 : 			// flux at the tip
+  104 : 			fluxLeft(i, j) = int1d(Th, tipLeft)(abs(dxu*N.x+dyu*N.y));
+  105 : 			fluxRight(i, j) = int1d(Th, tipRight)(abs(dxu*N.x+dyu*N.y));
+  106 : 		}
+  107 : 	}
+  108 : 
+  109 : 	{ // export
+  110 : 	real d=(H-L)/10;
+  111 : 	ofstream file("results_d"+d+".fluxes");
+  112 : 	for (int j = 0; j < nSteps; j++){
+  113 : 		for (int i = 0; i < nSteps; i++){
+  114 : 			file << " " << hLow(j, i);
+  115 : 			file << " " << mobilityArr(j, i);
+  116 : 			file << " " << fluxLeft(j, i);
+  117 : 			file << " " << fluxRight(j, i);
+  118 : 			file << endl;
+  119 : 			}
+  120 : 		}
+  121 : 	}
+  122 : 
+  123 : 	cout << endl << "Measured time: " << clock()-time1 << endl << endl;
+  124 : } sizestack + 1024 =3512  ( 2488 )
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 25207.8
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 50351.2
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 75417.8
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 100603
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 125838
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 150901
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 176050
+
+Step: 1/50
+Step: 2/50
+Step: 3/50
+Step: 4/50
+Step: 5/50
+Step: 6/50
+Step: 7/50
+Step: 8/50
+Step: 9/50
+Step: 10/50
+Step: 11/50
+Step: 12/50
+Step: 13/50
+Step: 14/50
+Step: 15/50
+Step: 16/50
+Step: 17/50
+Step: 18/50
+Step: 19/50
+Step: 20/50
+Step: 21/50
+Step: 22/50
+Step: 23/50
+Step: 24/50
+Step: 25/50
+Step: 26/50
+Step: 27/50
+Step: 28/50
+Step: 29/50
+Step: 30/50
+Step: 31/50
+Step: 32/50
+Step: 33/50
+Step: 34/50
+Step: 35/50
+Step: 36/50
+Step: 37/50
+Step: 38/50
+Step: 39/50
+Step: 40/50
+Step: 41/50
+Step: 42/50
+Step: 43/50
+Step: 44/50
+Step: 45/50
+Step: 46/50
+Step: 47/50
+Step: 48/50
+Step: 49/50
+Step: 50/50
+
+Measured time: 201268
+

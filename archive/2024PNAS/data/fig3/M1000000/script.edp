@@ -1,0 +1,134 @@
+
+int nAdapt=8;
+int mobilityInside = 1000000;
+int mobilityOutside = 1;
+real W = 0.3333333333333333;
+real H = 1;
+real l = 0.3;
+real xLow = 0.1111111111111111;
+real L = 0.9;
+real xHigh = 0.2222222222222222;
+real fWidth = 0.02222222222222222;
+
+// Mesh
+int bottom=99;
+int top=98; //could be anything such that !=0 and bottom!=top
+int right=97;
+int left=96;
+int finger=95;
+int tipLeft=94;
+int tipRight=93;
+cout<<endl<<"----------Border idies----------"<<endl;
+cout<<"Bottom: "<< bottom << " | "<< "Top: "<< top << endl;
+cout<<"Left: "<< left << " | "<< "Right: "<< right << endl;
+cout<<"Fingers: "<< finger << " | "<< "Tip left: "<< tipLeft << " | "<< "Tip right: "<< tipRight << endl;
+
+// Contour of the domain -- rectangle
+border C01(t=0, H){x=W; y=t; label=right;} // PBCdic boundary conditions
+border C02(t=W, 0){x=t; y=H; label=top;} // Flux of the field from the top
+border C03(t=H, 0){x=0; y=t;  label=left;} // PBCdic boundary conditions
+border C040(t=0, (xLow-fWidth/2)){x=t; y=0; label=bottom;}
+border C041(t=(xLow-fWidth/2), (xLow+fWidth/2)){x=t; y=0; label=bottom;}
+border C042(t=(xLow+fWidth/2), (xHigh-fWidth/2)){x=t; y=0; label=bottom;}
+border C043(t=(xHigh-fWidth/2), (xHigh+fWidth/2)){x=t; y=0; label=bottom;}
+border C044(t=(xHigh+fWidth/2), W){x=t; y=0; label=bottom;}
+// Low finger
+border C10(t=0., 1){x=xLow+fWidth/2; y=(l-fWidth/2)*t;label=finger;}
+border C111(t=0., 0.5){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipRight;}
+border C112(t=0.5, 1){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipLeft;}
+border C12(t=0., 1){x=xLow-fWidth/2; y=(l-fWidth/2)*(1-t);label=finger;}
+// High finger
+border C20(t=0., 1){x=xHigh+fWidth/2; y=(L-fWidth/2)*t;label=finger;}
+border C21(t=0., 1){x=xHigh+fWidth/2*cos(t*pi); y=(L-fWidth/2)+fWidth/2*sin(t*pi);label=finger;}
+border C22(t=0., 1){x=xHigh-fWidth/2; y=(L-fWidth/2)*(1-t);label=finger;}
+
+func PBC=[[left,y],[right,y]];
+
+mesh Th=buildmesh(C01(50) + C02(20) + C03(50) + C040(5) + C041(5) + C042(5) + C043(5)  + C044(5) 
+                        + C10(20) + C111(50)+C112(50) + C12(20)
+                        + C20(20) + C21(50) + C22(20), fixedborder=true);
+
+// Mobility
+int nLow = Th(xLow, 0.1).region, nHigh= Th(xHigh,0.1).region, nOutside=Th(W/10,0.9*H).region; 
+fespace Vh0(Th, P0, periodic=PBC);
+Vh0 mobility = mobilityOutside*(region==nOutside) + mobilityInside*(region==nLow|| region==nHigh );
+cout<<endl<<"----------Region idies----------"<<endl;
+cout<< "Outside: "<< nOutside<<endl;
+cout<< "High finger: "<< nHigh << " | "<< "Low finger: "<< nLow << endl;
+
+// Defining problem to solve
+fespace Vh(Th, P1, periodic=PBC);
+Vh u, v;
+problem Laplace(u, v) = int2d(Th)(mobility*(dx(u)*dx(v)+ dy(u)*dy(v)) )
+                                    +on(top, u=0) // constant field
+                                //  +on(finger, tipLeft, tipRight, u=1)
+                                // -int1d(Th,top)(v) // constant flux
+                                    +on(bottom, u=1);
+
+// Adaptation around the tip
+func real tipfield( real X, real Y, real sigma)
+{
+real rr=((x-X)^2 + (y-Y)^2)^0.5;
+real err=0;
+if (rr>0.99*sigma & rr<1.01*sigma)
+    err=1;
+return err;
+}
+
+// Solving the equation
+real error=0.01;
+Laplace;
+for(int i=0;i<nAdapt;i++){
+Th=adaptmesh(Th, u, err=error, hmax=0.01, nbvx=500000, periodic=PBC, verbosity=0, keepbackvertices=1); // Adapting mesh according to the first solution
+u=u;
+error=error/2;
+Laplace; // Solving one more time with adapted mesh
+}
+
+// Calculating gradient
+Vh dxu=dx(u);
+Vh dyu=dy(u);
+
+// Exporting data
+// points, triangles (faces)
+savemesh(Th,"results",[x,y]);
+{ // edges
+ofstream file("results.edges");
+for (int ne = 0; ne < Th.nbe; ne++ )
+    {
+    file << Th.be(ne)[0] << " " << Th.be(ne)[1] << " " << Th.be(ne).label << endl;
+    }
+}
+{ // fields
+ofstream file("results.fields");
+for (int i = 0; i < Th.nv; i++)
+    {
+    x = Th(i).x;
+    y = Th(i).y;
+    // file << x << " " << y << " ";
+    file << u;
+    file << " " << dxu << " " << dyu;
+    file << endl;
+    }
+}
+
+int ndof=0;
+for(int i=0;i<Th.nbe;++i) if(Th.be(i).label == tipLeft | Th.be(i).label == tipRight) ++ndof;
+real[int] angles(ndof), gradAbsNormal(ndof), gradAbs(ndof);
+int n=0;
+int1d(Th, tipRight, qfe=qf1pE)( (angles(n++)=pi-atan2(y-(l-fWidth/2), x-xLow))*1.
+                                +(gradAbs(n)=(dxu^2+dyu^2)^0.5)*1.
+                                +(gradAbsNormal(n)=abs(dxu*N.x+dyu*N.y))*1.);
+int1d(Th, tipLeft, qfe=qf1pE)( (angles(n++)=pi-atan2(y-(l-fWidth/2), x-xLow))*1.
+                                +(gradAbs(n)=(dxu^2+dyu^2)^0.5)*1.
+                                +(gradAbsNormal(n)=abs(dxu*N.x+dyu*N.y))*1.);
+{ // export
+ofstream file("results.tip");
+for (int i = 0; i < angles.n; i++)
+    {
+    file << angles(i);
+    file << " " << gradAbs(i) << " " << gradAbsNormal(i);
+    file << endl;
+    }
+}
+// plot([angles, gradAbs], [angles, gradAbsNormal], wait=true);

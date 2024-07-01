@@ -1,0 +1,124 @@
+
+real time1=clock();
+
+verbosity=0;
+int nAdapt=0;
+int nSteps=50;
+real mobilityInside;
+real mobilityOutside = 1;
+real W = 3.3333333333333335;
+real H = 10.;
+real L = 6;
+real l;
+real xLow = 1.1111111111111112;
+real xHigh = 2.2222222222222223;
+real fWidth = 0.22222222222222224;
+
+// Mesh labels
+int bottom=99;
+int top=98; //could be anything such that !=0 and bottom!=top
+int right=97;
+int left=96;
+int finger=95;
+int tipLeft=94;
+int tipRight=93;
+func PBC=[[left,y],[right,y]];
+
+for(int k=0;k<17;k++){
+	L = 1.+0.5*k;
+	
+	// Arrays with results
+	real[int, int] mobilityArr(nSteps, nSteps), hLow(nSteps, nSteps), fluxLeft(nSteps, nSteps), fluxRight(nSteps, nSteps);
+	func int borderInt (real a) {return int(a*20)+1;}
+	// Loop over hLow
+	real startingHeight = fWidth/2+0.05;
+	for(int j=0;j<nSteps;j++){
+		cout<<"Step: "<<j+1<<"/"<<nSteps<<endl; 
+		// hLow
+		l = startingHeight + 1.*j/(nSteps-1) * (L-startingHeight-0.05);
+		
+
+		// Contour of the domain -- rectangle
+		border C01(t=0, H){x=W; y=t; label=right;} // PBCdic boundary conditions
+		border C02(t=W, 0){x=t; y=H; label=top;} // Flux of the field from the top
+		border C03(t=H, 0){x=0; y=t;  label=left;} // PBCdic boundary conditions
+		border C040(t=0, (xLow-fWidth/2)){x=t; y=0; label=bottom;}
+		border C041(t=(xLow-fWidth/2), (xLow+fWidth/2)){x=t; y=0; label=bottom;}
+		border C042(t=(xLow+fWidth/2), (xHigh-fWidth/2)){x=t; y=0; label=bottom;}
+		border C043(t=(xHigh-fWidth/2), (xHigh+fWidth/2)){x=t; y=0; label=bottom;}
+		border C044(t=(xHigh+fWidth/2), W){x=t; y=0; label=bottom;}
+		// Low finger
+		border C10(t=0., 1){x=xLow+fWidth/2; y=(l-fWidth/2)*t;label=finger;}
+		border C111(t=0., 0.5){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipRight;}
+		border C112(t=0.5, 1){x=xLow+fWidth/2*cos(t*pi); y=(l-fWidth/2)+fWidth/2*sin(t*pi);label=tipLeft;}
+		border C12(t=0., 1){x=xLow-fWidth/2; y=(l-fWidth/2)*(1-t);label=finger;}
+		// High finger
+		border C20(t=0., 1){x=xHigh+fWidth/2; y=(L-fWidth/2)*t;label=finger;}
+		border C21(t=0., 1){x=xHigh+fWidth/2*cos(t*pi); y=(L-fWidth/2)+fWidth/2*sin(t*pi);label=finger;}
+		border C22(t=0., 1){x=xHigh-fWidth/2; y=(L-fWidth/2)*(1-t);label=finger;}
+
+		mesh Th=buildmesh( C01(borderInt(H)) + C02(borderInt(W)) + C03(borderInt(H))
+								+ C040(borderInt((xLow-fWidth/2))) + C041(borderInt(fWidth))
+								+ C042(borderInt((xHigh-xLow-fWidth))) + C043(borderInt(fWidth)) + C044(borderInt((W-xHigh-fWidth/2)))
+								+ C10(borderInt(l)) + C111(100)+C112(100) + C12(borderInt(l))
+								+ C20(borderInt(L)) + C21(100) + C22(borderInt(L)), fixedborder=true);
+		// plot(Th, wait=true);
+		
+		// Loop over mobility
+		for(int i=0;i<nSteps;i++){
+			
+			mobilityInside = 10.^(8.*i/(nSteps-1));
+			mobilityArr(i, j) = mobilityInside;
+			hLow(i, j) = l;
+
+			// Mobility
+			int nLow = Th(xLow, 0.01).region, nHigh= Th(xHigh,0.01).region, nOutside=Th(W/100.,0.99*H).region; 
+			fespace Vh0(Th, P0, periodic=PBC);
+			Vh0 mobility = mobilityOutside*(region==nOutside) + mobilityInside*(region==nLow|| region==nHigh );
+
+
+			// Defining problem to solve
+			fespace Vh(Th, P1, periodic=PBC);
+			Vh u, v;
+			problem Laplace(u, v) = int2d(Th)(mobility*(dx(u)*dx(v)+ dy(u)*dy(v)) )
+												+on(top, u=0) // constant field
+											// -int1d(Th,top)(v) // constant flux
+												+on(bottom, u=1);
+
+			// Solving the equation
+			real error=0.01;
+			Laplace;
+			for(int i=0;i<nAdapt;i++){
+			// Adapting mesh according to the first solution
+			Th=adaptmesh(Th, u, err=error, nbvx=500000, periodic=PBC, verbosity=0, keepbackvertices=1); // hmax=0.01, 
+			u=u;
+			error=error/2;
+			Laplace; // Solving one more time with adapted mesh
+			}
+
+			// Calculating gradient
+			Vh dxu=dx(u);
+			Vh dyu=dy(u);
+
+			// flux at the tip
+			fluxLeft(i, j) = int1d(Th, tipLeft)(abs(dxu*N.x+dyu*N.y));
+			fluxRight(i, j) = int1d(Th, tipRight)(abs(dxu*N.x+dyu*N.y));
+		}
+	}
+
+	{ // export
+	real d=(H-L)/10;
+	ofstream file("results_d"+d+".fluxes");
+	for (int j = 0; j < nSteps; j++){
+		for (int i = 0; i < nSteps; i++){
+			file << " " << hLow(j, i);
+			file << " " << mobilityArr(j, i);
+			file << " " << fluxLeft(j, i);
+			file << " " << fluxRight(j, i);
+			file << endl;
+			}
+		}
+	}
+
+	cout << endl << "Measured time: " << clock()-time1 << endl << endl;
+}
