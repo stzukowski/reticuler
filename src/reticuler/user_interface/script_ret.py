@@ -63,7 +63,7 @@ def main():
         script = system.extender.pde_solver.prepare_script(system.network)
 
         if args.output_file is None:
-            filename = exp_name + ".edp"
+            filename = exp_name + "_script.edp"
         else:
             filename = args.output_file[0] + ".edp"
             

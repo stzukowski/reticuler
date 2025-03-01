@@ -43,6 +43,8 @@ reticulate -out test --growth_params {\"growth_thresh_type\":1,\"growth_thresh\"
 ## How to cite
 [1] [*Through history to growth dynamics: backward evolution of spatial networks*](https://doi.org/10.1038/s41598-022-24656-x), S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci. Rep. 12, 20407 (2022).
 <!--- [Materials](https://github.com/stzukowski/reticuler/tree/main/archive/papers/2022SciRep) --->
+[2] [*Breakthrough-induced loop formation in evolving transport networks*](https://doi.org/10.1073/pnas.2401200121), S. Żukowski, A. J. M. Cornelissen, F. Osselin, S. Douady, P. Szymczak, PNAS 121 (29), e2401200121 (2024).
+[Materials](https://github.com/stzukowski/reticuler/tree/main/archive/2024PNAS)
 
 **References:**
 The thin-finger growth algorithm used in this package was based on an earlier code described in the paper

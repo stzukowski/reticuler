@@ -26,7 +26,7 @@ RIGHT_WALL_PBC = 999
 LEFT_WALL_PBC = 998
 
 def find_reconnection_point(p, a, b, too_close=0.1):
-    """Cartesian distance from point to line segment
+    """Cartesian distance from a point to line segment
     https://stackoverflow.com/a/58781995
 
     Edited to support arguments as series, from:
@@ -396,24 +396,24 @@ class Box:
         elif initial_condition == 4:
             def cyl2cart(r, theta):
                 # theta measured from the negative Y axis
-                return [R0+r*np.sin(theta), R0-r*np.cos(theta)]
+                return [R_rim+r*np.sin(theta), R_rim-r*np.cos(theta)]
             angular_width = 2*np.pi / 8
-            R0 = 5 # mm
-            r0 = 0.4 * R0
-            h0 = R0 - r0
+            R_rim = 5 # mm
+            R_stom = 0.45 * R_rim
+            h0 = R_rim - R_stom
                 
             # right boundary
-            box.__add_points([cyl2cart(R0, angular_width/2)])
+            box.__add_points([cyl2cart(R_rim, angular_width/2)])
             
             # stomach
             n_points_stomach = 24 # n_points_rim % 2 == 0
             box.__add_points(
-                np.vstack( cyl2cart(r0, np.linspace(angular_width/2, -angular_width/2, n_points_stomach+1)) ).T
+                np.vstack( cyl2cart(R_stom, np.linspace(angular_width/2, -angular_width/2, n_points_stomach+1)) ).T
             )
             # circular rim
             n_points_rim = 24 # n_points_rim % 8 == 0
             box.__add_points(
-                np.vstack( cyl2cart(R0, np.linspace(-angular_width/2,0.99999*angular_width/2, n_points_rim+1)) ).T
+                np.vstack( cyl2cart(R_rim, np.linspace(-angular_width/2,0.99999*angular_width/2, n_points_rim+1)) ).T
             )
             
             # seeds indices
@@ -453,15 +453,15 @@ class Box:
             n_inter = 42 # n_inter % 3 == 0
             branches.append(Branch(
                     ID=0,
-                    points=np.vstack(cyl2cart(np.linspace(R0, r0, n_inter+1), 0)).T,
+                    points=np.vstack(cyl2cart(np.linspace(R_rim, R_stom, n_inter+1), 0)).T,
                     steps=np.zeros(n_inter+1),
                 )
             )
             # trifork left
             n_trifork = 42
             t = np.linspace(angular_width/8, np.pi/2,n_trifork)
-            r1 = np.sqrt( (2*R0*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
-            x = R0 - r1 * np.cos(t)
+            r1 = np.sqrt( (2*R_rim*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
+            x = R_rim - r1 * np.cos(t)
             y = 2/3*h0 * np.sin(t)
             branches.append(Branch(
                     ID=1,
@@ -471,8 +471,8 @@ class Box:
             )
             # trifork right
             t = np.linspace(np.pi-angular_width/8, np.pi/2,n_trifork)
-            r1 = np.sqrt( (2*R0*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
-            x = R0 - r1 * np.cos(t)
+            r1 = np.sqrt( (2*R_rim*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
+            x = R_rim - r1 * np.cos(t)
             y = 2/3*h0 * np.sin(t)
             branches.append(Branch(
                     ID=2,
@@ -484,7 +484,7 @@ class Box:
             for i, theta in enumerate(np.arange(-3/8,3.1/8,1/4)*angular_width):
                 branch = Branch(
                         ID=3+i,
-                        points=np.vstack(cyl2cart(np.array([R0, R0-0.1]), theta)).T,
+                        points=np.vstack(cyl2cart(np.array([R_rim, R_rim-0.1]), theta)).T,
                         steps=np.array([0, 0])
                     )
                 branches.append(branch)       
@@ -677,6 +677,15 @@ class Network:
                                                     too_close=pde_solver.ds)                    
 
                 if min_distance < reconnection_distance:
+                    # to make more realistich reconnections we stretch tip further
+                    tip = branch.points[-1] + 2*dr
+                    _, ind_min, is_pt_new, reconnection_pt = \
+                                    find_reconnection_point(tip, \
+                                                        all_segments_branches[mask,4:6], \
+                                                        all_segments_branches[mask,6:], 
+                                                        too_close=pde_solver.ds) 
+                    
+                    # reconnect to a branch
                     branch2_id = int(all_segments_branches[mask][ind_min,0])
                     print("! Branch {ID} reconnected to branch {ID2}!".format(ID=branch.ID, ID2=branch2_id))
                     
@@ -690,22 +699,22 @@ class Network:
                     
                     if is_pt_new:
                         branch2_ind = int(all_segments_branches[mask][ind_min,1])
-                        branch2 = self.active_branches[branch2_ind]
+                        branch2 = self.branches[branch2_ind]
                         ind_pt = int(all_segments_branches[mask][ind_min, 2])
-                        branch2.points = np.insert(branch2.points, ind_pt+1, reconnection_pt)
-                        branch2.steps = np.insert(branch2.steps, ind_pt+1, branch2.steps[ind_pt])
+                        branch2.points = np.insert(branch2.points, ind_pt+1, reconnection_pt, axis=0)
+                        branch2.steps = np.insert(branch2.steps, ind_pt+1, branch2.steps[ind_pt], axis=0)
 
                         print("New point... to test.")
-                        # in theory we should update all_segments_branches
-                        # all_segments_branches = all_segments_branches[ all_segments_branches[:,0]!=branch2_id]
-                        # n_points = len(branch2.points)
-                        # all_segments_branches = np.vstack(( all_segments_branches, \
-                        #     np.column_stack( ( np.ones(n_points-1)*branch2.ID,
-                        #                       np.ones(n_points-1)*branch2_ind,
-                        #                       np.arange(n_points-1), np.arange(1, n_points),
-                        #                       branch2.points[:-1], branch2.points[1:] )
-                        #                     )
-                        #     ) )
+                        # update all_segments_branches (in case something else reconnects to the same branch)
+                        all_segments_branches = all_segments_branches[ all_segments_branches[:,0]!=branch2_id]
+                        n_points = len(branch2.points)
+                        all_segments_branches = np.vstack(( all_segments_branches, \
+                            np.column_stack( ( np.ones(n_points-1)*branch2.ID,
+                                              np.ones(n_points-1)*branch2_ind,
+                                              np.arange(n_points-1), np.arange(1, n_points),
+                                              branch2.points[:-1], branch2.points[1:] )
+                                            )
+                            ) )                      
                 
 
     def move_tips(self, extender, step=0):
@@ -945,27 +954,28 @@ class System:
             sleeping_branches=sleeping_branches,
             branch_connectivity=branch_connectivity,
         )
-        # General
-        json_growth = json_load["growth"]
-        growth_type_legend = ["max step",
-                              "max height", "max length", "max time"]
-        growth_thresh_type = growth_type_legend.index(
-            json_growth["threshold_type"])
-        growth_thresh = json_growth["threshold"]
-        dump_every = json_growth["dump_every"]
-        timestamps = np.asarray(json_load["timestamps"])
-
-        json_growth_gauges = json_growth["growth_gauges"]
-        growth_gauges = np.array(
-            [
-                json_growth_gauges["number_of_steps"],
-                json_growth_gauges["height"],
-                json_growth_gauges["network_length"],
-                json_growth_gauges["time"],
-            ]
-        )
 
         try:
+            # General
+            json_growth = json_load["growth"]
+            growth_type_legend = ["max step",
+                                  "max height", "max length", "max time"]
+            growth_thresh_type = growth_type_legend.index(
+                json_growth["threshold_type"])
+            growth_thresh = json_growth["threshold"]
+            dump_every = json_growth["dump_every"]
+            timestamps = np.asarray(json_load["timestamps"])
+    
+            json_growth_gauges = json_growth["growth_gauges"]
+            growth_gauges = np.array(
+                [
+                    json_growth_gauges["number_of_steps"],
+                    json_growth_gauges["height"],
+                    json_growth_gauges["network_length"],
+                    json_growth_gauges["time"],
+                ]
+            )
+            
             # Extender and solver
             json_extender = json_load["extender"]
             if json_extender["type"] == "ModifiedEulerMethod":  
@@ -1005,11 +1015,6 @@ class System:
             system = cls(
                 network=network,
                 extender=extender,
-                timestamps=timestamps,
-                growth_gauges=growth_gauges,
-                growth_thresh_type=growth_thresh_type,
-                growth_thresh=growth_thresh,
-                dump_every=dump_every,
                 exp_name=input_file,
             )
 
@@ -1054,10 +1059,8 @@ class System:
                                                  step=self.growth_gauges[0])
             
             self.__update_growth_gauges(out_growth[0])
-            print("Computation time: {clock:.2f}h".format(
-                    clock=(time.time() - start_clock)/3600
-                )
-            )
+            t_diff = time.time() - start_clock
+            print(f"Computation time: {int(t_diff/3600):d}h {int(t_diff/60):d}min")
             
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()

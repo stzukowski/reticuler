@@ -63,9 +63,10 @@ def plot_polygon(ax, poly, **kwargs):
 def plot_tree(ax, system, 
               rot_angle=None, is_thick=None, 
               xmin=None, xmax=None, 
-              ymin=None, ymax=None, 
+              ymin=None, ymax=None,
+              facecolor="#def1ff",
               **kwargs_tree_plot):
-    """Plot a tree with optional arguments from \*\*kwargs_tree, and a black box.
+    """Plot a tree with optional arguments from \*\*kwargs_tree, and a black box (with facecolor).
 
     Parameters
     -------
@@ -85,6 +86,9 @@ def plot_tree(ax, system,
     ymax : float, default None
         Plot extends from y=``ymin`` to x=``ymax``.
         If None ymin = max( y of the network).
+    facecolor : str or tuple, default `#def1ff`
+        facecolor for box. To manipulate transparency provide tuple 
+        (r,g,b,alpha) (e.g. (0, 0, 0, 0.5) ).
     kwargs_plots : dict, default {`color`: `#0066CC`, `linewidth`: 2.5}
         Arguments to plot the tree.
 
@@ -101,6 +105,7 @@ def plot_tree(ax, system,
     else:
         options_tree_plot = {"color": "#0066CC", "linewidth": 1.25}
     options_tree_plot.update(kwargs_tree_plot) 
+    
 
     base = ax.transData
     rot = transforms.Affine2D().rotate_deg(-rot_angle)
@@ -110,7 +115,7 @@ def plot_tree(ax, system,
     plot_polygon(ax, box, 
                  edgecolor="0", 
                  linewidth=options_tree_plot["linewidth"]*2, 
-                 facecolor="#f2f2f2ff" if is_thick else "#def1ff",
+                 facecolor="#f2f2f2ff" if is_thick else facecolor,
                  transform=rot+base)
 
     # PLOT LINES

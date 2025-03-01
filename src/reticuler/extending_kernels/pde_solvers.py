@@ -66,7 +66,7 @@ def rotation_matrix(angle):
 def arr2str(arr):
     return np.array2string(arr, separator=",", precision=12,max_line_width=np.inf,threshold=np.inf).replace("\n", "")
 
-def prepare_contour1(border_contour, inside_buildmesh, i, points, label, border_name="contour"):
+def prepare_contour(border_contour, inside_buildmesh, i, points, label, border_name="contour"):
     for j, pair in enumerate(zip(points, points[1:])):
         x0 = pair[0][0]
         y0 = pair[0][1]
@@ -75,7 +75,7 @@ def prepare_contour1(border_contour, inside_buildmesh, i, points, label, border_
 
         border_contour = (
             border_contour
-            + "border {b_n}{i}connection{j}(t=0, 1){{x={x0:.12e}+t*({ax:.12e});y={y0:.12e}+t*({ay:.12e}); label={label};}}\n".format(
+            + "border {b_n}{i}connection{j}(t=0, 1){{x={x0:.6e}+t*({ax:.6e});y={y0:.6e}+t*({ay:.6e}); label={label};}}\n".format(
                 b_n=border_name, i=i, j=j, x0=x0, ax=x1 - x0, y0=y0, ay=y1 - y0, label=label
             )
         )
@@ -86,30 +86,44 @@ def prepare_contour1(border_contour, inside_buildmesh, i, points, label, border_
     
     return border_contour, inside_buildmesh
     
-def prepare_contour(border_contour, inside_buildmesh, i, points, label, border_name="contour", i_tsh=1023):
+def prepare_contour_list(border_contour, inside_buildmesh, i, points, label, ns_border=1, border_name="contour", i_tsh=1023):
+    if not np.isscalar(ns_border):
+        ns_border = arr2str(ns_border)
     border_contour = (
         border_contour
-        + "real[int] contour{i}X({n}); real[int] contour{i}Y({n}); int[int] contour{i}N({n}-1); contour{i}N=1;".format(i=i, n=len(points))
+        + "real[int] {b_n}{i}X({n}); real[int] {b_n}{i}Y({n}); int[int] {b_n}{i}N({n}-1); {b_n}{i}N={N};".format(b_n=border_name, i=i, n=len(points), N=ns_border)
         )
-
+    if not np.isscalar(label):
+        border_contour = (
+        border_contour
+        + "int[int] {b_n}{i}BC({n});".format(b_n=border_name, i=i, n=len(points))
+        )
     for j in range((len(points)-1)//i_tsh+1):
         border_contour = (
             border_contour
-            + "\ncontour{i}X({ind0}:{ind1})={pointsX};\ncontour{i}Y({ind0}:{ind1})={pointsY};\n".format( \
-                        i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, \
+            + "\n{b_n}{i}X({ind0}:{ind1})={pointsX};\n{b_n}{i}Y({ind0}:{ind1})={pointsY};\n".format( \
+                        b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, \
                         pointsX=arr2str(points[j*i_tsh:(j+1)*i_tsh,0]),
                         pointsY=arr2str(points[j*i_tsh:(j+1)*i_tsh,1])
                             ) 
             )
+        if not np.isscalar(label):
+            border_contour = (
+            border_contour
+            + "{b_n}{i}BC({ind0}:{ind1})={bcs};\n".format(b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, bcs=arr2str(label))
+            )     
+
+    if not np.isscalar(label):
+        label = "{b_n}{i}BC(i)".format(b_n=border_name, i=i)
     border_contour = (
         border_contour
-        + "border contour{i}(t=0, 1; i){{ x = contour{i}X(i)*(1-t) + contour{i}X(i+1)*t; y = contour{i}Y(i)*(1-t) + contour{i}Y(i+1)*t; label={label};}}\n\n".format(
-            i=i, label=label
+        + "border {b_n}{i}(t=0, 1; i){{ x = {b_n}{i}X(i)*(1-t) + {b_n}{i}X(i+1)*t; y = {b_n}{i}Y(i)*(1-t) + {b_n}{i}Y(i+1)*t; label={label};}}\n\n".format(
+            b_n=border_name, i=i, label=label
         )
     )
 
     inside_buildmesh = (
-        inside_buildmesh + " contour{i}(contour{i}N) +".format(i=i)
+        inside_buildmesh + " {b_n}{i}({b_n}{i}N) +".format(b_n=border_name, i=i)
     )
     return border_contour, inside_buildmesh
 
@@ -139,6 +153,7 @@ class FreeFEM:
         - 3: random bifurcations
     bifurcation_thresh : float, default depends on bifurcation_type
         Threshold for the bifurcation criterion.
+        Default: 0.8 for a1 bifurcation; -0.1 for a3/a1
     bifurcation_angle : float, default 2pi/5
         Angle between the daughter branches after bifurcation.
         Default angle (72 degrees) corresponds to the analytical solution
@@ -364,6 +379,7 @@ class FreeFEM:
             	h=hTriangle; // the triangle size
             	nvAroundTips = countNvAroundTips (3.*R, Th, Th.nv, nbTips, X, Y);
             	adaptCounter++;
+                // plot(Th, wait=true);
             }
             
             // cout << endl << "Adaptation finished." << " h[].min = " << h[].min;
@@ -372,7 +388,8 @@ class FreeFEM:
             // solving with adapted mesh
             potential;
             // cout << "Problem solved." << endl;
-            // plot(u, wait=true, fill=true, fill=true, value=true);
+            // plot(Th, wait=true);
+            // plot(u, wait=true, fill=true, value=true);
             
             real adaptTime=clock() - adaptTime0;
             """
@@ -563,17 +580,9 @@ class FreeFEM:
                axis=0 ).astype(int)
             
         border_box = "\nreal buildTime0=clock();\n\n"
-        border_box = (
-            border_box
-            + "int[int] boxN={ns};\n".format(ns=arr2str(ns_border))
-            + "int[int] boxBC={bcs};\n".format(bcs=arr2str(connections_bc[:,2]))
-            + "real[int,int] boxXY={points};\n".format(points=arr2str(points))
-            + "border box(t=0, 1; i){{ int ii=(i+1)%{n}; x=boxXY(i,0)*(1-t) + boxXY(ii,0)*t; y=boxXY(i,1)*(1-t) + boxXY(ii,1)*t; label=boxBC(i);}}\n\n".format(
-                n=len(points)
-            )
-        )
-        # cout<<endl<<i<<"  "<<ii<<"  "<<x<<"  "<<y;
-        inside_buildmesh_box = " box(boxN) +"
+        inside_buildmesh_box = ""
+        border_box, inside_buildmesh_box = prepare_contour_list(border_box, inside_buildmesh="", i="", points=np.vstack((points, points[0])), label=connections_bc[:,2], ns_border=ns_border, border_name="box", i_tsh=1023)
+        
         return border_box, inside_buildmesh_box
 
     def prepare_script(self, network):
@@ -602,11 +611,14 @@ class FreeFEM:
             )
             + self.__script_border_box
             + border_network
-            + "\nmesh Th = buildmesh({inside_buildmesh});\n".format( # , fixedborder=true
+            # + "\nplot({inside_buildmesh}, dim=2, wait=true);\n\n".format(
+                # inside_buildmesh=inside_buildmesh
+            # )
+            + "\nmesh Th = buildmesh({inside_buildmesh}, fixedborder=true);\n".format(
                 inside_buildmesh=inside_buildmesh
             )
             + "\nreal buildTime=clock() - buildTime0;\n"
-            + "// plot(Th, wait=true, fill=true, bb=[[1.25,0.25],[1.75,0.75]])\n;"
+            + "// plot(Th, wait=true, fill=true, bb=[[1.25,0.25],[1.75,0.75]]);\n"
         )
                 
         tip_information = textwrap.dedent(
@@ -731,7 +743,7 @@ class FreeFEM:
             
         ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b"kopytko")+7:], sep=",")
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
-        with np.printoptions(formatter={"float": "{:.12e}".format}):
+        with np.printoptions(formatter={"float": "{:.6e}".format}):
             print("a1a2a3") # , self.flux_info)
             for i, branch in enumerate(network.active_branches):
                 print("Branch {}:".format(branch.ID), self.flux_info[i], ", l={}".format(branch.length()))
@@ -885,7 +897,7 @@ class FreeFEM_ThickFingers:
         )
         
         # contours based on the thickened tree
-        box_ring, _, _, _, _, _ = \
+        box_ring, _, _, _, _, _, _ = \
             self.fingers_and_box_contours(network)
         self.script_border_box, self.script_inside_buildmesh_box = \
             self.prepare_script_box(network, box_ring)
@@ -1010,7 +1022,7 @@ class FreeFEM_ThickFingers:
                 cout<<"angles"<<tipLabels(k)<<angles<<"angles"<<tipLabels(k)<<"end"<<endl;
                 cout<<"fluxes"<<tipLabels(k)<<fluxes<<"fluxes"<<tipLabels(k)<<"end"<<endl;
                 real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
-            	 cout<<"tot_flux"<<tipLabels(k)<<"1 "<<totGrad<<"tot_flux"<<tipLabels(k)<<"end"<<endl;
+            	cout<<"tot_flux"<<tipLabels(k)<<"1 "<<totGrad<<"tot_flux"<<tipLabels(k)<<"end"<<endl;
                 
                 // real maxGrad=0, maxAngle=pi/2;
                 // real[int] fluxesMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
@@ -1033,42 +1045,6 @@ class FreeFEM_ThickFingers:
             """
         )
 
-    def __check_bifurcation_and_moving_conditions(self, network):
-        """Check bifurcation and moving conditions."""
-
-        a1 = self.pde_solver.flux_info[..., 0]
-        max_a1 = np.max(a1)
-        # checking which branches are_moving
-        # (first condition for low eta, second for high)
-        are_moving = np.logical_and(a1/max_a1 > self.inflow_thresh,
-                                    (a1/max_a1)**self.eta > self.inflow_thresh)
-
-        # shallow copy of active_branches (creates new list instance, but the elements are still the same)
-        branches_to_iterate = network.active_branches.copy()
-        for i, branch in enumerate(branches_to_iterate):
-            a1 = self.pde_solver.flux_info[i, 0]
-            is_bifurcating = False
-            if (
-                self.bifurcation_type
-                and branch.length() > self.distance_from_bif_thresh
-            ):
-                # the second condition above is used to avoid many bifurcations
-                # in almost one point which can occur while ds is very small
-                if (self.bifurcation_type == 1 and a1 > self.bifurcation_thresh):
-                    is_bifurcating = True
-                elif self.bifurcation_type == 3:
-                    p = self.bifurcation_thresh * (a1 / max_a1) ** self.eta
-                    r = np.random.uniform(0, 1)  # uniform distribution [0,1)
-                    if p > r:
-                        is_bifurcating = True
-                        
-            if not are_moving[i]:
-                network.sleeping_branches.append(branch)
-                network.active_branches.remove(branch)
-                print("! Branch {ID} is sleeping !".format(ID=branch.ID))
-
-        return are_moving
-                       
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
         """Find a single test shift over which the tip is moving.
 
@@ -1116,7 +1092,7 @@ class FreeFEM_ThickFingers:
         
         border_nodes_mask = np.diff(network.box.boundary_conditions)!=0
         border_nodes = network.box.points[1:][border_nodes_mask]
-        border_nodes_inds2 = np.where(inNd(box_ring_pts,border_nodes))[0] # assumes that the points are ordered (if not we need to use a solution like for the seeds)
+        border_nodes_inds2 = np.where(inNd(box_ring_pts,border_nodes))[0] # ?assumes that the points are ordered (if not we need to use a solution like for the seeds)
         boundary_conditions = np.ones(len(connections_to_add), dtype=int)
         boundary_conditions[:border_nodes_inds2[1]] = network.box.boundary_conditions[0]
         bcs0 = network.box.boundary_conditions[1:][border_nodes_mask]
@@ -1130,23 +1106,23 @@ class FreeFEM_ThickFingers:
         # for p in network.box.points[1:][border_nodes]:
         #     plt.plot(*p, '.',ms=20, c='r')
         
-        # network.box.connections = connections_to_add
-        # network.box.boundary_conditions = boundary_conditions
+        # # # TO THROW AWAY?
+        # # # network.box.connections = connections_to_add
+        # # # network.box.boundary_conditions = boundary_conditions
+        # # # # update seeds indices and box.points
+        # # # x = network.box.points[network.box.seeds_connectivity[:,0]]
+        # # # y = box_ring_pts
+        # # # inds = y[:,None] == x
+        # # # row_sums = inds.sum(axis=2)
+        # # # i, j = np.where(row_sums == 2)
+        # # # network.box.seeds_connectivity[j,0] = i
+        # # # network.box.points = box_ring_pts
         
-        # # update seeds indices and box.points
-        # x = network.box.points[network.box.seeds_connectivity[:,0]]
-        # y = box_ring_pts
-        # inds = y[:,None] == x
-        # row_sums = inds.sum(axis=2)
-        # i, j = np.where(row_sums == 2)
-        # network.box.seeds_connectivity[j,0] = i
-        # network.box.points = box_ring_pts
-        
-        # border_box, inside_buildmesh_box = \
-        #     FreeFEM.prepare_script_box(self, 
-        #                                 network.box.connections_bc(), \
-        #                                 network.box.points, \
-        #                                 points_per_unit_len=0.5)
+        # # # border_box, inside_buildmesh_box = \
+        # # #     FreeFEM.prepare_script_box(self, 
+        # # #                                 network.box.connections_bc(), \
+        # # #                                 network.box.points, \
+        # # #                                 points_per_unit_len=0.5)
         
         border_box, inside_buildmesh_box = \
             FreeFEM.prepare_script_box(self, 
@@ -1157,75 +1133,138 @@ class FreeFEM_ThickFingers:
         return border_box, inside_buildmesh_box
         
     
+    # def fingers_and_box_contours(self, network):
+    #     """ Prepares contours of the thickened tree using shapely library. """
+    #     tips = np.empty((len(network.active_branches), 3))
+    #     pts = [] # list with regularized points (skeleton)
+    #     points_in = [] # points inside subdomains with higher mobility
+    #     border_contour = ""
+    #     inside_buildmesh = ""
+    #     for i, branch in enumerate(network.branches):           
+    #         # to be sure that finger contours nicely intersect with the box 
+    #         # (with cap_style=2 in the buffer) we prepend a point outside of the box
+    #         dr = branch.points[1] - branch.points[0]
+    #         dr1 = self.finger_width/2*dr/np.linalg.norm(dr)
+    #         skeleton = [branch.points[0]-dr1, 
+    #                     branch.points[0],
+    #                     branch.points[0]+dr/2,
+    #                     branch.points[0]+dr]
+            
+    #         # contour can intersect itself if finger_width>ds 
+    #         # (ds = distances between the points in the branch)
+    #         # hence, we select the points on the branch 
+    #         # that are finger_width/2 apart from each other
+    #         segment_lengths = np.linalg.norm(branch.points[2:]-branch.points[1:-1], axis=1)
+    #         len_sum = 0
+    #         for j, seg in enumerate(segment_lengths):
+    #             len_sum = len_sum + seg
+    #             if len_sum>self.finger_width/2:
+    #                 len_sum = 0
+    #                 skeleton.append(branch.points[j+2])
+    #         skeleton[-1] = branch.points[-1]
+    #         # if not (branch.points[-1]==skeleton[-1]).all():
+    #         #     skeleton.append(branch.points[-1])
+            
+    #         # if connected to the wall -> append point outside of the box
+    #         mask_conn = network.branch_connectivity[:,0]==branch.ID
+    #         if any(mask_conn) and network.branch_connectivity[mask_conn,1]==-1:
+    #             dr = branch.points[-1]-branch.points[-2]
+    #             dr = self.finger_width/2*dr/np.linalg.norm(dr)
+    #             skeleton.append(branch.points[-1]+dr)
+                
+    #         pts.append(np.array(skeleton))
+            
+    #         # if the branch is a dead end -> tip with a semi-circular cap
+    #         if len(network.branch_connectivity)==0 or \
+    #                 branch.ID not in network.branch_connectivity[:,0]:
+    #             tip_vec =  skeleton[-1]-skeleton[-2]
+    #             points_in.append(skeleton[-1] + tip_vec/np.linalg.norm(tip_vec)*self.finger_width/4)
+    #             tilt_ang = np.arctan2(tip_vec[1], tip_vec[0])-np.pi/2
+    #             border_contour = (
+    #                 border_contour
+    #                 + "border tip{i}(t=0, 1){{x={x0:.6e}+{f_w_half:.6e}*cos(t*pi+{phi0:.6e});y={y0:.6e}+{f_w_half:.6e}*sin(t*pi+{phi0:.6e}); label={bc};}}\n".format(
+    #                     i=branch.ID, x0=branch.points[-1,0], y0=branch.points[-1,1], 
+    #                     f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
+    #                 )
+    #             )
+    #             inside_buildmesh = (
+    #                 inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
+    #             )  
+                
+    #         if branch in network.active_branches:
+    #             ind = network.active_branches.index(branch)
+    #             tips[ind, 0] = 1000+branch.ID # tip label
+    #             tips[ind, 1] = branch.points[-1, 0] # x
+    #             tips[ind, 2] = branch.points[-1, 1] # y
+                
+    #     border_contour = border_contour + "\n"
+        
+    #     # thicken tree and find intersection with the box
+    #     tree = MultiLineString(pts)
+    #     thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=2, join_style=2, resolution=99)
+    #     box_ring = LinearRing(network.box.points)
+    #     box_polygon = Polygon(box_ring)
+    #     box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
+    #                       *box_ring.intersection(thick_tree).geoms])
+    #     thick_tree = box_polygon.intersection(thick_tree)
+        
+    #     # polygons to contours_tree
+    #     polygons = [thick_tree] if thick_tree.geom_type=="Polygon" else thick_tree.geoms
+    #     contours_tree = []
+    #     for i, poly in enumerate(polygons):
+    #         points_in.append(poly.representative_point().coords[0])
+    #         poly = shapely.geometry.polygon.orient(poly) # now, exterior is ccw, but interiors are cw
+            
+    #         # exteriors
+    #         poly_exterior = poly.exterior.difference(box_ring)
+    #         lines = [poly_exterior] if poly_exterior.geom_type=="LineString" else poly_exterior.geoms
+    #         for line in lines:
+    #             contours_tree.append( np.array(line.coords) )
+            
+    #         # interiors
+    #         for ring in poly.interiors:
+    #             contours_tree.append( np.asarray(ring.coords) )
+        
+    #     return box_ring, contours_tree, tips, points_in, border_contour, inside_buildmesh
+    
     def fingers_and_box_contours(self, network):
         """ Prepares contours of the thickened tree using shapely library. """
-        tips = np.empty((len(network.active_branches), 3))
-        pts = [] # list with regularized points (skeleton)
-        points_in = [] # points inside subdomains with higher mobility
         border_contour = ""
         inside_buildmesh = ""
-        for i, branch in enumerate(network.branches):            
-            # to be sure that finger contours nicely intersect with the box 
-            # (with cap_style=2 in the buffer) we prepend a point outside of the box
-            dr = branch.points[1] - branch.points[0]
-            dr1 = self.finger_width/2*dr/np.linalg.norm(dr)
-            skeleton = [branch.points[0]-dr1, 
-                        branch.points[0],
-                        branch.points[0]+dr/2,
-                        branch.points[0]+dr]
+        pts = []
+        pts_in = [] # points inside subdomains with higher mobility
+        tips_all = []; tips_active = [];
+        for i, branch in enumerate(network.branches):
             
-            # contour can intersect itself if finger_width>ds 
-            # (ds = distances between the points in the branch)
-            # hence, we select the points on the branch 
-            # that are finger_width/2 apart from each other
-            segment_lengths = np.linalg.norm(branch.points[2:]-branch.points[1:-1], axis=1)
-            len_sum = 0
-            for j, seg in enumerate(segment_lengths):
-                len_sum = len_sum + seg
-                if len_sum>self.finger_width/2:
-                    len_sum = 0
-                    skeleton.append(branch.points[j+2])
-            skeleton[-1] = branch.points[-1]
-            # if not (branch.points[-1]==skeleton[-1]).all():
-            #     skeleton.append(branch.points[-1])
+            # # don't take too much points
+            # skeleton = [branch.points[0]]
+            # segment_lengths = np.linalg.norm(branch.points[2:]-branch.points[1:-1], axis=1)
+            # len_sum = 0
+            # for j, seg in enumerate(segment_lengths):
+            #     len_sum = len_sum + seg
+            #     if len_sum>self.finger_width/2:
+            #         len_sum = 0
+            #         skeleton.append(branch.points[j+2])
+            # skeleton[-1] = branch.points[-1]
+            # pts.append(np.array(skeleton))
             
-            # if connected to the wall -> append point outside of the box
-            mask_conn = network.branch_connectivity[:,0]==branch.ID
-            if any(mask_conn) and network.branch_connectivity[mask_conn,1]==-1:
-                dr = branch.points[-1]-branch.points[-2]
-                dr = self.finger_width/2*dr/np.linalg.norm(dr)
-                skeleton.append(branch.points[-1]+dr)
-                
-            pts.append(np.array(skeleton))
+            pts.append(branch.points)
             
-            # if the branch is a dead end -> tip with a semi-circular cap
             if len(network.branch_connectivity)==0 or \
                     branch.ID not in network.branch_connectivity[:,0]:
-                tip_vec =  skeleton[-1]-skeleton[-2]
-                points_in.append(skeleton[-1] + tip_vec/np.linalg.norm(tip_vec)*self.finger_width/4)
-                tilt_ang = np.arctan2(tip_vec[1], tip_vec[0])-np.pi/2
-                border_contour = (
-                    border_contour
-                    + "border tip{i}(t=0, 1){{x={x0:.12e}+{f_w_half:.12e}*cos(t*pi+{phi0:.12e});y={y0:.12e}+{f_w_half:.12e}*sin(t*pi+{phi0:.12e}); label={bc};}}\n".format(
-                        i=branch.ID, x0=branch.points[-1,0], y0=branch.points[-1,1], 
-                        f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
-                    )
-                )
-                inside_buildmesh = (
-                    inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
-                )  
                 
-            if branch in network.active_branches:
-                ind = network.active_branches.index(branch)
-                tips[ind, 0] = 1000+branch.ID # tip label
-                tips[ind, 1] = branch.points[-1, 0] # x
-                tips[ind, 2] = branch.points[-1, 1] # y
+                tips_all.append([1000+branch.ID, branch.points[-1]])
+                pts_in.append(branch.points[-1])
                 
-        border_contour = border_contour + "\n"
+                if branch in network.active_branches:
+                    tips_active.append([1000+branch.ID, \
+                                        branch.points[-1, 0], \
+                                        branch.points[-1, 1] ]) # tip label, x, y
+        tips_active = np.asarray(tips_active)
         
         # thicken tree and find intersection with the box
         tree = MultiLineString(pts)
-        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=2, join_style=2, resolution=99)
+        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=2, quad_segs=49)
         box_ring = LinearRing(network.box.points)
         box_polygon = Polygon(box_ring)
         box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
@@ -1236,7 +1275,7 @@ class FreeFEM_ThickFingers:
         polygons = [thick_tree] if thick_tree.geom_type=="Polygon" else thick_tree.geoms
         contours_tree = []
         for i, poly in enumerate(polygons):
-            points_in.append(poly.representative_point().coords[0])
+            pts_in.append(poly.representative_point().coords[0])
             poly = shapely.geometry.polygon.orient(poly) # now, exterior is ccw, but interiors are cw
             
             # exteriors
@@ -1248,16 +1287,22 @@ class FreeFEM_ThickFingers:
             # interiors
             for ring in poly.interiors:
                 contours_tree.append( np.asarray(ring.coords) )
-        # for s in pts:
-            # contours_tree.append(s[1:])
         
-        return box_ring, contours_tree, tips, points_in, border_contour, inside_buildmesh
+        contours_tree_bc = []
+        for cont in contours_tree:
+            contours_tree_bc.append(888)
+            for b_label, tip_xy in tips_all:
+                mask = np.linalg.norm(cont-tip_xy,axis=1)<self.finger_width/2*1.01
+                if mask.any():
+                    contours_tree_bc[-1] = ~mask*888 + mask*b_label
+        
+        return box_ring, contours_tree, contours_tree_bc, tips_active, pts_in, border_contour, inside_buildmesh    
     
     def prepare_script(self, network):
         """Return a full FreeFEM script with the `network` geometry."""
         
         # contours based on the thickened tree
-        box_ring, contours_tree, tips, points_in, border_contour, inside_buildmesh = \
+        box_ring, contours_tree, contours_tree_bc, tips, points_in, border_contour, inside_buildmesh = \
             self.fingers_and_box_contours(network)
            
         self.script_border_box, self.script_inside_buildmesh_box = \
@@ -1266,7 +1311,9 @@ class FreeFEM_ThickFingers:
         # contours_tree to border
         for i, points in enumerate(contours_tree):
             # points = np.flip(points0, axis=0)
-            border_contour, inside_buildmesh = prepare_contour(border_contour, inside_buildmesh, i, points, label=888, border_name="contour" )
+            border_contour, inside_buildmesh = \
+                prepare_contour_list(border_contour, inside_buildmesh, i, points, \
+                                     label=contours_tree_bc[i], border_name="contour" )
         
         inside_buildmesh = self.script_inside_buildmesh_box + inside_buildmesh[:-1]
         
