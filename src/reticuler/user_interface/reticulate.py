@@ -6,7 +6,8 @@ import textwrap
 import importlib.metadata
 import matplotlib.pyplot as plt
 
-from reticuler.system import Box, Network, System
+from reticuler.utilities.building_blocks import Box, Network
+from reticuler.system import System
 from reticuler.extending_kernels import extenders, pde_solvers
 from reticuler.user_interface import graphics
 

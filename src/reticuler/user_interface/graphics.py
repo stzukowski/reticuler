@@ -12,9 +12,9 @@ import matplotlib.transforms as transforms
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 from matplotlib.collections import PatchCollection
-from shapely.geometry import MultiLineString, LinearRing, Polygon
+from shapely.geometry import MultiLineString, Polygon
 
-from reticuler.extending_kernels.pde_solvers import rotation_matrix
+from reticuler.utilities.misc import rotation_matrix
 from reticuler.user_interface import clippers
 
 plt.rcParams.update(

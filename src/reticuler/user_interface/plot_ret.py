@@ -1,13 +1,20 @@
 """Command line script to plot a network"""
 
+import os
 import glob
 import argparse
 import json
 import textwrap
 import matplotlib.pyplot as plt
+import numpy as np
 
 from reticuler.system import System
 from reticuler.user_interface import graphics
+from reticuler.user_interface import clippers
+
+def create_dir(dir_name):
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -118,7 +125,34 @@ def main():
             """
         ),
     )    
-       
+
+    # Rotate the plot
+    parser.add_argument(
+        "-rot",
+        "--rot_angle",        
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+            An angle by which the output will be rotated.
+            default = 0
+            """
+        ),
+        default=[None],
+    )
+
+    # Save frames with each step
+    parser.add_argument(
+        "-frams",
+        "--frames",
+        action=argparse.BooleanOptionalAction,
+        help=textwrap.dedent(
+            """\
+            Flag indicating to plot all frames.
+            """
+        ),
+    )        
     # Animate the growth
     parser.add_argument(
         "-anim",
@@ -130,21 +164,7 @@ def main():
             """
         ),
     )
-    # Animate the growth
-    parser.add_argument(
-        "-rot",
-        "--rot_angle",        
-        type=float,
-        nargs=1,
-        metavar="num",
-        help=textwrap.dedent(
-            """\
-            An angle by which the final animation will be rotated.
-            default = 0
-            """
-        ),
-        default=[None],
-    )          
+    # Speed factor for the animation
     parser.add_argument(
         "-speed",
         "--speed_factor",
@@ -172,12 +192,11 @@ def main():
     for file in file_names:
         exp_name = file[:-5]
         # Import System from JSON file
-        system = System.import_json(input_file=exp_name)
+        system0 = System.import_json(input_file=exp_name)
     
         if args.animate:
-            # animation!
             ani = graphics.animate_tree(
-                system0=system,
+                system0=system0,
                 xmax=args.xmax[0],
                 ymax=args.ymax[0],
                 speed_factor=args.speed_factor[0],
@@ -189,21 +208,32 @@ def main():
             else:
                 ani.save(args.output_file[0] + ".avi", writer="ffmpeg", dpi=600)
         else:
-            fig, ax = plt.subplots()
-            graphics.plot_tree(
-                ax,
-                system=system,
-                xmax=args.xmax[0],
-                ymax=args.ymax[0],
-                rot_angle=args.rot_angle[0],
-                **args.plot_params[0]
-            )
-        
-            if args.output_file is None:
-                fig.savefig(exp_name + args.output_extension[0], 
-                            bbox_inches="tight", dpi=400)
-            else:
-                fig.savefig(args.output_file[0] + args.output_extension[0], 
+            output_name = exp_name
+            if args.output_file is not None:
+                output_name = args.output_file[0]
+          
+            steps = [int(system0.growth_gauges[0])]
+            if args.frames:
+                steps = np.arange(system0.growth_gauges[0]+1, dtype=int)
+                create_dir(f"frames_{exp_name}/")
+                output_name = f"frames_{exp_name}/" + output_name
+             
+            for s in steps:
+                print(f"Plotting step {s}")
+                system = system0.copy()
+                if args.frames:
+                    clippers.clip_to_step(system, s)
+                fig, ax = plt.subplots()
+                graphics.plot_tree(
+                    ax,
+                    system=system,
+                    xmax=args.xmax[0],
+                    ymax=args.ymax[0],
+                    rot_angle=args.rot_angle[0],
+                    **args.plot_params[0]
+                )
+            
+                fig.savefig(output_name + f"_S{s}" + args.output_extension[0], 
                             bbox_inches="tight", dpi=400)
 
 

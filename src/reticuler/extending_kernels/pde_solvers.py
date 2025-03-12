@@ -11,7 +11,6 @@ import subprocess
 from datetime import datetime
 import os.path
 import os
-from platform import system
 from tempfile import NamedTemporaryFile
 import textwrap
 
@@ -19,7 +18,8 @@ import shapely
 from shapely.ops import linemerge 
 from shapely.geometry import MultiLineString, LinearRing, Polygon
 
-from reticuler.system import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET, DIRICHLET_OUTLET, CONSTANT_FLUX, NEUMANN
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET, DIRICHLET_OUTLET, NEUMANN_1, NEUMANN_2
+from reticuler.utilities.misc import rotation_matrix
 
 def asvoid(arr):
     """
@@ -40,28 +40,6 @@ def inNd(a, b, assume_unique=False):
     a = asvoid(a)
     b = asvoid(b)
     return np.in1d(a, b, assume_unique)
-
-def rotation_matrix(angle):
-    """Construct a matrix to rotate a vector by an ``angle``.
-
-    Parameters
-    ----------
-    angle : float
-
-    Returns
-    -------
-    array
-        An 2-2 array.
-
-    Examples
-    --------
-    >>> rot = rotation_matrix(angle)
-    >>> rotated_vector = np.dot(rot, vector)
-
-    """
-    return np.array(
-        [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
-    )
 
 def arr2str(arr):
     return np.array2string(arr, separator=",", precision=12,max_line_width=np.inf,threshold=np.inf).replace("\n", "")
@@ -314,11 +292,11 @@ class FreeFEM:
             problem potential(u,v,solver=sparsesolver)=
                      int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
                          // -int2d(Th)(v) // rain in domain
-                         -int1d(Th,{CONSTANT_FLUX})(v)  // constant flux
+                         -int1d(Th,{NEUMANN_1})(v)  // constant flux
             			 +on({DIRICHLET_OUTLET},u=dirichletOut) // constant field
                          +on({DIRICHLET},u=0);
             """
-        ).format(CONSTANT_FLUX=CONSTANT_FLUX, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
+        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
 
         self.__script_problem_Poisson = textwrap.dedent(
             """ 
@@ -332,11 +310,11 @@ class FreeFEM:
             problem potential(u,v,solver=sparsesolver)=
                      int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
                          -int2d(Th)(v) // rain in domain
-                         -int1d(Th,{CONSTANT_FLUX})(v)  // constant flux
+                         -int1d(Th,{NEUMANN_1})(v)  // constant flux
             			 +on({DIRICHLET_OUTLET},u=dirichletOut) // constant field
                          +on({DIRICHLET},u=0);
             """
-        ).format(CONSTANT_FLUX=CONSTANT_FLUX, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
+        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
 
         self.__script_adaptmesh = textwrap.dedent(
             """
@@ -854,8 +832,19 @@ class FreeFEM_ThickFingers:
         # less than `inflow_thresh` of max flux/velocity puts branches asleep
         self.inflow_thresh = inflow_thresh
         self.distance_from_bif_thresh = 2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
-         
+        
         # parts of the script
+        NEUMANN_2_script = ""
+        if (network.box.boundary_conditions==NEUMANN_2).any(): 
+            NEUMANN_2_script = f"""
+            // Normalize "u" if Neumann_2 BC
+            real fluxNeumann2=int1d(Th, {NEUMANN_2})( abs([dxu,dyu]'*[N.x,N.y]) );
+            u=u/fluxNeumann2;
+            // Recalculate gradients
+            dxu=dx(u);
+            dyu=dy(u);
+            """
+        
         self.pbc = "" if network.box.boundary_conditions[0]==2 else ", periodic=PBC"
         
         self.__script_init = textwrap.dedent(
@@ -922,11 +911,12 @@ class FreeFEM_ThickFingers:
             problem potential(u,v,solver=CG)=
                      int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
                                 // -int2d(Th)(v) // rain in domain
-                                -int1d(Th,{CONSTANT_FLUX})(v)  // constant flux
+                                -int1d(Th,{NEUMANN_1})(v)  // constant flux (local)
+                                +on({NEUMANN_2},u=0) // constant flux (global)
                                 +on({DIRICHLET_OUTLET},u=0) // constant field
                                 +on({DIRICHLET},u=1);
             """
-        ).format(pbc=self.pbc, CONSTANT_FLUX=CONSTANT_FLUX, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
+        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, NEUMANN_2=NEUMANN_2, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
 
         self.__script_problem_Poisson = textwrap.dedent(
             """ 
@@ -939,11 +929,12 @@ class FreeFEM_ThickFingers:
             problem potential(u,v,solver=CG)=
                      int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
                                 -int2d(Th)(v) // Poissonian source term
-                                -int1d(Th,{CONSTANT_FLUX})(v)  // constant flux
+                                -int1d(Th,{NEUMANN_1})(v)  // constant flux (local)
+                                +on({NEUMANN_2},u=0) // constant flux (global)
                                 +on({DIRICHLET_OUTLET},u=0) // constant field
                                 +on({DIRICHLET},u=1);
             """
-        ).format(pbc=self.pbc, CONSTANT_FLUX=CONSTANT_FLUX, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
+        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, NEUMANN_2=NEUMANN_2, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
 
         self.__script_adaptmesh = textwrap.dedent(
             """
@@ -1004,7 +995,7 @@ class FreeFEM_ThickFingers:
             dyu=dy(u);
             // du=(dxu^2+dyu^2)^0.5;
             // plot(du, wait=true, fill=true);
-            
+            {NEUMANN_2_script}            
             // Deteremining the flux coming to the tip
             // More on reading the field values in specific points:
             // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
@@ -1013,7 +1004,7 @@ class FreeFEM_ThickFingers:
             cout.precision(12);
             cout << "kopytko ";
             for(int k=0;k<nbTips;k++)
-            {
+            {{
                 int ndof=nvOnTips(k), n=0;
                 real[int] angles(ndof), fluxes(ndof); // angles with X axis
                 int1d(Th, tipLabels(k), qfe=qf1pE)( (angles(n++)=atan2(y-Y(k), x-X(k)))*1.
@@ -1026,23 +1017,23 @@ class FreeFEM_ThickFingers:
                 
                 // real maxGrad=0, maxAngle=pi/2;
                 // real[int] fluxesMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
-                // for (int i=0; i<=(ndof-avgWindow); i++){
+                // for (int i=0; i<=(ndof-avgWindow); i++){{
                     // real sumGrad=0, sumAng=0;
-                    // for (int j=i; j<i+avgWindow; j++){
+                    // for (int j=i; j<i+avgWindow; j++){{
                         // sumGrad += fluxes[j];
                         // sumAng += angles[j];
-                    // }
+                    // }}
                     // fluxesMvAvg(i) = sumGrad / avgWindow;
                     // anglesMvAvg(i) = sumAng / avgWindow;
-                    // if (fluxesMvAvg(i)>maxGrad){
+                    // if (fluxesMvAvg(i)>maxGrad){{
                         // maxGrad=fluxesMvAvg(i);
                         // maxAngle=anglesMvAvg(i);
-                    // }
-                // }
+                    // }}
+                // }}
                 // real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
                 // cout << totGrad << "," << maxAngle << ",";
-            }            
-            """
+            }}            
+            """.format(NEUMANN_2_script=NEUMANN_2_script)
         )
 
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
@@ -1106,24 +1097,6 @@ class FreeFEM_ThickFingers:
         # for p in network.box.points[1:][border_nodes]:
         #     plt.plot(*p, '.',ms=20, c='r')
         
-        # # # TO THROW AWAY?
-        # # # network.box.connections = connections_to_add
-        # # # network.box.boundary_conditions = boundary_conditions
-        # # # # update seeds indices and box.points
-        # # # x = network.box.points[network.box.seeds_connectivity[:,0]]
-        # # # y = box_ring_pts
-        # # # inds = y[:,None] == x
-        # # # row_sums = inds.sum(axis=2)
-        # # # i, j = np.where(row_sums == 2)
-        # # # network.box.seeds_connectivity[j,0] = i
-        # # # network.box.points = box_ring_pts
-        
-        # # # border_box, inside_buildmesh_box = \
-        # # #     FreeFEM.prepare_script_box(self, 
-        # # #                                 network.box.connections_bc(), \
-        # # #                                 network.box.points, \
-        # # #                                 points_per_unit_len=0.5)
-        
         border_box, inside_buildmesh_box = \
             FreeFEM.prepare_script_box(self, 
                                         np.column_stack((connections_to_add, boundary_conditions)), \
@@ -1131,101 +1104,6 @@ class FreeFEM_ThickFingers:
                                         points_per_unit_len=0.5)
         
         return border_box, inside_buildmesh_box
-        
-    
-    # def fingers_and_box_contours(self, network):
-    #     """ Prepares contours of the thickened tree using shapely library. """
-    #     tips = np.empty((len(network.active_branches), 3))
-    #     pts = [] # list with regularized points (skeleton)
-    #     points_in = [] # points inside subdomains with higher mobility
-    #     border_contour = ""
-    #     inside_buildmesh = ""
-    #     for i, branch in enumerate(network.branches):           
-    #         # to be sure that finger contours nicely intersect with the box 
-    #         # (with cap_style=2 in the buffer) we prepend a point outside of the box
-    #         dr = branch.points[1] - branch.points[0]
-    #         dr1 = self.finger_width/2*dr/np.linalg.norm(dr)
-    #         skeleton = [branch.points[0]-dr1, 
-    #                     branch.points[0],
-    #                     branch.points[0]+dr/2,
-    #                     branch.points[0]+dr]
-            
-    #         # contour can intersect itself if finger_width>ds 
-    #         # (ds = distances between the points in the branch)
-    #         # hence, we select the points on the branch 
-    #         # that are finger_width/2 apart from each other
-    #         segment_lengths = np.linalg.norm(branch.points[2:]-branch.points[1:-1], axis=1)
-    #         len_sum = 0
-    #         for j, seg in enumerate(segment_lengths):
-    #             len_sum = len_sum + seg
-    #             if len_sum>self.finger_width/2:
-    #                 len_sum = 0
-    #                 skeleton.append(branch.points[j+2])
-    #         skeleton[-1] = branch.points[-1]
-    #         # if not (branch.points[-1]==skeleton[-1]).all():
-    #         #     skeleton.append(branch.points[-1])
-            
-    #         # if connected to the wall -> append point outside of the box
-    #         mask_conn = network.branch_connectivity[:,0]==branch.ID
-    #         if any(mask_conn) and network.branch_connectivity[mask_conn,1]==-1:
-    #             dr = branch.points[-1]-branch.points[-2]
-    #             dr = self.finger_width/2*dr/np.linalg.norm(dr)
-    #             skeleton.append(branch.points[-1]+dr)
-                
-    #         pts.append(np.array(skeleton))
-            
-    #         # if the branch is a dead end -> tip with a semi-circular cap
-    #         if len(network.branch_connectivity)==0 or \
-    #                 branch.ID not in network.branch_connectivity[:,0]:
-    #             tip_vec =  skeleton[-1]-skeleton[-2]
-    #             points_in.append(skeleton[-1] + tip_vec/np.linalg.norm(tip_vec)*self.finger_width/4)
-    #             tilt_ang = np.arctan2(tip_vec[1], tip_vec[0])-np.pi/2
-    #             border_contour = (
-    #                 border_contour
-    #                 + "border tip{i}(t=0, 1){{x={x0:.6e}+{f_w_half:.6e}*cos(t*pi+{phi0:.6e});y={y0:.6e}+{f_w_half:.6e}*sin(t*pi+{phi0:.6e}); label={bc};}}\n".format(
-    #                     i=branch.ID, x0=branch.points[-1,0], y0=branch.points[-1,1], 
-    #                     f_w_half=self.finger_width/2, bc=1000+branch.ID, phi0=tilt_ang
-    #                 )
-    #             )
-    #             inside_buildmesh = (
-    #                 inside_buildmesh + " tip{i}(101) +".format(i=branch.ID)
-    #             )  
-                
-    #         if branch in network.active_branches:
-    #             ind = network.active_branches.index(branch)
-    #             tips[ind, 0] = 1000+branch.ID # tip label
-    #             tips[ind, 1] = branch.points[-1, 0] # x
-    #             tips[ind, 2] = branch.points[-1, 1] # y
-                
-    #     border_contour = border_contour + "\n"
-        
-    #     # thicken tree and find intersection with the box
-    #     tree = MultiLineString(pts)
-    #     thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=2, join_style=2, resolution=99)
-    #     box_ring = LinearRing(network.box.points)
-    #     box_polygon = Polygon(box_ring)
-    #     box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
-    #                       *box_ring.intersection(thick_tree).geoms])
-    #     thick_tree = box_polygon.intersection(thick_tree)
-        
-    #     # polygons to contours_tree
-    #     polygons = [thick_tree] if thick_tree.geom_type=="Polygon" else thick_tree.geoms
-    #     contours_tree = []
-    #     for i, poly in enumerate(polygons):
-    #         points_in.append(poly.representative_point().coords[0])
-    #         poly = shapely.geometry.polygon.orient(poly) # now, exterior is ccw, but interiors are cw
-            
-    #         # exteriors
-    #         poly_exterior = poly.exterior.difference(box_ring)
-    #         lines = [poly_exterior] if poly_exterior.geom_type=="LineString" else poly_exterior.geoms
-    #         for line in lines:
-    #             contours_tree.append( np.array(line.coords) )
-            
-    #         # interiors
-    #         for ring in poly.interiors:
-    #             contours_tree.append( np.asarray(ring.coords) )
-        
-    #     return box_ring, contours_tree, tips, points_in, border_contour, inside_buildmesh
     
     def fingers_and_box_contours(self, network):
         """ Prepares contours of the thickened tree using shapely library. """
@@ -1264,7 +1142,7 @@ class FreeFEM_ThickFingers:
         
         # thicken tree and find intersection with the box
         tree = MultiLineString(pts)
-        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=2, quad_segs=49)
+        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=2, quad_segs=25)
         box_ring = LinearRing(network.box.points)
         box_polygon = Polygon(box_ring)
         box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
@@ -1300,7 +1178,6 @@ class FreeFEM_ThickFingers:
     
     def prepare_script(self, network):
         """Return a full FreeFEM script with the `network` geometry."""
-        
         # contours based on the thickened tree
         box_ring, contours_tree, contours_tree_bc, tips, points_in, border_contour, inside_buildmesh = \
             self.fingers_and_box_contours(network)
@@ -1452,6 +1329,6 @@ class FreeFEM_ThickFingers:
             # Highest gradiend direction (angle with X axis)
             self.flux_info[i,1] = xx[np.argmax(smoothed)] % np.pi
             
-        with np.printoptions(formatter={"float": "{:.6g}".format}):
-            # print("flux_info: \n", self.flux_info)
-            print("angles: \n", self.flux_info[...,1]*180/np.pi)
+        # with np.printoptions(formatter={"float": "{:.6g}".format}):
+        #     # print("flux_info: \n", self.flux_info)
+        #     print("angles: \n", self.flux_info[...,1]*180/np.pi)

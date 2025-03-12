@@ -82,57 +82,47 @@ class ModifiedEulerMethod:
         
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
         dRs_0, dt_0 = self.pde_solver.find_test_dRs(network, is_dr_normalized, is_zero_approx_step=True)
-    
+        dt = dt_0
+        
         # moving network tips
         network.move_tips(self, step=step)
         network0 = network.copy()
     
-        dRs_test = dRs_0.copy()
-        dt = dt_0
-        approximation_step = 0
-        # APPROXIMATION LOOP - we end 'max_approximation_step' steps
-        while approximation_step < self.max_approximation_step:
-            approximation_step = approximation_step + 1
-    
-            self.pde_solver.solve_PDE(network)
-            # v[ x(n+1)] ]: finding velocity at the next point
-            dRs_1, _ = self.pde_solver.find_test_dRs(network, is_dr_normalized)
-            
-            # average dR
-            dRs_test = (dRs_0 + dRs_1) / 2
-            if is_dr_normalized:
-                dRs_test = self.pde_solver.ds * dRs_test / np.max(  np.linalg.norm(dRs_test, axis=1) )
-                
-                # normally division dX/a1^eta would give single dt
-                # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
-                # dt is not perfectly the same for different tips, so we take a mean
-                dt = np.mean( np.linalg.norm(dRs_test, axis=1) / \
-                             self.pde_solver.flux_info[...,0]**self.pde_solver.eta )
-                
-            # adjust tip positions in test_network
-            for i, branch in enumerate(network.active_branches):
-                branch.points[-1] = network0.active_branches[i].points[-1] - dRs_0[i] + dRs_test[i]
-            
-            print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
-            print('dRs: ', dRs_test)
-            
+        did_reconnect = False
         if self.is_reconnecting:
-            network.reconnect(self.pde_solver, step)
+            did_reconnect = network.reconnect(self.pde_solver, step)
+            
+        if did_reconnect:
+            print("Reconnected branch, skipping Modified Euler Method steps.")
+            return dt, flux_info_0
+        else:
+            dRs_test = dRs_0.copy()
+            approximation_step = 0
+            # APPROXIMATION LOOP - we end 'max_approximation_step' steps
+            while approximation_step < self.max_approximation_step:
+                approximation_step = approximation_step + 1
         
-        # # global growth of the box
-        # def cyl2cart(r, theta):
-        #     R0 = 5
-        #     # theta measured from the negative Y axis
-        #     return [R0+r*np.sin(theta), R0-r*np.cos(theta)]
+                self.pde_solver.solve_PDE(network)
+                
+                # v[ x(n+1)] ]: finding velocity at the next point
+                dRs_1, _ = self.pde_solver.find_test_dRs(network, is_dr_normalized)
+                
+                # average dR
+                dRs_test = (dRs_0 + dRs_1) / 2
+                if is_dr_normalized:
+                    dRs_test = self.pde_solver.ds * dRs_test / np.max(  np.linalg.norm(dRs_test, axis=1) )
+                    
+                    # normally division dX/a1^eta would give single dt
+                    # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
+                    # dt is not perfectly the same for different tips, so we take a mean
+                    dt = np.mean( np.linalg.norm(dRs_test, axis=1) / \
+                                 self.pde_solver.flux_info[...,0]**self.pde_solver.eta )
+                    
+                # adjust tip positions in test_network
+                for i, branch in enumerate(network.active_branches):
+                    branch.points[-1] = network0.active_branches[i].points[-1] - dRs_0[i] + dRs_test[i]
+                
+                # print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
+                # print('dRs: ', dRs_test)    
         
-        # def cart2cyl(x, y):
-        #     R0 = 5
-        #     # theta measured from the negative Y axis
-        #     return [R0+r*np.sin(theta), R0-r*np.cos(theta)]
-        
-        # for b in network.branches:
-        #     b.points = 
-                                                    
-        # network.box.points = 
-        
-        return dt, flux_info_0
+            return dt, flux_info_0

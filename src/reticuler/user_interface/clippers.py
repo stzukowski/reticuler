@@ -32,7 +32,8 @@ def clip_to_step(system, max_step):
             branch.points = branch.points[~to_trash]
             branch.steps = branch.steps[~to_trash]
             mask = system.network.branch_connectivity[:,0]!=branch.ID
-            if (system.network.branch_connectivity[~mask,1]==-1).any():
+            if mask.any():
+            # if (system.network.branch_connectivity[~mask,1]==-1).any():
                 system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
                 system.network.active_branches.append(branch)
             
