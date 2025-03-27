@@ -18,7 +18,7 @@ import shapely
 from shapely.ops import linemerge 
 from shapely.geometry import MultiLineString, LinearRing, Polygon
 
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET, DIRICHLET_OUTLET, NEUMANN_1, NEUMANN_2
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
 from reticuler.utilities.misc import rotation_matrix
 
 def asvoid(arr):
@@ -43,6 +43,11 @@ def inNd(a, b, assume_unique=False):
 
 def arr2str(arr):
     return np.array2string(arr, separator=",", precision=12,max_line_width=np.inf,threshold=np.inf).replace("\n", "")
+
+def array_from_string(out_string, key):
+    ind_0 = out_string.find(key.encode("ascii"))+len(key)
+    ind_1 = out_string.find(key.encode("ascii")+b"end")
+    return np.fromstring(out_string[ind_0:ind_1], sep="\t")
 
 def prepare_contour(border_contour, inside_buildmesh, i, points, label, border_name="contour"):
     for j, pair in enumerate(zip(points, points[1:])):
@@ -283,38 +288,24 @@ class FreeFEM:
         self.__script_problem_Laplace = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // DEFINING PROBLEM AND equation TO SOLVE
+            // DEFINING PROBLEM AND EQUATION TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             fespace Vh(Th,P2);
             Vh u,v;
             
-            real dirichletOut = 2; // also under a_i integrals
+            real dirichletOut = 1; // also under a_i integrals
             problem potential(u,v,solver=sparsesolver)=
                      int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
                          // -int2d(Th)(v) // rain in domain
                          -int1d(Th,{NEUMANN_1})(v)  // constant flux
-            			 +on({DIRICHLET_OUTLET},u=dirichletOut) // constant field
-                         +on({DIRICHLET},u=0);
+                         +on({DIRICHLET_1},u=dirichletOut) // constant field
+                         +on({DIRICHLET_0},u=0);
             """
-        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
+        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_0=DIRICHLET_0, DIRICHLET_1=DIRICHLET_1)
 
-        self.__script_problem_Poisson = textwrap.dedent(
-            """ 
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // DEFINING PROBLEM AND equation TO SOLVE
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            fespace Vh(Th,P2);
-            Vh u,v;
-            
-            real dirichletOut = 2; // also under a_i integrals
-            problem potential(u,v,solver=sparsesolver)=
-                     int2d(Th)(dx(u)*dx(v) + dy(u)*dy(v))
-                         -int2d(Th)(v) // rain in domain
-                         -int1d(Th,{NEUMANN_1})(v)  // constant flux
-            			 +on({DIRICHLET_OUTLET},u=dirichletOut) // constant field
-                         +on({DIRICHLET},u=0);
-            """
-        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_OUTLET=DIRICHLET_OUTLET, DIRICHLET=DIRICHLET)
+        self.__script_problem_Poisson = self.__script_problem_Laplace.replace(
+                                            "// -int2d(Th)(v) // rain in domain", 
+                                            "-int2d(Th)(v) // rain in domain")
 
         self.__script_adaptmesh = textwrap.dedent(
             """
@@ -329,7 +320,7 @@ class FreeFEM:
             // First adaptation
             real firstAdaptTime0=clock();
             // Th = adaptmesh(Th,5.*tipfield(X,Y,3.*R,nbTips),nbvx=500000,nbsmooth=100,iso=true);
-            Th = adaptmesh(Th,1,nbvx=500000,hmax=0.1,nbsmooth=100,iso=true,ratio=1.8);
+            Th = adaptmesh(Th,1,nbvx=500000,hmax=0.1,nbsmooth=100,iso=true,ratio=1.8,keepbackvertices=1);
             real firstAdaptTime=clock() - firstAdaptTime0;
             // plot(Th, wait=true);
             
@@ -351,7 +342,7 @@ class FreeFEM:
             	// cout << "Adaptation step: " << adaptCounter << ", h[].min = " << h[].min;
             	// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
             	potential;
-            	Th=adaptmesh(Th,[u, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5);
+            	Th=adaptmesh(Th,[u, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5,keepbackvertices=1);
             	error = 0.5*error;
             	u=u;
             	h=hTriangle; // the triangle size
@@ -373,6 +364,7 @@ class FreeFEM:
             """
         )
 
+        # // ofstream freefemOutput("{file_name}");
         self.__script_integrate_a1a2a3 = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -384,52 +376,51 @@ class FreeFEM:
             mesh Ph;
             real[int] a(3); // list of coefficients of the expansion
             int exponant=2; // precision of the exponential
-            // ofstream freefemOutput("{file_name}");
             
             cout.precision(12);
             cout << "kopytko ";
             for(int i=0;i<nbTips;++i)
-            {
+            {{
                 // cout << "Processing Tip " << i << " ";   
                 x0=X(i);y0=Y(i);
                 // cout << "(x0, y0) = (" << x0 << ", " <<y0<< "), angle = " << angle(i) << endl;
-                
-            	// cout << "Projecting... Th.nv = " << Th.nv;
-                Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R)); 
-            	// cout << ", Ph.nv = " << Ph.nv << endl;
-            	
-                for(int order=1; order<=a.n; ++order){ 
+
+            	   // cout << "Projecting... Th.nv = " << Th.nv;
+                Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R));
+            	   // cout << ", Ph.nv = " << Ph.nv << endl;
+
+                for(int order=1; order<=a.n; ++order){{
                     a[order-1]=
                     int2d(Ph)( u*exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
             		*BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) );
                     
-                    if (BC(i)==4) 
-                    {
+                    if (BC(i)=={DIRICHLET_1}) 
+                    {{
                         a[order-1]-=int2d(Ph)( dirichletOut*exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
                 		*BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) );
                         a[order-1]*=-1;
-                    }
+                    }}
                         
                     a[order-1]/=(int2d(Ph)(exp(-(sqrt((x-x0)^2 + (y-y0)^2)/R)^exponant)
             		*square(BaseVector(order,exp(-angle(i)*1i)*( (x-x0) + (y-y0)*1i) ) )));
             		
-            		cout << a[order-1] << ",";
-                    // cout << "a(" << order << ") = " << a[order-1] << endl;
-                }
+            		cout << a[order-1] << " ";
+                // cout << "a(" << order << ") = " << a[order-1] << endl;
+                }}
             	// freefemOutput << Th.nv << " ";
             	// freefemOutput << Ph.nv << " ";
             	// freefemOutput << adaptCounter << " ";
             	
             	// cout << endl;
-            };
-            
+            }};
+            cout << "kopytko" << "end";
             // cout << endl << endl << "Building mesh took: " << buildTime; 
             // cout << endl << "First adapt took: " << firstAdaptTime; 
             // cout << endl << "First run took: " << firstRunTime; 
             // cout << endl << "Adaptation took: " << adaptTime; 
             // cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
             // cout << endl << "Total time: " << clock()-time0 << endl << endl;
-            """
+            """.format(DIRICHLET_1=DIRICHLET_1)
         )
 
     def __streamline_extension(self, beta, dr):
@@ -570,6 +561,7 @@ class FreeFEM:
         border_network = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
         for i, branch in enumerate(network.branches):
+            # border_network, inside_buildmesh = prepare_contour_list(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
             border_network, inside_buildmesh = prepare_contour(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
             if branch in network.active_branches:
                 ind = network.active_branches.index(branch)
@@ -699,7 +691,7 @@ class FreeFEM:
         -------
         None.
 
-        """
+        """        
         script = self.prepare_script(network)
         if self.is_script_saved:
             out_freefem = self.run_freefem(script) # useful for debugging
@@ -719,7 +711,7 @@ class FreeFEM:
             if out_freefem.returncode:
                 print("\nFreeFem++ didn't work with stronger mesh adaptation.\n")
             
-        ai_coeffs_flat = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b"kopytko")+7:], sep=",")
+        ai_coeffs_flat = array_from_string(out_freefem.stdout, "kopytko")
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         with np.printoptions(formatter={"float": "{:.6e}".format}):
             print("a1a2a3") # , self.flux_info)
@@ -834,18 +826,18 @@ class FreeFEM_ThickFingers:
         self.distance_from_bif_thresh = 2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
         
         # parts of the script
-        NEUMANN_2_script = ""
-        if (network.box.boundary_conditions==NEUMANN_2).any(): 
-            NEUMANN_2_script = f"""
-            // Normalize "u" if Neumann_2 BC
-            real fluxNeumann2=int1d(Th, {NEUMANN_2})( abs([dxu,dyu]'*[N.x,N.y]) );
-            u=u/fluxNeumann2;
+        DIRICHLET_GLOB_FLUX_script = ""
+        if (network.box.boundary_conditions==DIRICHLET_GLOB_FLUX).any(): 
+            DIRICHLET_GLOB_FLUX_script = f"""
+            // Normalize "u" if DIRICHLET_GLOB_FLUX BC
+            real globFlux=int1d(Th, {DIRICHLET_GLOB_FLUX})( abs([dxu,dyu]'*[N.x,N.y])*mobility );
+            u=u/globFlux;
             // Recalculate gradients
             dxu=dx(u);
             dyu=dy(u);
             """
         
-        self.pbc = "" if network.box.boundary_conditions[0]==2 else ", periodic=PBC"
+        self.pbc = "" if network.box.boundary_conditions[0]!=2 else ", periodic=PBC"
         
         self.__script_init = textwrap.dedent(
             """
@@ -902,7 +894,7 @@ class FreeFEM_ThickFingers:
         self.__script_problem_Laplace = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // DEFINING PROBLEM AND equation TO SOLVE
+            // DEFINING PROBLEM AND EQUATION TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             
             fespace Vh(Th,P2{pbc});
@@ -911,30 +903,16 @@ class FreeFEM_ThickFingers:
             problem potential(u,v,solver=CG)=
                      int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
                                 // -int2d(Th)(v) // rain in domain
-                                -int1d(Th,{NEUMANN_1})(v)  // constant flux (local)
-                                +on({NEUMANN_2},u=0) // constant flux (global)
-                                +on({DIRICHLET_OUTLET},u=0) // constant field
-                                +on({DIRICHLET},u=1);
+                                -int1d(Th,{NEUMANN_1})(mobility*v)  // constant flux (local)
+                                +on({DIRICHLET_GLOB_FLUX},u=0) // constant flux (global)
+                                +on({DIRICHLET_0},u=0) // constant field
+                                +on({DIRICHLET_1},u=1);
             """
-        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, NEUMANN_2=NEUMANN_2, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
+        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, DIRICHLET_GLOB_FLUX=DIRICHLET_GLOB_FLUX, DIRICHLET_1=DIRICHLET_1, DIRICHLET_0=DIRICHLET_0)
 
-        self.__script_problem_Poisson = textwrap.dedent(
-            """ 
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            // DEFINING PROBLEM AND equation TO SOLVE
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            fespace Vh(Th,P2{pbc});
-            Vh u,v,dxu,dyu,du;
-
-            problem potential(u,v,solver=CG)=
-                     int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
-                                -int2d(Th)(v) // Poissonian source term
-                                -int1d(Th,{NEUMANN_1})(v)  // constant flux (local)
-                                +on({NEUMANN_2},u=0) // constant flux (global)
-                                +on({DIRICHLET_OUTLET},u=0) // constant field
-                                +on({DIRICHLET},u=1);
-            """
-        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, NEUMANN_2=NEUMANN_2, DIRICHLET=DIRICHLET, DIRICHLET_OUTLET=DIRICHLET_OUTLET)
+        self.__script_problem_Poisson = self.__script_problem_Laplace.replace(
+                                            "// -int2d(Th)(v) // rain in domain", 
+                                            "-int2d(Th)(v) // rain in domain")
 
         self.__script_adaptmesh = textwrap.dedent(
             """
@@ -965,7 +943,7 @@ class FreeFEM_ThickFingers:
                 cout << "Adaptation step: " << adaptCounter;
                 cout << ", nvOnTip.min = " << nvOnTips.min << endl;
                 // plot(Th, wait=true, bb=[[x0Th, y0Th],[x1Th, y1Th]]);
-                Th=adaptmesh(Th, [u, 0.01*tipfield(X,Y,nbTips,tipR)],err=error,nbvx=500000,verbosity=0,nbsmooth=100,iso=1,ratio=1.8,keepbackvertices=1{pbc}); // Adapting mesh according to the first solution
+                Th=adaptmesh(Th, [u/u[].max, 0.01*tipfield(X,Y,nbTips,tipR)],err=error,nbvx=500000,verbosity=0,nbsmooth=100,iso=1,ratio=1.8,keepbackvertices=1{pbc}); // Adapting mesh according to the first solution
                 u=u;
                 mobility=mobility;
                 error=error/2;
@@ -995,12 +973,12 @@ class FreeFEM_ThickFingers:
             dyu=dy(u);
             // du=(dxu^2+dyu^2)^0.5;
             // plot(du, wait=true, fill=true);
-            {NEUMANN_2_script}            
+            {DIRICHLET_GLOB_FLUX_script}            
             // Deteremining the flux coming to the tip
             // More on reading the field values in specific points:
             // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
             // https://ljll.math.upmc.fr/pipermail/freefempp/2009/000337.html
-            int avgWindow = 5;
+            // int avgWindow = 5;
             cout.precision(12);
             cout << "kopytko ";
             for(int k=0;k<nbTips;k++)
@@ -1032,8 +1010,9 @@ class FreeFEM_ThickFingers:
                 // }}
                 // real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
                 // cout << totGrad << "," << maxAngle << ",";
-            }}            
-            """.format(NEUMANN_2_script=NEUMANN_2_script)
+            }}
+            cout << "kopytko" << "end";
+            """.format(DIRICHLET_GLOB_FLUX_script=DIRICHLET_GLOB_FLUX_script)
         )
 
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
@@ -1142,7 +1121,7 @@ class FreeFEM_ThickFingers:
         
         # thicken tree and find intersection with the box
         tree = MultiLineString(pts)
-        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=2, quad_segs=25)
+        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=1, quad_segs=25)
         box_ring = LinearRing(network.box.points)
         box_polygon = Polygon(box_ring)
         box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
@@ -1160,11 +1139,13 @@ class FreeFEM_ThickFingers:
             poly_exterior = poly.exterior.difference(box_ring)
             lines = [poly_exterior] if poly_exterior.geom_type=="LineString" else poly_exterior.geoms
             for line in lines:
-                contours_tree.append( np.array(line.coords) )
+                line1 = line.simplify(tolerance=1e-4)
+                contours_tree.append( np.array(line1.coords) )
             
             # interiors
             for ring in poly.interiors:
-                contours_tree.append( np.asarray(ring.coords) )
+                ring1 = ring.simplify(tolerance=1e-4)
+                contours_tree.append( np.asarray(ring1.coords) )
         
         contours_tree_bc = []
         for cont in contours_tree:
@@ -1174,7 +1155,7 @@ class FreeFEM_ThickFingers:
                 if mask.any():
                     contours_tree_bc[-1] = ~mask*888 + mask*b_label
         
-        return box_ring, contours_tree, contours_tree_bc, tips_active, pts_in, border_contour, inside_buildmesh    
+        return box_ring, contours_tree, contours_tree_bc, tips_active, pts_in, border_contour, inside_buildmesh
     
     def prepare_script(self, network):
         """Return a full FreeFEM script with the `network` geometry."""
@@ -1205,7 +1186,7 @@ class FreeFEM_ThickFingers:
             + self.script_border_box
             + border_contour
             )
-        if network.box.boundary_conditions[0]!=2:
+        if network.box.boundary_conditions[0]==2:
             buildmesh = buildmesh + \
                 "func PBC=[[{left},y],[{right},y]];".format( left=LEFT_WALL_PBC, right=RIGHT_WALL_PBC)
         buildmesh = buildmesh + \
@@ -1296,18 +1277,13 @@ class FreeFEM_ThickFingers:
         # flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b"kopytko")+7:], sep=",")
         # self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
         
-        # determining flux_info here:
-        import_array = lambda key : np.fromstring(out_freefem.stdout[\
-                                            out_freefem.stdout.find(key.encode("ascii"))+len(key):\
-                                            out_freefem.stdout.find(key.encode("ascii")+b"end")], \
-                                                  sep="\t")[1:]
- 
+        # determining flux_info 
         angles=[]; fluxes=[]; 
         self.flux_info = np.zeros((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
             tip_label = 1000+branch.ID
-            angles.append(import_array("angles{}".format(tip_label)))
-            fluxes.append(import_array("fluxes{}".format(tip_label))) 
+            angles.append(array_from_string(out_freefem.stdout, f"angles{tip_label}")[1:])
+            fluxes.append(array_from_string(out_freefem.stdout, f"fluxes{tip_label}")[1:]) 
             ind_cut = np.where(np.diff(angles[-1])<0)[0]
             if ind_cut.size:
                 angles[-1][ind_cut[0]+1:] = angles[-1][ind_cut[0]+1:] + 2*np.pi
@@ -1325,7 +1301,7 @@ class FreeFEM_ThickFingers:
                                              mode="same")
             
             # Total flux:
-            self.flux_info[i,0] = import_array("tot_flux{}".format(tip_label))
+            self.flux_info[i,0] = array_from_string(out_freefem.stdout, f"tot_flux{tip_label}")[1:]
             # Highest gradiend direction (angle with X axis)
             self.flux_info[i,1] = xx[np.argmax(smoothed)] % np.pi
             

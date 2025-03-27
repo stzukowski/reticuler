@@ -9,7 +9,7 @@ Classes:
 import numpy as np 
 import copy
 
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET, DIRICHLET_OUTLET, NEUMANN_0, NEUMANN_1, NEUMANN_2
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
 from reticuler.utilities.misc import cyl2cart, find_reconnection_point
 
 class Branch:
@@ -26,8 +26,8 @@ class Branch:
         A 1-n array with evolution steps at which corresponding points were added.
     BC : int, default 0
         The boundary condition on fingers, when solving the equations for the field.
-        0 - Dirichlet (phi=0)
-        4 - Dirichlet outlet (phi=1)
+        DIRICHLET_0 (u=0)
+        DIRICHLET_1 (u=1)
     dR : array or 0, default 0
         A 1-2 array of tip progression ([dx, dy]).
     is_bifurcating : bool, default False
@@ -36,7 +36,7 @@ class Branch:
 
     """
 
-    def __init__(self, ID, points, steps, BC=DIRICHLET):
+    def __init__(self, ID, points, steps, BC=DIRICHLET_0):
         """Initialize Branch.
 
         Parameters
@@ -157,9 +157,11 @@ class Box:
             absorbing bottom wall, reflecting left and right, and:
                 - IC = 0: constant flux on top (Laplacian case)
                 - IC = 1: reflective top (Poissonian case)
-                - IC = 2: as IC=0 + PBC right and left wall
-                - IC = 3: as IC=0, but Dirichlet BC on top
-                - IC = 4: jellyfish (an octant) with a trifork
+                - IC = 2: PBC right and left wall + DIRICHLET_1 BC on top
+                - IC = 3: as IC=0, but DIRICHLET_1 BC on top
+            IC = 4, 5: jellyfish (an octant) with a trifork
+                - IC = 4: Dirichlet on bottom and top, but rescaled such that global flux is constant
+                - IC = 5: u=0 on top and Neumann on bottom
         kwargs_construct:
             IC = 0, 1, 2, 3
                 seeds_x : array, default [0.5]
@@ -191,7 +193,7 @@ class Box:
             options_construct = {
                 "seeds_x": [0.5],
                 "initial_lengths": [0.01],
-                "branch_BCs": [DIRICHLET],
+                "branch_BCs": [DIRICHLET_0],
                 "height": 50.0,
                 "width": 2.0,
             }
@@ -218,7 +220,7 @@ class Box:
                 ]
             )
             # seeds at the top boundary
-            mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_OUTLET
+            mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_1
             box.__add_points(
                 np.vstack(
                     [
@@ -268,8 +270,8 @@ class Box:
             ).T
             box.__add_connection(
                 connections_to_add,
-                boundary_conditions=DIRICHLET
-                * np.ones(len(connections_to_add), dtype=int),
+                boundary_conditions=DIRICHLET_0 * \
+                    np.ones(len(connections_to_add), dtype=int),
             )
 
             # right, left, top Neumann:
@@ -278,17 +280,17 @@ class Box:
             if initial_condition == 0:
                 box.boundary_conditions[1] = NEUMANN_1
             if initial_condition == 2:
-                box.boundary_conditions[1] = DIRICHLET_OUTLET
+                box.boundary_conditions[1] = DIRICHLET_1
                 box.boundary_conditions[0] = RIGHT_WALL_PBC
                 box.boundary_conditions[2] = LEFT_WALL_PBC
             if initial_condition == 3:
-                box.boundary_conditions[1:2+sum(mask_seeds_from_outlet)] = DIRICHLET_OUTLET
+                box.boundary_conditions[1:2+sum(mask_seeds_from_outlet)] = DIRICHLET_1
 
             # Creating initial branches
             branches = []
             for i, x in enumerate(options_construct["seeds_x"]):
                 BC = options_construct["branch_BCs"][i]
-                if BC==DIRICHLET:                    
+                if BC==DIRICHLET_0:                    
                     branch = Branch(
                             ID=i,
                             points=np.array(
@@ -296,7 +298,7 @@ class Box:
                             ),
                             steps=np.array([0, 0]),
                         )
-                elif BC==DIRICHLET_OUTLET:
+                elif BC==DIRICHLET_1:
                    branch = Branch(
                            ID=i,
                            points=np.array(
@@ -313,7 +315,7 @@ class Box:
                 
         # Jellyfish
         # make it smoother initially, so that it stays smooth when enlarging?        
-        elif initial_condition == 4:
+        elif initial_condition == 4 or initial_condition == 5:
             angular_width = 2*np.pi / 8
             R_rim = 5 # mm
             R_stom = 0.45 * R_rim
@@ -323,12 +325,12 @@ class Box:
             box.__add_points([cyl2cart(R_rim, angular_width/2, R_rim)])
             
             # stomach
-            n_points_stomach = 24 # n_points_rim % 2 == 0
+            n_points_stomach = 48 # n_points_rim % 2 == 0
             box.__add_points(
                 cyl2cart(R_stom, np.linspace(angular_width/2, -angular_width/2, n_points_stomach+1), R_rim)
             )
             # circular rim
-            n_points_rim = 24 # n_points_rim % 8 == 0
+            n_points_rim = 48 # n_points_rim % 8 == 0
             box.__add_points(
                 cyl2cart(R_rim, np.linspace(-angular_width/2,0.99999*angular_width/2, n_points_rim+1), R_rim)
             )
@@ -351,14 +353,18 @@ class Box:
             ).T
             box.__add_connection(
                 connections_to_add,
-                boundary_conditions=DIRICHLET
+                boundary_conditions=DIRICHLET_1
                 * np.ones(len(connections_to_add), dtype=int),
             )
             # right, left Neumann:
             box.boundary_conditions[0] = NEUMANN_0
             box.boundary_conditions[n_points_stomach+1] = NEUMANN_0
-            # top Dirichlet
-            box.boundary_conditions[1:n_points_stomach+1] = NEUMANN_2
+            # top DIRICHLET_GLOB_FLUX
+            box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_GLOB_FLUX
+            if initial_condition == 5:
+                # bottom NEUMANN_1
+                box.boundary_conditions[n_points_stomach+2:] = NEUMANN_1    
+            
             # points_to_plot = box.points[box.connections]
             # for i, pts in enumerate(points_to_plot):
             #     plt.plot(*pts.T, '.-', color="{}".format(box.boundary_conditions[i]/5), ms=1, lw=5)
@@ -491,8 +497,8 @@ class Network:
         """Find potential anastomoses and reconnect."""       
         
         if type(pde_solver).__name__ == "FreeFEM_ThickFingers":
-            reconnection_distance = pde_solver.finger_width # + 0.01*pde_solver.ds # !!!
-            reconnection_distance_bt = pde_solver.finger_width/2 # + 0.01*pde_solver.ds
+            reconnection_distance = pde_solver.finger_width + 5e-3
+            reconnection_distance_bt = pde_solver.finger_width/2 + 5e-3 # 0.05*pde_solver.ds
         else:
             print("Reconnections for thin fingers? Check carefully!")
             reconnection_distance = 0.01*pde_solver.ds
@@ -512,9 +518,9 @@ class Network:
                                 )
                 ) )
         
-        mask_outlet = np.logical_or(self.box.boundary_conditions==NEUMANN_1,
-                                    self.box.boundary_conditions==NEUMANN_2,
-                                    self.box.boundary_conditions==DIRICHLET_OUTLET)
+        mask_outlet = np.logical_or(self.box.boundary_conditions==DIRICHLET_GLOB_FLUX,
+                                    self.box.boundary_conditions==DIRICHLET_0)
+                                    # self.box.boundary_conditions==NEUMANN_1,)
         inds_outlet = np.where(mask_outlet)[0]
         # starting pt. ind.,
         # starting x, starting y, ending x, ending y
@@ -531,7 +537,7 @@ class Network:
                             find_reconnection_point(branch.points[-1], \
                                                 all_segments_outlet[...,1:3], \
                                                 all_segments_outlet[...,3:], 
-                                                too_close=pde_solver.ds)
+                                                too_close=1e-3)
                                 
             if min_distance < reconnection_distance_bt:
                 # decreasing step size while approaching BT:
@@ -592,11 +598,11 @@ class Network:
                                 find_reconnection_point(tip, \
                                                     all_segments_branches[mask,4:6], \
                                                     all_segments_branches[mask,6:], 
-                                                    too_close=pde_solver.ds)                    
+                                                    too_close=1e-3)                    
 
                 if min_distance < reconnection_distance:
                     did_reconnect = True
-                    # # to make more realistich reconnections we stretch tip further
+                    # to make more realistich reconnections we stretch tip further
                     dr = branch.points[-1] - branch.points[-2]
                     dr = dr/np.linalg.norm(dr) * pde_solver.finger_width/2 # !!!
                     tip = branch.points[-1] + dr
@@ -604,11 +610,11 @@ class Network:
                                     find_reconnection_point(tip, \
                                                         all_segments_branches[mask,4:6], \
                                                         all_segments_branches[mask,6:], 
-                                                        too_close=pde_solver.ds) 
+                                                        too_close=1e-3) 
                     
                     # reconnect to a branch
                     branch2_id = int(all_segments_branches[mask][ind_min,0])
-                    print("! Branch {ID} reconnected to branch {ID2}!".format(ID=branch.ID, ID2=branch2_id))
+                    print("! Branch {ID} reconnected to branch {ID2} !".format(ID=branch.ID, ID2=branch2_id))
                     
                     if type(pde_solver).__name__ == "FreeFEM_ThickFingers":
                         branch.points = np.vstack( (branch.points, [tip]) )
@@ -625,7 +631,6 @@ class Network:
                         branch2.points = np.insert(branch2.points, ind_pt+1, reconnection_pt, axis=0)
                         branch2.steps = np.insert(branch2.steps, ind_pt+1, branch2.steps[ind_pt], axis=0)
 
-                        print("New point... to test.")
                         # update all_segments_branches (in case something else reconnects to the same branch)
                         all_segments_branches = all_segments_branches[ all_segments_branches[:,0]!=branch2_id]
                         n_points = len(branch2.points)

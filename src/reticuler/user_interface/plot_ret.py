@@ -1,6 +1,5 @@
 """Command line script to plot a network"""
 
-import os
 import glob
 import argparse
 import json
@@ -9,12 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from reticuler.system import System
-from reticuler.user_interface import graphics
-from reticuler.user_interface import clippers
-
-def create_dir(dir_name):
-    if not os.path.exists(dir_name):
-        os.makedirs(dir_name)
+from reticuler.user_interface import graphics, clippers
+from reticuler.utilities.misc import create_dir
 
 def main():
     parser = argparse.ArgumentParser(
@@ -144,7 +139,7 @@ def main():
 
     # Save frames with each step
     parser.add_argument(
-        "-frams",
+        "-f",
         "--frames",
         action=argparse.BooleanOptionalAction,
         help=textwrap.dedent(

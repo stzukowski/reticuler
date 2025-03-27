@@ -15,13 +15,14 @@ Classes:
 
 import numpy as np
 import json
+import os
 
 # Labels for boundary conditions
-DIRICHLET = 1
-NEUMANN_0 = 2
-NEUMANN_1 = 3
-NEUMANN_2 = 5
-DIRICHLET_OUTLET = 4
+DIRICHLET_0 = 1 # u=0
+DIRICHLET_1 = 2 # u=1
+DIRICHLET_GLOB_FLUX = 3 # global flux constant (rescaled Dirichlet)
+NEUMANN_0 = 4 # zero flux boundary condition
+NEUMANN_1 = 5 # constant flux = -1 (influx)
 RIGHT_WALL_PBC = 999
 LEFT_WALL_PBC = 998
 
@@ -129,6 +130,10 @@ def rotation_matrix(angle):
     return np.array(
         [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
     )
+
+def create_dir(dir_name):
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
 
 class NumpyEncoder(json.JSONEncoder):
     """Special json encoder for numpy types.

@@ -94,7 +94,7 @@ class ModifiedEulerMethod:
             
         if did_reconnect:
             print("Reconnected branch, skipping Modified Euler Method steps.")
-            return dt, flux_info_0
+            return [dt, flux_info_0]
         else:
             dRs_test = dRs_0.copy()
             approximation_step = 0
@@ -125,4 +125,4 @@ class ModifiedEulerMethod:
                 # print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
                 # print('dRs: ', dRs_test)    
         
-            return dt, flux_info_0
+            return [dt, flux_info_0]

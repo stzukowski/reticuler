@@ -16,8 +16,8 @@ import json
 import importlib.metadata
 
 from reticuler.utilities.misc import NumpyEncoder
-from reticuler.utilities.building_blocks import Branch, Box, Network
-from reticuler.utilities.morphers import Jellyfish
+from reticuler.utilities.geometry import Branch, Box, Network
+from reticuler.utilities import morphers
 from reticuler.extending_kernels import extenders, pde_solvers
 
 
@@ -50,6 +50,7 @@ class System:
         self,
         network,
         extender,
+        morpher=None,
         timestamps=None,
         growth_thresh_type=0,
         growth_thresh=5,
@@ -76,6 +77,7 @@ class System:
         """
         self.network = network
         self.extender = extender
+        self.morpher = morpher
 
         # Growth limits:
         # 0: max step, 1: max height
@@ -141,6 +143,19 @@ class System:
                 }
             }
 
+        if self.morpher is not None:
+            if type(self.morpher).__name__ == "Jellyfish":
+                export_morpher = {
+                    "morpher": {
+                        "type": type(self.morpher).__name__,
+                        "radii": self.morpher.radii,
+                        "timescale": self.morpher.timescale,
+                        "v_rim": self.morpher.v_rim,
+                        }
+                    }
+        else:
+            export_morpher = {}
+                
         export_branches = {}
         for branch in self.network.branches[::-1]:
             if branch in self.network.active_branches:
@@ -153,6 +168,7 @@ class System:
                 branch.ID: {
                     "ID": branch.ID,
                     "state": state,
+                    "BC": branch.BC,
                     "points_and_steps": branch.points_steps(),
                 }
             }
@@ -173,7 +189,7 @@ class System:
 
         export_timestamps = {"timestamps": self.timestamps}
         to_export = export_general | export_extender | \
-                        export_network | export_timestamps
+                        export_morpher | export_network | export_timestamps
         with open(self.exp_name + ".json", "w", encoding="utf-8") as f:
             json.dump(to_export, f, ensure_ascii=False,
                       indent=4, cls=NumpyEncoder)
@@ -204,6 +220,7 @@ class System:
             points_steps = np.asarray(json_branch["points_and_steps"])
             branch = Branch(
                 ID=json_branch["ID"],
+                BC=json_branch["BC"],
                 points=points_steps[:, :2],
                 steps=np.array(points_steps[:, 2], dtype=int),
             )
@@ -234,7 +251,7 @@ class System:
             sleeping_branches=sleeping_branches,
             branch_connectivity=branch_connectivity,
         )
-
+        
         try:
             # General
             json_growth = json_load["growth"]
@@ -255,6 +272,18 @@ class System:
                     json_growth_gauges["time"],
                 ]
             )
+
+            # Morpher
+            if "morpher" in json_load:
+                json_morpher = json_load["morpher"]
+                if json_morpher["type"] == "Jellyfish":  
+                    morpher = morphers.Jellyfish(
+                                    radii=json_morpher["radii"],
+                                    timescale=json_morpher["timescale"],
+                                    v_rim=json_morpher["v_rim"],
+                                    )
+            else:
+                morpher = None
             
             # Extender and solver
             json_extender = json_load["extender"]
@@ -279,6 +308,7 @@ class System:
             system = cls(
                 network=network,
                 extender=extender,
+                morpher=morpher,
                 timestamps=timestamps,
                 growth_gauges=growth_gauges,
                 growth_thresh_type=growth_thresh_type,
@@ -288,7 +318,7 @@ class System:
             )
         except Exception as error:
             print(type(error).__name__, ": ", error)
-            print("!WARNING! Extender/PDE solver not imported.")
+            print("!WARNING! Extender/PDE solver/morpher not imported.")
             pde_solver = pde_solvers.FreeFEM(network)
             extender = extenders.ModifiedEulerMethod(
                 pde_solver=pde_solver,)
@@ -338,10 +368,11 @@ class System:
             out_growth = self.extender.integrate(network=self.network, \
                                                  step=self.growth_gauges[0])
             
-            # morphing the syste: jellyfish, leaf
-            Jellyfish.morph(network=self.network, \
-                            out_growth=out_growth, \
-                            step=self.growth_gauges[0])
+            # morphing the system: jellyfish, leaf
+            if self.morpher is not None:
+                out_growth = self.morpher.morph(network=self.network, \
+                                                out_growth=out_growth, \
+                                                step=self.growth_gauges[0])
             
             
             # Updating gauges, etc.

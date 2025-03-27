@@ -1,2 +1,2 @@
-from .building_blocks import *
+from .geometry import *
 from .misc import *

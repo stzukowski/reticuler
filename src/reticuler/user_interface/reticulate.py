@@ -5,10 +5,12 @@ import json
 import textwrap
 import importlib.metadata
 import matplotlib.pyplot as plt
+import numpy as np
 
-from reticuler.utilities.building_blocks import Box, Network
+from reticuler.utilities.geometry import Box, Network
 from reticuler.system import System
 from reticuler.extending_kernels import extenders, pde_solvers
+from reticuler.utilities import morphers
 from reticuler.user_interface import graphics
 
 # %%
@@ -232,6 +234,14 @@ def main():
         network = Network(box=box, branches=branches, 
                           active_branches=active_branches, 
                           branch_connectivity=branch_connectivity)
+        
+        # Morpher
+        if args.initial_condition[0]==4 or args.initial_condition[0]==5:
+            morpher = morphers.Jellyfish(
+                        radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2])
+                        )
+        else:
+            morpher = None
           
         # Extender
         if args.extender[0] == "ModifiedEulerMethod":
@@ -249,6 +259,7 @@ def main():
         system = System(
             network=network,
             extender=extender,
+            morpher=morpher,
             exp_name=args.output_file[0],
             **args.growth_params[0]
         )
