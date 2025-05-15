@@ -12,9 +12,9 @@ import matplotlib.transforms as transforms
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 from matplotlib.collections import PatchCollection
-from shapely.geometry import MultiLineString, LinearRing, Polygon
+from shapely.geometry import MultiLineString, Polygon
 
-from reticuler.extending_kernels.pde_solvers import rotation_matrix
+from reticuler.utilities.misc import rotation_matrix
 from reticuler.user_interface import clippers
 
 plt.rcParams.update(
@@ -215,9 +215,19 @@ def animate_tree(system0,
         system = system0.copy()
         clippers.clip_to_time(system, i)
         
+        etwas = [] # for tree buffer
+        if type(system.morpher).__name__ == "Leaf":
+            # update box
+            box = Polygon(system.network.box.points)
+            etwas.append(*plot_polygon(ax, box, 
+                         edgecolor="0", 
+                         linewidth=options_tree_plot["linewidth"]*2, 
+                         facecolor="0.8" if is_thick else "#def1ff",
+                         transform=rot+base))
+        
+        
         # PLOT LINES
         ymax_tree = 2
-        etwas = [] # for tree buffer
         for branch in system.network.branches:
             line = branch.points
             if np.max(line[:, 1])*1.05 > ymax_tree:
@@ -238,6 +248,7 @@ def animate_tree(system0,
             # fig, ax = plt.subplots()
             etwas = plot_polygon(ax, thick_tree, transform=rot+base, 
                          edgecolor="0", facecolor=options_tree_plot["color"])
+            
         artists.append(etwas)
         
     if xmin is not None or xmax is not None \

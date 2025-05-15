@@ -189,6 +189,7 @@ class BackwardSystem:
         self.system.extender.pde_solver.eta = self.trimmer.eta
         self.system.extender.pde_solver.bifurcation_type = 0
         self.system.extender.pde_solver.inflow_thresh = 0
+        self.system.extender.pde_solver.is_backward = True
         
         self.dump_every = dump_every
         self.exp_name = system.exp_name+'_back'

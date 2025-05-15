@@ -60,15 +60,18 @@ def main():
         exp_name = file[:-5]
         # Import System from JSON file
         system = System.import_json(input_file=exp_name)
-        script = system.extender.pde_solver.prepare_script(system.network)
 
-        if args.output_file is None:
-            filename = exp_name + "_script.edp"
+        if len(system.network.active_branches)==0:
+            print("Cannot create the script - no active tips. Clip network.")
         else:
-            filename = args.output_file[0] + ".edp"
-            
-        with open(filename, "w") as edp_temp_file:
-            edp_temp_file.write(script)
+            script = system.extender.pde_solver.prepare_script(system.network)
+            if args.output_file is None:
+                filename = exp_name + "_script.edp"
+            else:
+                filename = args.output_file[0] + ".edp"
+                
+            with open(filename, "w") as edp_temp_file:
+                edp_temp_file.write(script)
 
 if __name__ == "__main__":
     main()

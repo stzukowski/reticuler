@@ -32,7 +32,8 @@ def clip_to_step(system, max_step):
             branch.points = branch.points[~to_trash]
             branch.steps = branch.steps[~to_trash]
             mask = system.network.branch_connectivity[:,0]!=branch.ID
-            if (system.network.branch_connectivity[~mask,1]==-1).any():
+            if mask.any():
+            # if (system.network.branch_connectivity[~mask,1]==-1).any():
                 system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
                 system.network.active_branches.append(branch)
             
@@ -40,6 +41,10 @@ def clip_to_step(system, max_step):
     system.growth_gauges[0] = max_step
     system.growth_gauges[1], system.growth_gauges[2] = system.network.height_and_length()
     system.growth_gauges[3] = system.timestamps[-1]
+    
+    if type(system.morpher).__name__ == "Leaf":
+        system.morpher.box_history = system.morpher.box_history[:int(max_step+1)]
+        system.network.box = system.morpher.box_history[-1].copy()
 
 
 def clip_to_length(system, max_length):

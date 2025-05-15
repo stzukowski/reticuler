@@ -10,6 +10,7 @@ Subpackages
    reticuler.backward_evolution
    reticuler.extending_kernels
    reticuler.user_interface
+   reticuler.utilities
 
 Submodules
 ----------
