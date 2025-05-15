@@ -77,9 +77,8 @@ class ModifiedEulerMethod:
         """
         # running PDE solver
         # self.pde_solver.flux_info are updated in FreeFEM solver
-        self.pde_solver.solve_PDE(network)
-        flux_info_0 = self.pde_solver.flux_info.copy()
-        
+        out_solver = self.pde_solver.solve_PDE(network) # returns flux_info_0 for backward and rim_xy_fluxes for leaf
+            
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
         dRs_0, dt_0 = self.pde_solver.find_test_dRs(network, is_dr_normalized, is_zero_approx_step=True)
         dt = dt_0
@@ -94,7 +93,6 @@ class ModifiedEulerMethod:
             
         if did_reconnect:
             print("Reconnected branch, skipping Modified Euler Method steps.")
-            return [dt, flux_info_0]
         else:
             dRs_test = dRs_0.copy()
             approximation_step = 0
@@ -125,4 +123,4 @@ class ModifiedEulerMethod:
                 # print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
                 # print('dRs: ', dRs_test)    
         
-            return [dt, flux_info_0]
+        return [dt, out_solver]

@@ -7,8 +7,8 @@ Classes:
 import numpy as np
 
 from reticuler.utilities.geometry import Branch
-from reticuler.utilities.misc import DIRICHLET_1
 from reticuler.utilities.misc import cyl2cart, cart2cyl, extend_radially, find_reconnection_point
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
 
 class Jellyfish:
     """A class to handle jellyfish simulations. Includes global growth and adding new sprouts.
@@ -28,7 +28,7 @@ class Jellyfish:
         timescale : float, default 0.1
             Factor to match the time when the first sprouts connect to stomachs.
         v_rim : float, default 1.0
-            How fast jelly radius grow [mm/day].
+            How fast jelly radius grows [mm/day].
 
         Returns
         -------
@@ -90,9 +90,92 @@ class Jellyfish:
                 network.box.points = np.insert(network.box.points, ind_min+1, seed, axis=0)
                 network.box.connections = np.vstack((network.box.connections, [network.box.connections[-1,0]+1,0]))
                 network.box.connections[-2,1] = network.box.connections[-1,0]
-                network.box.boundary_conditions = np.append(network.box.boundary_conditions, DIRICHLET_1)
+                network.box.boundary_conditions = np.append(network.box.boundary_conditions, network.box.boundary_conditions[-1])
 
             network.box.seeds_connectivity[network.box.seeds_connectivity[:,0]>ind_min, 0] = network.box.seeds_connectivity[network.box.seeds_connectivity[:,0]>ind_min, 0] + 1
             network.box.seeds_connectivity = np.vstack((network.box.seeds_connectivity, [ind_min+1, branch.ID]))
+        
+        return out_growth
+  
+# import matplotlib.pyplot as plt
+# fig2,ax2 = plt.subplots()
+class Leaf:
+    """A class to handle evolution of the boundary.
+    """ 
+    def __init__(
+        self,
+        box_history=[],
+        v_rim=1,
+    ):
+        """Initialize Leaf.
+
+        Parameters
+        ----------
+        box_init : Box
+            An object of class Box.
+        v_rim : float, default 1.0
+            How fast the rim grows [mm/day].
+
+        Returns
+        -------
+        None.
+
+        """
+        self.v_rim = v_rim
+        self.box_history = box_history
+    
+        
+    def morph(self, network, out_growth, step):
+        # Boundary dynamics
+        rim_xy_flux = out_growth[1]
+
+        x = rim_xy_flux[:,0]
+        y = rim_xy_flux[:,1]
+        fluxes = rim_xy_flux[:,2]; 
+
+        # SIGMOIDA
+        # fluxes0=fluxes;
+        # fluxes = fluxes0.max()/(1+np.exp((np.quantile(fluxes0,0.6)-fluxes0)*3))
+        # # fluxes0.max()/(1+np.exp((np.mean(fluxes0)-fluxes0)*100))
+        # ax2.clear()
+        # ax2.plot(np.arctan2(y,x),fluxes0, '.-', ms=5)
+        # ax2.plot(np.arctan2(y,x),fluxes, '.-', ms=5)
+        # plt.pause(0.01)
+
+        # PUSH THE BOUNDARY
+        s=self.v_rim*out_growth[0] # mnożnik fluxów
+        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = lustro względem ostatniego punktu
+        vy=np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
+        alfa=(np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
+        sx=s*fluxes*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
+        sy=s*fluxes*np.sin(alfa)
+        x+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
+        y+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
+        
+        
+        # UPDATE BOX
+        xys = np.stack((x,y)).T
+        xys = xys[y>5e-3]
+        n_seeds = np.sum(network.box.boundary_conditions!=DIRICHLET_1)-1
+        network.box.points = np.vstack(( network.box.points[0], 
+                                        xys,
+                                        network.box.points[-1-n_seeds:] ))
+        network.box.points[0,0] = xys[0,0]
+        network.box.points[-1-n_seeds,0] = xys[-1,0]
+        
+        network.box.seeds_connectivity = np.column_stack(
+                    (
+                        len(network.box.points) - n_seeds + np.arange(n_seeds),
+                        np.arange(n_seeds),
+                    )
+                )
+        network.box.connections = np.vstack(
+            [np.arange(len(network.box.points)), np.roll(
+                np.arange(len(network.box.points)), -1)]
+        ).T
+        network.box.boundary_conditions = DIRICHLET_1 * np.ones(len(network.box.connections), dtype=int)
+        network.box.boundary_conditions[-1-n_seeds:] = NEUMANN_0
+        
+        self.box_history.append(network.box.copy())
         
         return out_growth

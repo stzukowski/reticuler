@@ -240,6 +240,8 @@ def main():
             morpher = morphers.Jellyfish(
                         radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2])
                         )
+        elif args.initial_condition[0]==6:
+            morpher = morphers.Leaf(box_history=[box.copy()])
         else:
             morpher = None
           

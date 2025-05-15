@@ -47,7 +47,7 @@ def arr2str(arr):
 def array_from_string(out_string, key):
     ind_0 = out_string.find(key.encode("ascii"))+len(key)
     ind_1 = out_string.find(key.encode("ascii")+b"end")
-    return np.fromstring(out_string[ind_0:ind_1], sep="\t")
+    return np.fromstring(out_string[ind_0:ind_1], sep="\t")[1:]
 
 def prepare_contour(border_contour, inside_buildmesh, i, points, label, border_name="contour"):
     for j, pair in enumerate(zip(points, points[1:])):
@@ -171,6 +171,8 @@ class FreeFEM:
             inflow_thresh=0.05,
             distance_from_bif_thresh=None,
             is_script_saved=False,
+            is_backward=False,
+            is_leaf=False,
         ):
         """Initialize FreeFEM.
 
@@ -195,6 +197,9 @@ class FreeFEM:
         self.ds = ds
         self.flux_info = []
         self.is_script_saved = is_script_saved
+        
+        self.is_backward = is_backward
+        self.is_leaf = is_leaf
         
         self.bifurcation_type = bifurcation_type  # no bifurcations, a1, a3/a1, random
         self.bifurcation_thresh = bifurcation_thresh
@@ -290,6 +295,7 @@ class FreeFEM:
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND EQUATION TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            
             fespace Vh(Th,P2);
             Vh u,v;
             
@@ -333,8 +339,7 @@ class FreeFEM:
             // Adaptation loop
             real adaptTime0=clock();
             // cout << endl << endl << "Adaptation..." << endl;
-            fespace Vh0(Th,P0);
-            Vh0 h=1;
+            fespace Vh0(Th,P0); Vh0 h=1;
             real error=0.02;
             int adaptCounter=1;
             while(nvAroundTips.min < 250 || adaptCounter<=3)
@@ -342,7 +347,7 @@ class FreeFEM:
             	// cout << "Adaptation step: " << adaptCounter << ", h[].min = " << h[].min;
             	// cout << ", nvAroundTip.min = " << nvAroundTips.min << endl;
             	potential;
-            	Th=adaptmesh(Th,[u, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5,keepbackvertices=1);
+            	Th=adaptmesh(Th,[u/u[].max, 20.*tipfield(X,Y,3.*R,nbTips)],err=error,nbvx=1000000,iso=true,ratio=2,hmin=1e-5,keepbackvertices=1);
             	error = 0.5*error;
             	u=u;
             	h=hTriangle; // the triangle size
@@ -365,11 +370,12 @@ class FreeFEM:
         )
 
         # // ofstream freefemOutput("{file_name}");
-        self.__script_integrate_a1a2a3 = textwrap.dedent(
+        self.__script_integrate = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
+            
             real coeffTime0=clock();
             // cout << endl << endl << "Finding the Tip coefficients..." << endl;
             
@@ -378,14 +384,14 @@ class FreeFEM:
             int exponant=2; // precision of the exponential
             
             cout.precision(12);
-            cout << "kopytko ";
+            cout << "kopytko"<<nbTips<<endl;
             for(int i=0;i<nbTips;++i)
             {{
                 // cout << "Processing Tip " << i << " ";   
                 x0=X(i);y0=Y(i);
                 // cout << "(x0, y0) = (" << x0 << ", " <<y0<< "), angle = " << angle(i) << endl;
 
-            	   // cout << "Projecting... Th.nv = " << Th.nv;
+                // cout << "Projecting... Th.nv = " << Th.nv;
                 Ph=trunc(Th,(sqrt((x-x0)^2+(y-y0)^2) < 3*R));
             	   // cout << ", Ph.nv = " << Ph.nv << endl;
 
@@ -422,6 +428,83 @@ class FreeFEM:
             // cout << endl << "Total time: " << clock()-time0 << endl << endl;
             """.format(DIRICHLET_1=DIRICHLET_1)
         )
+
+    def update_scripts_leaf(self):
+        
+        add_after = lambda text, after_what, add_what: text.replace(after_what, after_what+add_what)
+        
+        self.is_leaf = True
+        script_distance = textwrap.dedent("""
+                        // Distance from the rim and required edges
+                        fespace Vh1(Th,P1);
+                        Vh1 u1,v1,dist;
+                        varf vb(u1,v1) = on(2,u1=1); // Defines a variational form vb that imposes Dirichlet condition u1=1 on boundary label 2
+                        Vh1 ub=vb(0, Vh1, tgv=1); // Solves the var. prob. to create boundary marker function ub; tgv=1 enables strong imposition of BC; ub=1 on boundary label 2, 0 elsewhere
+                        ub[]=ub[] ? 0:1; //  inverts the marker values; Now ub marks interior points as 1, boundary 2 as 0
+                        distance(Th,ub,dist[],distmax=100);
+                        // plot(dist,wait=1,fill=1);
+                        Vh1 distExp=exp(-dist/0.05);
+                        plot(distExp, wait=true, fill=1);
+                        """
+                        )
+        self.__script_adaptmesh = self.__script_adaptmesh.replace("\n// Solving the problem", \
+                                          script_distance+"\n// Solving the problem")
+        self.__script_adaptmesh = self.__script_adaptmesh.replace("nvAroundTips.min < 250", "nvAroundTips.min < 100")
+        # self.__script_adaptmesh = self.__script_adaptmesh.replace("Th = adaptmesh(Th,1,", "// Th = adaptmesh(Th,1,")
+        self.__script_adaptmesh = add_after(self.__script_adaptmesh, "keepbackvertices=1",",requirededges=reqEdgs")
+        
+        self.__script_init = """load "distance"\n""" + self.__script_init
+        
+        self.__script_adaptmesh = add_after( self.__script_adaptmesh, \
+                                            "// counting cells around the tips",
+                                            "\nint[int] reqEdgs=[{DIRICHLET_1}];".format(DIRICHLET_1=DIRICHLET_1) )
+        self.__script_adaptmesh = add_after(self.__script_adaptmesh, \
+                                            "u=u;", "distExp=distExp;")
+        self.__script_adaptmesh = add_after(self.__script_adaptmesh, \
+                                            "*R,nbTips)", ", distExp")
+        
+        self.__script_adaptmesh = self.__script_adaptmesh.replace("// plot(Th", "plot(Th")
+    
+        script_flux_rim = textwrap.dedent("""
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // CALCULATE FLUXES AT THE RIM
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+            // Counting vertices on the rim
+            func int countNvOnRim( mesh th, int tLabels)
+            {{
+                int nvOnRim=0;
+                int1d(th, tLabels, qfe=qf1pE)( (nvOnRim++)*1.);
+                return nvOnRim;
+            }}
+            int nvOnRim=countNvOnRim(Th, {DIRICHLET_1});
+
+            // Calculating gradient
+            Vh dxu,dyu;
+            dxu=dx(u);
+            dyu=dy(u);
+
+            // Deteremining the flux coming to the tip
+            // More on reading the field values in specific points:
+            // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
+            // https://ljll.math.upmc.fr/pipermail/freefempp/2009/000337.html
+
+            int ndof=countNvOnRim(Th, {DIRICHLET_1}), n=0;
+            real[int] xs(ndof), ys(ndof), fluxes(ndof); // angles with X axis
+            int1d(Th, {DIRICHLET_1}, qfe=qf1pE)( (xs(n++)=x)*1.
+                                      +(ys(n)=y)*1.
+                                       +(fluxes(n)=abs(dxu*N.x+dyu*N.y))*1.);
+            // cout<<"tip"<<tipLabels(k)<<endl;
+            cout<<"xs"<<xs<<"xs"<<"end"<<endl;
+            cout<<"ys"<<ys<<"ys"<<"end"<<endl;
+            cout<<"fluxes"<<fluxes<<"fluxes"<<"end"<<endl;
+            real totGrad =  int1d(Th, {DIRICHLET_1})( abs([dxu,dyu]'*[N.x,N.y]) );
+            cout<<"tot_flux"<<"1 "<<totGrad<<"tot_flux"<<"end"<<endl;
+
+            // plot([angles,fluxes], wait=true);
+            """.format(DIRICHLET_1=DIRICHLET_1)
+        )
+        self.__script_integrate = self.__script_integrate + script_flux_rim
 
     def __streamline_extension(self, beta, dr):
         """Calculate a vector over which the tip is shifted.
@@ -557,6 +640,11 @@ class FreeFEM:
     def prepare_script(self, network):
         """Return a FreeFEM script with `network` geometry."""
 
+        if self.is_leaf:
+            self.__script_border_box, self.__script_inside_buildmesh_box = \
+                self.prepare_script_box(network.box.connections_bc(), \
+                                        network.box.points)
+
         tips = np.empty((len(network.active_branches), 4))
         border_network = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
@@ -588,7 +676,7 @@ class FreeFEM:
                 inside_buildmesh=inside_buildmesh
             )
             + "\nreal buildTime=clock() - buildTime0;\n"
-            + "// plot(Th, wait=true, fill=true, bb=[[1.25,0.25],[1.75,0.75]]);\n"
+            + "// plot(Th, wait=true, fill=true);\n"
         )
                 
         tip_information = textwrap.dedent(
@@ -616,7 +704,7 @@ class FreeFEM:
             script = script + self.__script_problem_Poisson
         else:
             script = script + self.__script_problem_Laplace
-        script = script + self.__script_adaptmesh + self.__script_integrate_a1a2a3
+        script = script + self.__script_adaptmesh + self.__script_integrate
 
         return script
     
@@ -693,6 +781,7 @@ class FreeFEM:
 
         """        
         script = self.prepare_script(network)
+        
         if self.is_script_saved:
             out_freefem = self.run_freefem(script) # useful for debugging
             # print(out_freefem.stdout)
@@ -713,11 +802,21 @@ class FreeFEM:
             
         ai_coeffs_flat = array_from_string(out_freefem.stdout, "kopytko")
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
+        
         with np.printoptions(formatter={"float": "{:.6e}".format}):
             print("a1a2a3") # , self.flux_info)
             for i, branch in enumerate(network.active_branches):
                 print("Branch {}:".format(branch.ID), self.flux_info[i], ", l={}".format(branch.length()))
+        
+        if self.is_backward:
+            return self.flux_info.copy()
             
+        if self.is_leaf:
+            rim_xs = array_from_string(out_freefem.stdout,"xs")
+            rim_ys = array_from_string(out_freefem.stdout,"ys")
+            rim_fluxes = array_from_string(out_freefem.stdout,"fluxes")
+            rim_xy_flux = np.stack((rim_xs, rim_ys, rim_fluxes)).T        
+            return rim_xy_flux
 
 class FreeFEM_ThickFingers:
     """PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.
@@ -1282,8 +1381,8 @@ class FreeFEM_ThickFingers:
         self.flux_info = np.zeros((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
             tip_label = 1000+branch.ID
-            angles.append(array_from_string(out_freefem.stdout, f"angles{tip_label}")[1:])
-            fluxes.append(array_from_string(out_freefem.stdout, f"fluxes{tip_label}")[1:]) 
+            angles.append(array_from_string(out_freefem.stdout, f"angles{tip_label}"))
+            fluxes.append(array_from_string(out_freefem.stdout, f"fluxes{tip_label}")) 
             ind_cut = np.where(np.diff(angles[-1])<0)[0]
             if ind_cut.size:
                 angles[-1][ind_cut[0]+1:] = angles[-1][ind_cut[0]+1:] + 2*np.pi
@@ -1299,11 +1398,12 @@ class FreeFEM_ThickFingers:
             window = scipy.signal.windows.gaussian(100, 1000)
             smoothed = scipy.signal.convolve(yy, window/window.sum(), \
                                              mode="same")
-            
+
             # Total flux:
-            self.flux_info[i,0] = array_from_string(out_freefem.stdout, f"tot_flux{tip_label}")[1:]
+            self.flux_info[i,0] = array_from_string(out_freefem.stdout, f"tot_flux{tip_label}")
             # Highest gradiend direction (angle with X axis)
-            self.flux_info[i,1] = xx[np.argmax(smoothed)] % np.pi
+            ang_max = xx[np.argmax(smoothed)]
+            self.flux_info[i,1] = (ang_max + np.pi) % (2*np.pi) - np.pi
             
         # with np.printoptions(formatter={"float": "{:.6g}".format}):
         #     # print("flux_info: \n", self.flux_info)

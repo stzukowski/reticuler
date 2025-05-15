@@ -15,6 +15,8 @@ import copy
 import json
 import importlib.metadata
 
+import matplotlib.pyplot as plt
+
 from reticuler.utilities.misc import NumpyEncoder
 from reticuler.utilities.geometry import Branch, Box, Network
 from reticuler.utilities import morphers
@@ -78,6 +80,9 @@ class System:
         self.network = network
         self.extender = extender
         self.morpher = morpher
+        
+        if type(self.morpher).__name__ == "Leaf":
+            self.extender.pde_solver.update_scripts_leaf()
 
         # Growth limits:
         # 0: max step, 1: max height
@@ -153,6 +158,24 @@ class System:
                         "v_rim": self.morpher.v_rim,
                         }
                     }
+            elif type(self.morpher).__name__ == "Leaf":
+                export_box_history = {}
+                for i, bx in enumerate(self.morpher.box_history):
+                    box_dict = { f"box{i}": {
+                        "points": bx.points,
+                        "connections_and_bc": bx.connections_bc(),
+                        "seeds_connectivity": bx.seeds_connectivity,
+                        }
+                    }
+                    export_box_history = export_box_history | box_dict
+                
+                export_morpher = {
+                    "morpher": {
+                        "type": type(self.morpher).__name__,
+                        "v_rim": self.morpher.v_rim,
+                        "box_history": export_box_history
+                        }
+                    }                
         else:
             export_morpher = {}
                 
@@ -282,6 +305,23 @@ class System:
                                     timescale=json_morpher["timescale"],
                                     v_rim=json_morpher["v_rim"],
                                     )
+                elif json_morpher["type"] == "Leaf":
+                    boxes = []
+                    for box_ind in json_morpher["box_history"]:
+                        json_box = json_morpher["box_history"][box_ind]
+                        connections_bc = np.asarray(json_box["connections_and_bc"], dtype=int)
+                        box = Box(
+                            points=np.asarray(json_box["points"]),
+                            connections=connections_bc[:, :2],
+                            boundary_conditions=connections_bc[:, 2],
+                            seeds_connectivity=np.asarray(json_box["seeds_connectivity"], dtype=int),
+                        )  
+                        boxes.append(box.copy())
+                    morpher = morphers.Leaf(
+                                    v_rim=json_morpher["v_rim"],
+                                    box_history=boxes,
+                                    )
+
             else:
                 morpher = None
             
@@ -342,7 +382,7 @@ class System:
         print("Network length: {l:.3f}".format(l=self.growth_gauges[2]))
         print("Evolution time: {t:.3f}".format(t=self.growth_gauges[3]))
 
-    def evolve(self):
+    def evolve(self, ax=None):
         """Run the simulation.
 
         Run the simulation in a while loop until ``self.growth_thresh`` is not reached.
@@ -352,6 +392,7 @@ class System:
         None.
 
         """
+        
         self.export_json()
         start_clock = time.time()
         while self.growth_gauges[self.growth_thresh_type] < self.growth_thresh \
@@ -370,6 +411,7 @@ class System:
             
             # morphing the system: jellyfish, leaf
             if self.morpher is not None:
+                # ax.plot(*out_growth[1][:,:2].T, '.-', ms=5, color="tab:orange")
                 out_growth = self.morpher.morph(network=self.network, \
                                                 out_growth=out_growth, \
                                                 step=self.growth_gauges[0])
@@ -382,6 +424,18 @@ class System:
             
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()
+                if ax is not None:
+                    ax.clear()
+                    ax.set_xlim(-1.5,1.5)
+                    ax.set_ylim(0,3)
+                    ax.set_aspect(1)
+                    ax.plot(*np.vstack( (self.network.box.points, 
+                                         self.network.box.points[0])).T, 
+                            # '.-', ms=5, 
+                            color="tab:green", lw=1, alpha=0.5)
+                    for b in self.network.branches:
+                        ax.plot(*b.points.T, color="darkgreen") # '.-', 
+                    plt.pause(0.01)
 
         self.export_json()
         print("\n End of the simulation")

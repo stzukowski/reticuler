@@ -41,6 +41,10 @@ def clip_to_step(system, max_step):
     system.growth_gauges[0] = max_step
     system.growth_gauges[1], system.growth_gauges[2] = system.network.height_and_length()
     system.growth_gauges[3] = system.timestamps[-1]
+    
+    if type(system.morpher).__name__ == "Leaf":
+        system.morpher.box_history = system.morpher.box_history[:int(max_step+1)]
+        system.network.box = system.morpher.box_history[-1].copy()
 
 
 def clip_to_length(system, max_length):
