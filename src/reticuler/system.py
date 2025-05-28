@@ -426,8 +426,8 @@ class System:
                 self.export_json()
                 if ax is not None:
                     ax.clear()
-                    ax.set_xlim(-1.5,1.5)
-                    ax.set_ylim(0,3)
+                    ax.set_xlim(-5,5)
+                    ax.set_ylim(-5,5)
                     ax.set_aspect(1)
                     ax.plot(*np.vstack( (self.network.box.points, 
                                          self.network.box.points[0])).T, 

@@ -125,7 +125,7 @@ class Leaf:
         self.box_history = box_history
     
         
-    def morph(self, network, out_growth, step):
+    def morph_semicircle(self, network, out_growth, step):
         # Boundary dynamics
         rim_xy_flux = out_growth[1]
 
@@ -144,7 +144,7 @@ class Leaf:
 
         # PUSH THE BOUNDARY
         s=self.v_rim*out_growth[0] # mnożnik fluxów
-        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = lustro względem ostatniego punktu
+        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = lustro względem ostatniego punktu (dla semicircle)
         vy=np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
         alfa=(np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
         sx=s*fluxes*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
@@ -175,6 +175,48 @@ class Leaf:
         ).T
         network.box.boundary_conditions = DIRICHLET_1 * np.ones(len(network.box.connections), dtype=int)
         network.box.boundary_conditions[-1-n_seeds:] = NEUMANN_0
+        
+        self.box_history.append(network.box.copy())
+        
+        return out_growth
+        
+    def morph(self, network, out_growth, step):
+        # Boundary dynamics
+        rim_xy_flux = out_growth[1]
+
+        x = rim_xy_flux[:,0]
+        y = rim_xy_flux[:,1]
+        fluxes = rim_xy_flux[:,2]; 
+
+        # SIGMOIDA
+        # fluxes0=fluxes;
+        # fluxes = fluxes0.max()/(1+np.exp((np.quantile(fluxes0,0.6)-fluxes0)*3))
+        # # fluxes0.max()/(1+np.exp((np.mean(fluxes0)-fluxes0)*100))
+        # ax2.clear()
+        # ax2.plot(np.arctan2(y,x),fluxes0, '.-', ms=5)
+        # ax2.plot(np.arctan2(y,x),fluxes, '.-', ms=5)
+        # plt.pause(0.01)
+
+        # PUSH THE BOUNDARY
+        s=self.v_rim*out_growth[0] # mnożnik fluxów
+        vx=np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne
+        vy=np.diff(y,prepend=y[-1],append=y[0])
+        alfa=(np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
+        sx=s*fluxes*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
+        sy=s*fluxes*np.sin(alfa)
+        x+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
+        y+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
+        
+        
+        # UPDATE BOX
+        xys = np.stack((x,y)).T
+        network.box.points = xys
+        
+        network.box.connections = np.vstack(
+            [np.arange(len(network.box.points)), np.roll(
+                np.arange(len(network.box.points)), -1)]
+        ).T
+        network.box.boundary_conditions = DIRICHLET_1 * np.ones(len(network.box.connections), dtype=int)
         
         self.box_history.append(network.box.copy())
         
