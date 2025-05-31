@@ -474,7 +474,7 @@ class FreeFEM:
             func int countNvOnRim( mesh th, int tLabels)
             {{
                 int nvOnRim=0;
-                int1d(th, tLabels, qfe=qf1pE)( (nvOnRim++)*1.);
+                int1d(th, tLabels, qfe=qf1pElump)( (nvOnRim++)*1.);
                 return nvOnRim;
             }}
             int nvOnRim=countNvOnRim(Th, {DIRICHLET_1});
@@ -491,7 +491,7 @@ class FreeFEM:
 
             int ndof=countNvOnRim(Th, {DIRICHLET_1}), n=0;
             real[int] xs(ndof), ys(ndof), fluxes(ndof); // angles with X axis
-            int1d(Th, {DIRICHLET_1}, qfe=qf1pE)( (xs(n++)=x)*1.
+            int1d(Th, {DIRICHLET_1}, qfe=qf1pElump)( (xs(n++)=x)*1.
                                       +(ys(n)=y)*1.
                                        +(fluxes(n)=abs(dxu*N.x+dyu*N.y))*1.);
             // cout<<"tip"<<tipLabels(k)<<endl;

@@ -109,7 +109,7 @@ class Box:
     """
 
     def __init__(
-        self, points=None, connections=None, boundary_conditions=None, seeds_connectivity=None
+        self, points=None, connections=None, boundary_conditions=None, seeds_connectivity=None, initial_condition=None
     ):
         """Initialize Box.
 
@@ -132,6 +132,8 @@ class Box:
         # 1st column: index on border
         # 2nd column: branch_id
         self.seeds_connectivity = [] if seeds_connectivity is None else seeds_connectivity
+        
+        self.initial_condition = initial_condition
         
     def __add_points(self, points):
         self.points = np.vstack((self.points, points))
@@ -157,18 +159,20 @@ class Box:
         Parameters
         ----------
         initial_condition : int, default 0
-            IC = 0, 1, 2, 3. Rectangular box of dimensions ``width`` x ``height``,
+            IC = 0, 1, 2, 3, 8. Rectangular box of dimensions ``width`` x ``height``,
             absorbing bottom wall, reflecting left and right, and:
                 - IC = 0: constant flux on top (Laplacian case)
                 - IC = 1: reflective top (Poissonian case)
                 - IC = 2: PBC right and left wall + DIRICHLET_1 BC on top
                 - IC = 3: DIRICHLET_1 BC on top
+                - IC = 8: DIRICHLET_1 BC on growing top
             IC = 4, 5: jellyfish (an octant) with a trifork
                 - IC = 4: Dirichlet on bottom and top, but rescaled such that global flux is constant
                 - IC = 5: u=0 on top and Neumann on bottom
             IC = 6: leaf (semicircle with a single needle)
+            IC = 7: circular leaf
         kwargs_construct:
-            IC = 0, 1, 2, 3
+            IC = 0, 1, 2, 3, 8
                 seeds_x : array, default [0.5]
                     A 1-n array of x positions at the bottom boundary (y=0).
                 initial_lengths : array, default [0.01]
@@ -205,11 +209,11 @@ class Box:
 
         """
         # Build a box
-        box = cls()
+        box = cls(initial_condition=initial_condition)
 
         # Rectangular box of specified width and height
         if initial_condition == 0 or initial_condition == 1 or \
-            initial_condition == 2 or initial_condition == 3:
+            initial_condition == 2 or initial_condition == 3 or initial_condition == 8:
             options_construct = {
                 "seeds_x": [0.5],
                 "initial_lengths": [0.01],
@@ -230,33 +234,41 @@ class Box:
                     * options_construct["branch_BCs"][0]
                 )
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])
-            
-            
-            # right boundary
-            box.__add_points(
-                [
-                    [options_construct["width"], 0],
-                    [options_construct["width"], options_construct["height"]]
-                ]
-            )
-            # seeds at the top boundary
             mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_1
-            box.__add_points(
-                np.vstack(
-                    [
-                        options_construct["seeds_x"][mask_seeds_from_outlet],
-                        options_construct["height"]*\
-                            np.ones(sum(mask_seeds_from_outlet)),
-                    ]
-                ).T
-            )
-            # left boundary
-            box.__add_points(
-                [
-                    [0, options_construct["height"]],
-                    [0, 0]
-                ]
-            )
+            
+            # bottom right corner
+            box.__add_points([[options_construct["width"], 0]])
+            
+            if initial_condition!=8:
+                # top right corner (IC!=8)
+                box.__add_points([[options_construct["width"], options_construct["height"]]])
+                # seeds at the top boundary
+                box.__add_points(
+                    np.vstack(
+                        [
+                            options_construct["seeds_x"][mask_seeds_from_outlet], #array of x
+                            options_construct["height"]*np.ones(sum(mask_seeds_from_outlet)), #array of y (constant)
+                        ]
+                    ).T
+                )
+                # top left corner (IC!=8)
+                box.__add_points([[0, options_construct["height"]]])
+            
+            elif initial_condition==8:
+                # top including left and right corners
+                n_points_top = 100
+                box.__add_points(
+                        np.vstack(
+                            [
+                                np.linspace(options_construct["width"], 0, n_points_top), #array of x
+                                options_construct["height"]*np.ones(n_points_top), #array of y (constant)
+                            ]
+                        ).T
+                    )
+            
+            #bottom left corner
+            box.__add_points([[0, 0]])
+            
             # seeds at the bottom boundary
             box.__add_points(
                 np.vstack(
@@ -295,7 +307,7 @@ class Box:
             )
 
             # right, left, top Neumann:
-            box.boundary_conditions[0:3+sum(mask_seeds_from_outlet)] = NEUMANN_0
+            box.boundary_conditions[:-1-sum(~mask_seeds_from_outlet)] = NEUMANN_0
             # or top constant flux:
             if initial_condition == 0:
                 box.boundary_conditions[1] = NEUMANN_1
@@ -303,9 +315,8 @@ class Box:
                 box.boundary_conditions[1] = DIRICHLET_1
                 box.boundary_conditions[0] = RIGHT_WALL_PBC
                 box.boundary_conditions[2] = LEFT_WALL_PBC
-            if initial_condition == 3:
-                box.boundary_conditions[1:2+sum(mask_seeds_from_outlet)] = DIRICHLET_1
-
+            if initial_condition == 3 or initial_condition == 8:
+                box.boundary_conditions[1:-2-sum(~mask_seeds_from_outlet)] = DIRICHLET_1
             # Creating initial branches
             branches = []
             for i, x in enumerate(options_construct["seeds_x"]):
@@ -470,17 +481,16 @@ class Box:
                     * options_construct["branch_BCs"][0]
                 )
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])        
-        
-            box = Box()
-
+            
+            n_points_rim = 100
             if initial_condition == 6:
                 angular_width = np.pi
             elif initial_condition == 7:
-                angular_width = 1.999*np.pi
+                angular_width = np.pi*(2-2/n_points_rim)
+            
             # circular rim
-            n_points_rim = 100
             box.__add_points(
-                np.vstack( cyl2cart(options_construct["radius"], np.linspace(np.pi-angular_width/2,np.pi+angular_width/2, n_points_rim+1), 0) )
+                np.vstack( cyl2cart(options_construct["radius"], np.linspace(np.pi-angular_width/2,np.pi+angular_width/2, n_points_rim), 0) )
             )
             
             if initial_condition == 6:
@@ -493,7 +503,7 @@ class Box:
                         ]
                     ).T
                 )
-            
+                
                 # box.seeds_connectivity = [n_points_rim+len(options_construct["seeds_x"]), 0]
                 n_seeds = len(options_construct["seeds_x"])
                 box.seeds_connectivity = np.column_stack(
