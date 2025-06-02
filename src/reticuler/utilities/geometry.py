@@ -98,9 +98,13 @@ class Box:
     boundary_conditions : array, default []
         A 1-n array of boundary conditions \
         corresponding to links in ``connections`` list.
-            - 1: absorbing BC (vanishing field)
-            - 2: reflective BC (vanishing normal derivative)
-            - 3: constant flux
+            - 1: DIRICHLET_0, absorbing BC (vanishing field)
+            - 2: DIRICHLET_1
+            - 3: DIRICHLET_GLOB_FLUX, constant global flux
+            - 4: NEUMANN_0, reflective BC (vanishing normal derivative)
+            - 5: NEUMANN_1
+            -998:LEFT_WALL_PBC
+            -999:RIGHT_WALL_PBC
     seeds_connectivity : array, default []
         A 2-n array of seeds connectivity.
             - 1st column: index in ``points``
@@ -169,10 +173,10 @@ class Box:
             IC = 4, 5: jellyfish (an octant) with a trifork
                 - IC = 4: Dirichlet on bottom and top, but rescaled such that global flux is constant
                 - IC = 5: u=0 on top and Neumann on bottom
-            IC = 6: leaf (semicircle with a single needle)
-            IC = 7: circular leaf
+            IC = 6: semielliptical leaf
+            IC = 7: circle slice leaf with seeds in center
         kwargs_construct:
-            IC = 0, 1, 2, 3, 8
+            IC = 0, 1, 2, 3, 8, 6
                 seeds_x : array, default [0.5]
                     A 1-n array of x positions at the bottom boundary (y=0).
                 initial_lengths : array, default [0.01]
@@ -187,10 +191,8 @@ class Box:
                     Height of the rectangular system.
                 width : float, default 2.0
                     Width of the rectangular system.
-            IC = 6, 7
-                seeds_x : array, default [0] (for semicircle)
-                    A 1-n array of x positions at the bottom boundary (y=0).
-                seeds_phi : array, default [0] (for circle)
+            IC = 7
+                seeds_phi : array, default [0]
                     A 1-n array of phi angles at the center (0,0) relative to X axis.
                 initial_lengths : array, default [0.4]
                     A 1-n array of seeds initial lengths.
@@ -212,14 +214,13 @@ class Box:
         box = cls(initial_condition=initial_condition)
 
         # Rectangular box of specified width and height
-        if initial_condition == 0 or initial_condition == 1 or \
-            initial_condition == 2 or initial_condition == 3 or initial_condition == 8:
+        if initial_condition <=3 or initial_condition == 8 or initial_condition == 6:
             options_construct = {
                 "seeds_x": [0.5],
                 "initial_lengths": [0.01],
                 "branch_BCs": [DIRICHLET_0],
-                "height": 50.0,
-                "width": 2.0,
+                "height": 0.5,
+                "width": 0.5,
             }
             options_construct.update(kwargs_construct)
             options_construct["seeds_x"]=np.array(options_construct["seeds_x"])
@@ -236,27 +237,38 @@ class Box:
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])
             mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_1
             
-            # bottom right corner
-            box.__add_points([[options_construct["width"], 0]])
-            
-            if initial_condition!=8:
-                # top right corner (IC!=8)
-                box.__add_points([[options_construct["width"], options_construct["height"]]])
+            if initial_condition<=3:
+                # right boundary
+                box.__add_points(
+                    [
+                        [options_construct["width"], 0],
+                        [options_construct["width"], options_construct["height"]]
+                    ]
+                )
                 # seeds at the top boundary
+                mask_seeds_from_outlet = options_construct["branch_BCs"]==DIRICHLET_1
                 box.__add_points(
                     np.vstack(
                         [
-                            options_construct["seeds_x"][mask_seeds_from_outlet], #array of x
-                            options_construct["height"]*np.ones(sum(mask_seeds_from_outlet)), #array of y (constant)
+                            options_construct["seeds_x"][mask_seeds_from_outlet],
+                            options_construct["height"]*np.ones(sum(mask_seeds_from_outlet)),
                         ]
                     ).T
                 )
-                # top left corner (IC!=8)
-                box.__add_points([[0, options_construct["height"]]])
+                # left boundary
+                box.__add_points(
+                    [
+                        [0, options_construct["height"]],
+                        [0, 0]
+                    ]
+                )
+            else:
+                n_points_top=int(100*options_construct["width"])
             
-            elif initial_condition==8:
+            if initial_condition==8:
+                # bottom right corner
+                box.__add_points([[options_construct["width"], 0]])
                 # top including left and right corners
-                n_points_top = 100
                 box.__add_points(
                         np.vstack(
                             [
@@ -265,10 +277,15 @@ class Box:
                             ]
                         ).T
                     )
-            
-            #bottom left corner
-            box.__add_points([[0, 0]])
-            
+                #bottom left corner
+                box.__add_points([[0, 0]])
+            if initial_condition==6:
+                # semi ellipse
+                box.__add_points(
+                    np.vstack(( options_construct["width"]*np.cos(np.linspace(0, np.pi, n_points_top)),
+                              options_construct["height"]*np.sin(np.linspace(0, np.pi, n_points_top)) )).T
+                )
+                
             # seeds at the bottom boundary
             box.__add_points(
                 np.vstack(
@@ -317,6 +334,9 @@ class Box:
                 box.boundary_conditions[2] = LEFT_WALL_PBC
             if initial_condition == 3 or initial_condition == 8:
                 box.boundary_conditions[1:-2-sum(~mask_seeds_from_outlet)] = DIRICHLET_1
+            if initial_condition == 6:
+                box.boundary_conditions[:-1-sum(~mask_seeds_from_outlet)] = DIRICHLET_1
+                box.boundary_conditions[-1-sum(~mask_seeds_from_outlet):] = NEUMANN_0
             # Creating initial branches
             branches = []
             for i, x in enumerate(options_construct["seeds_x"]):
@@ -449,27 +469,16 @@ class Box:
                 
             branch_connectivity = np.array([[0,-1],[1,0],[2,0]])
         
-        # Leaf: semicircle - 6, circle - 7
-        elif initial_condition == 6 or initial_condition == 7:
+        # slice
+        elif initial_condition == 7:
             options_construct = {
-                "seeds_x": [0],
                 "seeds_phi": [0],
                 "initial_lengths": [0.4],
                 "branch_BCs": [DIRICHLET_0],
                 "radius": 0.5,
+                "angular_width": 2*np.pi #don't change, morpher not ready
             }
             options_construct.update(kwargs_construct)
-            options_construct["seeds_x"]=np.array(options_construct["seeds_x"])
-            if not len(options_construct["initial_lengths"])==len(options_construct["seeds_x"]):
-                options_construct["initial_lengths"] = (
-                    np.ones(len(options_construct["seeds_x"]))
-                    * options_construct["initial_lengths"][0]
-                )
-            if not len(options_construct["branch_BCs"])==len(options_construct["seeds_x"]):
-                options_construct["branch_BCs"] = (
-                    np.ones(len(options_construct["seeds_x"]))
-                    * options_construct["branch_BCs"][0]
-                )
             if not len(options_construct["initial_lengths"])==len(options_construct["seeds_phi"]):
                 options_construct["initial_lengths"] = (
                     np.ones(len(options_construct["seeds_phi"]))
@@ -482,38 +491,26 @@ class Box:
                 )
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])        
             
-            n_points_rim = 100
-            if initial_condition == 6:
-                angular_width = np.pi
-            elif initial_condition == 7:
-                angular_width = np.pi*(2-2/n_points_rim)
+            angular_width = options_construct["angular_width"]
+            n_points_rim = int(100*options_construct["radius"]*angular_width)
             
             # circular rim
             box.__add_points(
                 np.vstack( cyl2cart(options_construct["radius"], np.linspace(np.pi-angular_width/2,np.pi+angular_width/2, n_points_rim), 0) )
             )
-            
-            if initial_condition == 6:
-                # seeds at the bottom boundary
-                box.__add_points(
-                    np.vstack(
-                        [
-                            options_construct["seeds_x"],
-                            np.zeros(len(options_construct["seeds_x"])),
-                        ]
-                    ).T
-                )
-                
+            if angular_width == 2*np.pi:
+                box.points=box.points[1:]
+                box.seeds_connectivity = []
+            else:
+                box.__add_points([0,0])
                 # box.seeds_connectivity = [n_points_rim+len(options_construct["seeds_x"]), 0]
                 n_seeds = len(options_construct["seeds_x"])
                 box.seeds_connectivity = np.column_stack(
                         (
-                            len(box.points) - n_seeds + np.arange(n_seeds),
+                            len(box.points)*np.ones(n_seeds),
                             np.arange(n_seeds),
                         )
                     )
-            elif initial_condition == 7:
-                box.seeds_connectivity = []
             
             # Connections and BCs
             connections_to_add = np.vstack(
@@ -525,39 +522,39 @@ class Box:
                 boundary_conditions=DIRICHLET_1
                 * np.ones(len(connections_to_add), dtype=int),
             )
-            if initial_condition == 6:
-                box.boundary_conditions[-1-n_seeds:] = NEUMANN_0
+            if angular_width != 2*np.pi:
+                box.boundary_conditions[-2:] = NEUMANN_0
 
             # Creating initial branches
             branches = []
             active_branches = []
-            if initial_condition == 6:
-                for i, x in enumerate(options_construct["seeds_x"]):
-                    BC = options_construct["branch_BCs"][i]
-                    branch = Branch(
-                            ID=i,
-                            points=np.array(
-                                [[x, 0], [x, options_construct["initial_lengths"][i]]]
-                            ),
-                            steps=np.array([0, 0]),
-                            BC=BC
-                        )
-                    branches.append(branch)
-                    active_branches.append(branch)
-            elif initial_condition == 7:
-                for i, phi in enumerate(options_construct["seeds_phi"]):
-                    BC = options_construct["branch_BCs"][i]
-                    IL = options_construct["initial_lengths"][i]
-                    branch = Branch(
-                            ID=i,
-                            points=np.array(
-                                [[0, 0], [IL*np.cos(phi), IL*np.sin(phi)]]
-                            ),
-                            steps=np.array([0, 0]),
-                            BC=BC
-                        )
-                    branches.append(branch)
-                    active_branches.append(branch)
+            # if initial_condition == 6:
+                # for i, x in enumerate(options_construct["seeds_x"]):
+                    # BC = options_construct["branch_BCs"][i]
+                    # branch = Branch(
+                            # ID=i,
+                            # points=np.array(
+                                # [[x, 0], [x, options_construct["initial_lengths"][i]]]
+                            # ),
+                            # steps=np.array([0, 0]),
+                            # BC=BC
+                        # )
+                    # branches.append(branch)
+                    # active_branches.append(branch)
+            # elif initial_condition == 7:
+            for i, phi in enumerate(options_construct["seeds_phi"]):
+                BC = options_construct["branch_BCs"][i]
+                IL = options_construct["initial_lengths"][i]
+                branch = Branch(
+                        ID=i,
+                        points=np.array(
+                            [[0, 0], [IL*np.cos(phi), IL*np.sin(phi)]]
+                        ),
+                        steps=np.array([0, 0]),
+                        BC=BC
+                    )
+                branches.append(branch)
+                active_branches.append(branch)
             
             branch_connectivity = None
             

@@ -156,6 +156,23 @@ class Leaf:
         x+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
         y+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
         
+        min=0
+        max=0.02
+        #REMOVE POINTS
+        if min>0:
+            tooclose=np.logical_or(vx[1:]**2+vy[1:]**2<min**2, vx[:-1]**2+vy[:-1]**2<min**2) #wektor poprzedni lub następny za krótki
+            sharp=np.abs(np.arctan2(vy[:-1],vx[:-1])-np.arctan2(vy[1:],vx[1:]))>np.pi/2 #wykrywacz dzióbków (kąt między 0->1 a 1->2 za duży)
+            par=np.array(range(x.size))%2 #0 dla parzystych, 1 dla nieparzystych, zrównanie długości par do x
+            x=np.delete(x, np.logical_or(np.logical_and(par, tooclose),sharp)) #usuwanie co drugiego punktu oraz dzióbków
+            y=np.delete(y, np.logical_or(np.logical_and(par, tooclose),sharp))
+        #ADD POINTS
+        if max!=None:
+            midx=(x[:-1]+x[1:])/2 #środki odcinków
+            midy=(y[:-1]+y[1:])/2
+            toofar=np.append(False,np.diff(x)**2+np.diff(y)**2>max**2) #wektor następny za długi
+            x=np.insert(x,toofar,midx[toofar[1:]]) #wstawianie punktów w odpowiednich miejscach
+            y=np.insert(y,toofar,midy[toofar[1:]])
+        
         # UPDATE BOX
         n_seeds = np.sum(network.box.boundary_conditions!=DIRICHLET_1)-1
         if network.box.initial_condition==8:
