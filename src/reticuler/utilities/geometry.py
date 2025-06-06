@@ -479,6 +479,10 @@ class Box:
                 "angular_width": 2*np.pi #don't change, morpher not ready
             }
             options_construct.update(kwargs_construct)
+            
+            if type(options_construct["seeds_phi"])==int:
+                options_construct["seeds_phi"]=2*np.pi/options_construct["seeds_phi"]*np.arange(options_construct["seeds_phi"])
+                
             if not len(options_construct["initial_lengths"])==len(options_construct["seeds_phi"]):
                 options_construct["initial_lengths"] = (
                     np.ones(len(options_construct["seeds_phi"]))

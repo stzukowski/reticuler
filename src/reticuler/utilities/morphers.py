@@ -157,7 +157,7 @@ class Leaf:
         y+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
         
         min=0
-        max=0.02
+        max=0.05
         #REMOVE POINTS
         if min>0:
             tooclose=np.logical_or(vx[1:]**2+vy[1:]**2<min**2, vx[:-1]**2+vy[:-1]**2<min**2) #wektor poprzedni lub następny za krótki
@@ -166,7 +166,7 @@ class Leaf:
             x=np.delete(x, np.logical_or(np.logical_and(par, tooclose),sharp)) #usuwanie co drugiego punktu oraz dzióbków
             y=np.delete(y, np.logical_or(np.logical_and(par, tooclose),sharp))
         #ADD POINTS
-        if max!=None:
+        if max>0:
             midx=(x[:-1]+x[1:])/2 #środki odcinków
             midy=(y[:-1]+y[1:])/2
             toofar=np.append(False,np.diff(x)**2+np.diff(y)**2>max**2) #wektor następny za długi
