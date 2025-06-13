@@ -113,7 +113,7 @@ class Box:
     """
 
     def __init__(
-        self, points=None, connections=None, boundary_conditions=None, seeds_connectivity=None, initial_condition=None
+        self, points=None, connections=None, boundary_conditions=None, seeds_connectivity=None, initial_condition=None, angular_width=None
     ):
         """Initialize Box.
 
@@ -138,6 +138,7 @@ class Box:
         self.seeds_connectivity = [] if seeds_connectivity is None else seeds_connectivity
         
         self.initial_condition = initial_condition
+        self.angular_width = angular_width
         
     def __add_points(self, points):
         self.points = np.vstack((self.points, points))
@@ -157,7 +158,7 @@ class Box:
         return copy.deepcopy(self)
 
     @classmethod
-    def construct(cls, initial_condition=0, **kwargs_construct):
+    def construct(cls, initial_condition=0, angular_width=2*np.pi, **kwargs_construct):
         """Construct a Box with given initial condition.
 
         Parameters
@@ -175,6 +176,8 @@ class Box:
                 - IC = 5: u=0 on top and Neumann on bottom
             IC = 6: semielliptical leaf
             IC = 7: circle slice leaf with seeds in center
+        angular_width: float, default 2*np.pi
+            angle of the slice
         kwargs_construct:
             IC = 0, 1, 2, 3, 8, 6
                 seeds_x : array, default [0.5]
@@ -193,7 +196,7 @@ class Box:
                     Width of the rectangular system.
             IC = 7
                 seeds_phi : array, default [0]
-                    A 1-n array of phi angles at the center (0,0) relative to X axis.
+                    A 1-n array of phi angles at the center (0,0) relative to Y axis.
                 initial_lengths : array, default [0.4]
                     A 1-n array of seeds initial lengths.
                     Length must match seeds_x or be equal to 1 
@@ -211,7 +214,7 @@ class Box:
 
         """
         # Build a box
-        box = cls(initial_condition=initial_condition)
+        box = cls(initial_condition=initial_condition,angular_width=angular_width)
 
         # Rectangular box of specified width and height
         if initial_condition <=3 or initial_condition == 8 or initial_condition == 6:
@@ -469,14 +472,13 @@ class Box:
                 
             branch_connectivity = np.array([[0,-1],[1,0],[2,0]])
         
-        # slice
+        # circle or slice
         elif initial_condition == 7:
             options_construct = {
                 "seeds_phi": [0],
-                "initial_lengths": [0.4],
+                "initial_lengths": [0.1],
                 "branch_BCs": [DIRICHLET_0],
-                "radius": 0.5,
-                "angular_width": 2*np.pi #don't change, morpher not ready
+                "radius": 0.5
             }
             options_construct.update(kwargs_construct)
             
@@ -495,7 +497,6 @@ class Box:
                 )
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])        
             
-            angular_width = options_construct["angular_width"]
             n_points_rim = int(100*options_construct["radius"]*angular_width)
             
             # circular rim
@@ -507,8 +508,7 @@ class Box:
                 box.seeds_connectivity = []
             else:
                 box.__add_points([0,0])
-                # box.seeds_connectivity = [n_points_rim+len(options_construct["seeds_x"]), 0]
-                n_seeds = len(options_construct["seeds_x"])
+                n_seeds = len(options_construct["seeds_phi"])
                 box.seeds_connectivity = np.column_stack(
                         (
                             len(box.points)*np.ones(n_seeds),
@@ -552,7 +552,7 @@ class Box:
                 branch = Branch(
                         ID=i,
                         points=np.array(
-                            [[0, 0], [IL*np.cos(phi), IL*np.sin(phi)]]
+                            [[0, 0], [-IL*np.sin(phi), IL*np.cos(phi)]]
                         ),
                         steps=np.array([0, 0]),
                         BC=BC

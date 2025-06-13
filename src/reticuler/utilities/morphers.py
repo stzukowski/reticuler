@@ -128,7 +128,7 @@ class Leaf:
         # Boundary dynamics
         top_xy_flux = out_growth[1]
         top_xy_flux = np.vstack((top_xy_flux[1],top_xy_flux[::2]))
-        if network.box.initial_condition==7:
+        if network.box.initial_condition==7 and network.box.angular_width==2*np.pi:
             top_xy_flux = top_xy_flux[:-1]
         x = top_xy_flux[:,0]
         y = top_xy_flux[:,1]
@@ -145,10 +145,10 @@ class Leaf:
 
         # PUSH THE BOUNDARY
         s=self.v_rim*out_growth[0] # mnożnik fluxów
-        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = lustro względem ostatniego punktu (dla semicircle/rectangle)
+        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = lustro względem ostatniego punktu
         vy=np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
-        if network.box.initial_condition==7:
-            vx=np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne
+        if network.box.initial_condition==7 and network.box.angular_width==2*np.pi:
+            vx=np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne (tylko dla pełnego koła)
             vy=np.diff(y,prepend=y[-1],append=y[0])
         alfa=(np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
         sx=s*fluxes*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
@@ -172,7 +172,7 @@ class Leaf:
             toofar=np.append(False,np.diff(x)**2+np.diff(y)**2>max**2) #wektor następny za długi
             x=np.insert(x,toofar,midx[toofar[1:]]) #wstawianie punktów w odpowiednich miejscach
             y=np.insert(y,toofar,midy[toofar[1:]])
-        
+            
         # UPDATE BOX
         n_seeds = np.sum(network.box.boundary_conditions!=DIRICHLET_1)-1
         if network.box.initial_condition==8:
@@ -184,9 +184,19 @@ class Leaf:
             network.box.points = np.vstack(( np.stack((x,y)).T, network.box.points[-n_seeds:] ))
             network.box.points[0,1] = 0
             network.box.points[-1-n_seeds,1] = 0
-        if network.box.initial_condition==7:
+        if network.box.initial_condition==7 and network.box.angular_width==2*np.pi:
             network.box.points = np.stack((x,y)).T
-            
+        if network.box.initial_condition==7 and network.box.angular_width!=2*np.pi:
+            network.box.points = np.vstack(( np.stack((x,y)).T, [0,0] ))
+            aw=network.box.angular_width
+            x=network.box.points[0,0]
+            y=network.box.points[0,1]
+            network.box.points[0,0] = ((1-np.cos(aw))*x + np.sin(aw)*y)/2
+            network.box.points[0,1] = ((1+np.cos(aw))*y + np.sin(aw)*x)/2
+            x=network.box.points[-2,0]
+            y=network.box.points[-2,1]
+            network.box.points[-2,0] = ((1-np.cos(aw))*x - np.sin(aw)*y)/2
+            network.box.points[-2,1] = ((1+np.cos(aw))*y - np.sin(aw)*x)/2
         network.box.seeds_connectivity = np.column_stack(
                     (
                         len(network.box.points) - n_seeds + np.arange(n_seeds),
@@ -202,9 +212,8 @@ class Leaf:
             network.box.boundary_conditions[0] = NEUMANN_0
             network.box.boundary_conditions[-2-n_seeds] = NEUMANN_0
             network.box.boundary_conditions[-1-n_seeds:] = DIRICHLET_0
-        if network.box.initial_condition==6:
+        if network.box.initial_condition==6 or (network.box.initial_condition==7 and network.box.angular_width!=2*np.pi):
             network.box.boundary_conditions[-1-n_seeds:] = NEUMANN_0
-            
         self.box_history.append(network.box.copy())
         
         return out_growth

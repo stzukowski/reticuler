@@ -425,13 +425,13 @@ class System:
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()
                 if ax is not None:
-                    ax.clear()
+                    #ax.clear()
                     ax.set_xlim(-5,5)
                     ax.set_ylim(-5,5)
                     ax.set_aspect(1)
                     ax.plot(*np.vstack( (self.network.box.points, 
                                          self.network.box.points[0])).T, 
-                            # '.-', ms=5, 
+                            '.-', #ms=5, 
                             color="tab:green", lw=1, alpha=0.5)
                     for b in self.network.branches:
                         ax.plot(*b.points.T, color="darkgreen") # '.-', 
