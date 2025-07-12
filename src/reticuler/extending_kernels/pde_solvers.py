@@ -18,7 +18,7 @@ import shapely
 from shapely.ops import linemerge 
 from shapely.geometry import MultiLineString, LinearRing, Polygon
 
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
 from reticuler.utilities.misc import rotation_matrix
 
 def asvoid(arr):
@@ -146,8 +146,13 @@ class FreeFEM:
         of max flux/velocity.
     distance_from_bif_thresh : float, default 2.1*``ds``
         A minimal distance the tip has to move from the previous bifurcations
-        to split again. 
-
+        to split again.
+    is_script_saved : bool, default False
+        If True, the FreeFEM script is saved to a file.
+    is_backward : bool, default False
+        If True, solve_PDE returns flux_info.
+    is_leaf : bool, default False
+        If True, solve_PDE returns rim_xy_flux.
 
     References
     ----------
@@ -290,7 +295,7 @@ class FreeFEM:
             self.prepare_script_box(network.box.connections_bc(), \
                                     network.box.points)
         
-        self.__script_problem_Laplace = textwrap.dedent(
+        self.__script_problem = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND EQUATION TO SOLVE
@@ -309,7 +314,8 @@ class FreeFEM:
             """
         ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_0=DIRICHLET_0, DIRICHLET_1=DIRICHLET_1)
 
-        self.__script_problem_Poisson = self.__script_problem_Laplace.replace(
+        if self.equation==1:
+            self.__script_problem = self.__script_problem.replace(
                                             "// -int2d(Th)(v) // rain in domain", 
                                             "-int2d(Th)(v) // rain in domain")
 
@@ -370,7 +376,7 @@ class FreeFEM:
         )
 
         # // ofstream freefemOutput("{file_name}");
-        self.__script_integrate = textwrap.dedent(
+        self.__script_tip_integration = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
@@ -504,7 +510,7 @@ class FreeFEM:
             // plot([angles,fluxes], wait=true);
             """.format(DIRICHLET_1=DIRICHLET_1)
         )
-        self.__script_integrate = self.__script_integrate + script_flux_rim
+        self.__script_tip_integration = self.__script_tip_integration + script_flux_rim
 
     def __streamline_extension(self, beta, dr):
         """Calculate a vector over which the tip is shifted.
@@ -699,12 +705,9 @@ class FreeFEM:
             )
         )
 
-        script = self.__script_init + buildmesh + tip_information
-        if self.equation:
-            script = script + self.__script_problem_Poisson
-        else:
-            script = script + self.__script_problem_Laplace
-        script = script + self.__script_adaptmesh + self.__script_integrate
+        script = self.__script_init + buildmesh + tip_information + \
+                    self.__script_problem + self.__script_adaptmesh + \
+                        self.__script_tip_integration
 
         return script
     
@@ -831,34 +834,21 @@ class FreeFEM_ThickFingers:
     equation : int, default 0
         - 0: Laplace
         - 1: Poisson
+        - 2: Elasticity
     eta : float, default 1.0
         The growth exponent (v=a1**eta).
         High values increase competition between the branches.
         Low values stabilize the growth.
     ds : float, default 0.01
         A distance over which the fastest branch in the network
-        will move in each timestep.
-    bifurcation_type : int, default 0
-        - 0: no bifurcations
-        - 1: velocity bifurcations (velocity criterion)
-        - 2: random bifurcations
-    bifurcation_thresh : float, default 0
-        Threshold for the bifurcation criterion.
-    bifurcation_angle : float, default 2pi/5
-        Angle between the daughter branches after bifurcation.
-        Default angle (72 degrees) corresponds to the analytical solution
-        for fingers in a diffusive field.
-    inflow_thresh : float, default 0.05
-        Threshold to put asleep the tips with less than ``inflow_thresh``
-        of max flux/velocity.
-    distance_from_bif_thresh : float, default 2.1*``ds``
-        A minimal distance the tip has to move from the previous bifurcations
-        to split again.    
+        will move in each timestep. 
     flux_info : array
         A 2-n array with total flux and angle of highest flux direction 
         for each tip in the network.
+    is_script_saved : bool, default False
+        If True, the FreeFEM script is saved to a file.
 
-
+        
     References
     ----------
     .. [Ref2] https://freefem.org/
@@ -873,11 +863,6 @@ class FreeFEM_ThickFingers:
             equation=0,
             eta=1.0,
             ds=0.01,
-            bifurcation_type=0,
-            bifurcation_thresh=None,
-            bifurcation_angle=2 * np.pi / 5,
-            inflow_thresh=0.05,
-            distance_from_bif_thresh=None,
             is_script_saved=False,
         ):
         """Initialize FreeFEM.
@@ -890,11 +875,7 @@ class FreeFEM_ThickFingers:
         equation : int, default 0
         eta : float, default 1.0
         ds : float, default 0.01
-        bifurcation_type : int, default 0
-        bifurcation_thresh : float, default depends on bifurcation_type
-        bifurcation_angle : float, default 2pi/5
-        inflow_thresh : float, default 0.05
-        distance_from_bif_thresh : float, default 2.1*``ds``
+        is_script_saved : bool, default False
 
         Returns
         -------
@@ -908,21 +889,6 @@ class FreeFEM_ThickFingers:
         self.ds = ds
         self.flux_info = []
         self.is_script_saved = is_script_saved
-
-        self.bifurcation_type = bifurcation_type  # no bifurcations, a1, a3/a1, random
-        self.bifurcation_thresh = bifurcation_thresh
-        if bifurcation_thresh is None:
-            self.bifurcation_thresh = 0
-            if self.bifurcation_type == 1:
-                self.bifurcation_thresh = 0.8  # velocity bifurcations
-            if self.bifurcation_type == 2:  # random bifurcations
-                self.bifurcation_thresh = 3 * ds
-                # random bifurcations: bif_probability
-        self.bifurcation_angle = bifurcation_angle  # 2*np.pi/5
-
-        # less than `inflow_thresh` of max flux/velocity puts branches asleep
-        self.inflow_thresh = inflow_thresh
-        self.distance_from_bif_thresh = 2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
         
         # parts of the script
         DIRICHLET_GLOB_FLUX_script = ""
@@ -990,7 +956,7 @@ class FreeFEM_ThickFingers:
             """
             )
         
-        self.__script_problem_Laplace = textwrap.dedent(
+        self.__script_problem = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND EQUATION TO SOLVE
@@ -1009,7 +975,8 @@ class FreeFEM_ThickFingers:
             """
         ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, DIRICHLET_GLOB_FLUX=DIRICHLET_GLOB_FLUX, DIRICHLET_1=DIRICHLET_1, DIRICHLET_0=DIRICHLET_0)
 
-        self.__script_problem_Poisson = self.__script_problem_Laplace.replace(
+        if self.equation==1:
+            self.__script_problem = self.__script_problem.replace(
                                             "// -int2d(Th)(v) // rain in domain", 
                                             "-int2d(Th)(v) // rain in domain")
 
@@ -1053,11 +1020,12 @@ class FreeFEM_ThickFingers:
             }}
             cout << "Adaptation step: " << adaptCounter;
             cout << ", nvOnTip.min = " << nvOnTips.min << endl;
-            plot(Th, wait=true);
             cout << "Problem solved." << endl;
-            plot(u, wait=true, fill=true, value=true);
-            
+
             real adaptTime=clock() - adaptTime0;
+            
+            plot(Th, wait=true);
+            plot(u, wait=true, fill=true, value=true);
             """
         ).format(pbc=self.pbc)
 
@@ -1085,7 +1053,7 @@ class FreeFEM_ThickFingers:
                 int ndof=nvOnTips(k), n=0;
                 real[int] angles(ndof), fluxes(ndof); // angles with X axis
                 int1d(Th, tipLabels(k), qfe=qf1pE)( (angles(n++)=atan2(y-Y(k), x-X(k)))*1.
-                                                +(fluxes(n)=abs(dxu*N.x+dyu*N.y))*1.);
+                                                +(fluxes(n)=abs([dxu,dyu]'*[N.x,N.y]))*1.);
                 // cout<<"tip"<<tipLabels(k)<<endl;
                 cout<<"angles"<<tipLabels(k)<<angles<<"angles"<<tipLabels(k)<<"end"<<endl;
                 cout<<"fluxes"<<tipLabels(k)<<fluxes<<"fluxes"<<tipLabels(k)<<"end"<<endl;
@@ -1113,6 +1081,92 @@ class FreeFEM_ThickFingers:
             cout << "kopytko" << "end";
             """.format(DIRICHLET_GLOB_FLUX_script=DIRICHLET_GLOB_FLUX_script)
         )
+
+        # elastic problem
+        if self.equation==2:
+            self.__script_problem = textwrap.dedent(
+                """
+                ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                // DEFINING PROBLEM AND EQUATION TO SOLVE
+                ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                
+                fespace Displacement(Th,P2);
+                fespace Stress(Th, P2);
+
+                Displacement ur, uq, vr, vq;
+                Stress sigmarr, sigmaqq, sigmarq, sigmavM;
+                Displacement r, q, cosq, sinq;
+                r=sqrt((x-{radius})^2+(y-{radius})^2);q=atan2(y-{radius},x-{radius}); 
+                cosq=(x-{radius})/r; sinq=(y-{radius})/r;
+
+                macro dr(u) (dx(u)*cosq+dy(u)*sinq) // EOM (end of macro)
+                macro dq(u) ((dy(u)*cosq-dx(u)*sinq)*r) // EOM
+                // macro for strain
+                macro strain(ur,uq)
+                    [
+                        dr(ur),
+                        (1/r*dq(ur)+dr(uq)-uq/r)/2,
+                        (1/r*dq(ur)+dr(uq)-uq/r)/2,
+                        ur/r+1/r*dq(uq)
+                    ]//eps_rr, eps_rq , eps_qr , eps_qq
+                // macro for stress 
+                macro stress(ur,uq)
+                    [
+                        E/(1-nu^2)*(strain(ur,uq)[0]+nu*strain(ur,uq)[3]),
+                        E/(1+nu)*strain(ur,uq)[1],
+                        E/(1+nu)*strain(ur,uq)[2],
+                        E/(1-nu^2)*(strain(ur,uq)[3]+nu*strain(ur,uq)[0])
+                    ] //stress s_rr, s_rq, s_qr, s_qq
+                    
+                macro vonMises(sigmarr,sigmaqq,sigmarq) ( sqrt(sigmarr^2+sigmaqq^2-sigmarr*sigmaqq+3*sigmarq^2) ) // EOM von Mises stress
+                    
+                //	Equation to solve
+                problem	Elasticity([ur,uq],[vr,vq]) = 
+                    int2d(Th)(stress(ur,uq)'*strain(vr,vq)) 
+                    + on({NEUMANN_1}, ur={radial_deformation})
+                    + on({NEUMANN_0}, uq=0)
+                    ;
+                """
+            )
+
+            self.__script_adaptmesh = self.__script_adaptmesh.replace("potential;", \
+                                    "Elasticity;\n    sigmavM = vonMises(stress(ur,uq)[0],stress(ur,uq)[3],stress(ur,uq)[1]);")
+            self.__script_adaptmesh = self.__script_adaptmesh.replace("u/u[]", "sigmavM/sigmavM[]")
+            self.__script_adaptmesh = self.__script_adaptmesh.replace("u=u;", "ur=ur; uq=uq;")
+            self.__script_adaptmesh = self.__script_adaptmesh.replace("mobility=mobility;", "E=E; nu=nu;")
+            self.__script_adaptmesh = self.__script_adaptmesh.replace("plot(u, wait=true, fill=true, value=true);", \
+                                        textwrap.dedent("""
+                                            // Stresses 
+                                            sigmarr=stress(ur,uq)[0];sigmaqq=stress(ur,uq)[3];sigmarq=stress(ur,uq)[1];
+                                            sigmavM = vonMises(stress(ur,uq)[0],stress(ur,uq)[3],stress(ur,uq)[1]);
+
+                                            plot(sigmarr,fill=1, cmm="Stress sigmarr",wait=1,value=true);
+                                            plot(sigmaqq,fill=1, cmm="Stress sigmaqq",wait=1,value=true);
+                                            plot(sigmavM,fill=1, cmm="von Misses stress",wait=1,value=true,dim=2);
+
+                                            // plot on the deformed surface
+                                            // Cartesian displacements
+                                            // Displacement ux, uy;
+                                            // ux = cosq*ur - sinq*uq;
+                                            // uy = sinq*ur + cosq*uq;
+                                            // plot([ux,uy],coef=10,cmm="Displacement field",wait=1,value=true);
+
+                                            // real ampfactor = 1;
+                                            // mesh Th2=movemesh(Th,[x+ampfactor*ux,y+ampfactor*uy]);
+                                            // plot(Th,Th2,cmm="Deformed configuration/r",wait=1);
+                                            """)                          
+                                    )
+
+            self.__script_tip_integration = self.__script_tip_integration.replace(
+                                            textwrap.dedent("""
+                                            // Calculating gradient
+                                            dxu=dx(u);
+                                            dyu=dy(u);
+                                            // du=(dxu^2+dyu^2)^0.5;
+                                            // plot(du, wait=true, fill=true);"""), \
+                                            ""
+                                        )
+            self.__script_tip_integration = self.__script_tip_integration.replace("[dxu,dyu]'*[N.x,N.y]", "sigmavM")
 
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
         """Find a single test shift over which the tip is moving.
@@ -1323,21 +1377,37 @@ class FreeFEM_ThickFingers:
                 textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
                     i=i, x=p[0], y=p[1] ))
             mobility_regions = mobility_regions + "region==indRegion{i} || ".format(i=i)
-        script_mobility = script_mobility + textwrap.dedent(
-            """
-            fespace Vh0(Th, P0{pbc});
-            Vh0 mobility = {mobilityOutside}*!({mobility_regions}) + {mobilityInside}*({mobility_regions});
-            plot(mobility, wait=true, cmm="mobility", fill=true, value=true);
-            """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, 
-                        mobility_regions = mobility_regions[:-4], pbc=self.pbc)
-            )
+        
+        if self.equation<=1:
+            script_mobility = script_mobility + textwrap.dedent(
+                """
+                fespace Vh0(Th, P0{pbc});
+                Vh0 mobility = {mobilityOutside}*!({mobility_regions}) + {mobilityInside}*({mobility_regions});
+                plot(mobility, wait=true, cmm="mobility", fill=true, value=true);
+                """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, 
+                            mobility_regions = mobility_regions[:-4], pbc=self.pbc)
+                )
+        if self.equation==2:
+            script_mobility = script_mobility + textwrap.dedent(
+                """
+                fespace Vh0(Th, P0{pbc});
+                Vh0 E = {EOutside}*!({mobility_regions}) + {EInside}*({mobility_regions});
+                Vh0 nu = {nuOutside}*!({mobility_regions}) + {nuInside}*({mobility_regions});
+                plot(E, wait=true, cmm="E", fill=true, value=true);
+                plot(nu, wait=true, cmm="nu", fill=true, value=true);
+                """.format(EOutside=100, EInside=self.mobility_ratio,
+                            nuOutside=0.49, nuInside=0.3,
+                                mobility_regions = mobility_regions[:-4], pbc=self.pbc)
+                )
         
         # whole script
         script = self.__script_init + buildmesh + tip_information + script_mobility
-        if self.equation:
-            script = script + self.__script_problem_Poisson
+        if self.equation==2:
+            radius = (network.box.points[:,0].min()+network.box.points[:,0].max())/2
+            script = script + self.__script_problem.format(NEUMANN_1=NEUMANN_1,NEUMANN_0=NEUMANN_0, \
+                                                           radius=radius, radial_deformation=-0.04*radius)
         else:
-            script = script + self.__script_problem_Laplace
+            script = script + self.__script_problem
         script = script + self.__script_adaptmesh + self.__script_tip_integration
 
         return script

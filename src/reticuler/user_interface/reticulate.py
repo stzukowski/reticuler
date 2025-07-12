@@ -75,8 +75,8 @@ def main():
         )
         + textwrap.dedent(
             System.__doc__[
-                System.__doc__.find("growth_thresh_type")
-                - 4 : System.__doc__.find("exp_name")
+                System.__doc__.find("growth_thresh_type") : \
+                    System.__doc__.find("exp_name")
             ]
         ),
         default=[{}],
@@ -91,8 +91,8 @@ def main():
         metavar="label",
         help=textwrap.dedent(
             Box.construct.__doc__[
-                Box.construct.__doc__.find("initial_condition")
-                - 8 : Box.construct.__doc__.find("kwargs_construct")
+                Box.construct.__doc__.find("initial_condition") : \
+                    Box.construct.__doc__.find("kwargs_construct")
             ]
         ),
         default=[0],
@@ -115,8 +115,8 @@ def main():
         )
         + textwrap.dedent(
             Box.construct.__doc__[
-                Box.construct.__doc__.find("kwargs_construct")
-                - 8 : Box.construct.__doc__.find("Returns")
+                Box.construct.__doc__.find("kwargs_construct") : \
+                    Box.construct.__doc__.find("Returns") - 2
             ]
         ),
         default=[{}],
@@ -154,15 +154,15 @@ def main():
         + "1. FreeFEM\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM.__doc__[
-                pde_solvers.FreeFEM.__doc__.find("equation")
-                - 4 : pde_solvers.FreeFEM.__doc__.find("flux_info")
+                pde_solvers.FreeFEM.__doc__.find("equation") : \
+                    pde_solvers.FreeFEM.__doc__.find("References") - 2
             ]
         )
-        + "2. FreeFEM_ThickFingers\n"
+        + "\n\n2. FreeFEM_ThickFingers\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM_ThickFingers.__doc__[
-                pde_solvers.FreeFEM_ThickFingers.__doc__.find("equation")
-                - 4 : pde_solvers.FreeFEM_ThickFingers.__doc__.find("flux_info")
+                pde_solvers.FreeFEM_ThickFingers.__doc__.find("equation") : \
+                    pde_solvers.FreeFEM_ThickFingers.__doc__.find("References") - 2
             ]
         ),
         default=[{}],
@@ -200,8 +200,40 @@ def main():
         + "1. ModifiedEulerMethod\n"
         + textwrap.dedent(
             extenders.ModifiedEulerMethod.__doc__[
-                extenders.ModifiedEulerMethod.__doc__.find("eta")
-                - 4 : extenders.ModifiedEulerMethod.__doc__.find("References")
+                extenders.ModifiedEulerMethod.__doc__.find("is_reconnecting")
+                 : extenders.ModifiedEulerMethod.__doc__.find("References")-4
+            ]
+        ),
+        default=[{}],
+    )
+
+    # Morpher
+    parser.add_argument(
+        "--morpher_params",
+        type=json.loads,
+        nargs=1,
+        metavar="dict",
+        help=textwrap.dedent(
+            """\
+            Optional parameters for morpher.
+            
+            Pass dictionary in a form (no spaces, 
+            backslash before quotes around `value`): 
+                "{\"value\":key}"
+            default = {} (keeps default values as listed below)
+            
+            """
+        )
+        + "1. Jellyfish\n"
+        + textwrap.dedent(
+            morphers.Jellyfish.__doc__[
+                morphers.Jellyfish.__doc__.find("radii"):
+            ]
+        )
+        + "2. Leaf\n"
+        + textwrap.dedent(
+            morphers.Leaf.__doc__[
+                morphers.Leaf.__doc__.find("box_history"):
             ]
         ),
         default=[{}],
@@ -238,10 +270,11 @@ def main():
         # Morpher
         if args.initial_condition[0]==4 or args.initial_condition[0]==5:
             morpher = morphers.Jellyfish(
-                        radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2])
+                        radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2]), 
+                        **args.morpher_params[0]
                         )
         elif args.initial_condition[0]==6 or args.initial_condition[0]==7 or args.initial_condition[0]==8:
-            morpher = morphers.Leaf(box_history=[box.copy()])
+            morpher = morphers.Leaf(box_history=[box.copy()], **args.morpher_params[0])
         else:
             morpher = None
           
