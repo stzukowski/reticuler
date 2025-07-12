@@ -12,10 +12,19 @@ from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1,
 
 class Jellyfish:
     """A class to handle jellyfish simulations. Includes global growth and adding new sprouts.
+
+    Attributes
+    ----------
+    radii : array, default [0]
+        How radius changed in time (corresponds to system.timestamps).       
+    timescale : float, default 0.1
+        Factor to match the time when the first sprouts connect to stomachs.
+    v_rim : float, default 1.0
+        How fast jelly radius grows [mm/day].
     """ 
     def __init__(
         self,
-        radii,
+        radii=None,
         timescale=0.1,
         v_rim=1,
     ):
@@ -23,12 +32,9 @@ class Jellyfish:
 
         Parameters
         ----------
-        radii : array, default []
-            How radius changed in time (corresponds to system.timestamps).
         timescale : float, default 0.1
-            Factor to match the time when the first sprouts connect to stomachs.
         v_rim : float, default 1.0
-            How fast jelly radius grows [mm/day].
+        radii : array, default [0]
 
         Returns
         -------
@@ -101,6 +107,13 @@ class Jellyfish:
 # fig2,ax2 = plt.subplots()
 class Leaf:
     """A class to handle evolution of the boundary.
+
+    Attributes
+    ----------
+    box_history : list, default []
+        History of the box at each step.
+    v_rim : float, default 1.0
+        How fast the rim grows.
     """ 
     def __init__(
         self,
@@ -111,18 +124,16 @@ class Leaf:
 
         Parameters
         ----------
-        box_init : Box
-            An object of class Box.
+        box_history : list, default []
         v_rim : float, default 1.0
-            How fast the rim grows [mm/day].
 
         Returns
         -------
         None.
 
         """
-        self.v_rim = v_rim
         self.box_history = box_history
+        self.v_rim = v_rim
     
         
     def morph(self, network, out_growth, step):

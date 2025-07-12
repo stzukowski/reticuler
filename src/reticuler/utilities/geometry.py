@@ -380,8 +380,8 @@ class Box:
             # top DIRICHLET_GLOB_FLUX
             box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_GLOB_FLUX
             if initial_condition == 5:
-                # bottom NEUMANN_1
-                box.boundary_conditions[n_points_stomach+2:] = NEUMANN_1    
+                box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0 # top
+                box.boundary_conditions[n_points_stomach+2:] = NEUMANN_1 # bottom
             
             # points_to_plot = box.points[box.connections]
             # for i, pts in enumerate(points_to_plot):
