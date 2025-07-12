@@ -10,6 +10,7 @@ import numpy as np
 
 from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem, BackwardBranch
+from reticuler.utilities.misc import extend_radially
 
 def clip_to_step(system, max_step):
     branches_to_iterate = system.network.branches.copy()
@@ -42,6 +43,15 @@ def clip_to_step(system, max_step):
     system.growth_gauges[1], system.growth_gauges[2] = system.network.height_and_length()
     system.growth_gauges[3] = system.timestamps[-1]
     
+    if type(system.morpher).__name__ == "Jellyfish":
+        system.morpher.radii = system.morpher.radii[:len(system.timestamps)]
+        # extend box and network
+        R_rim0 = (system.network.box.points[:,0].min()+system.network.box.points[:,0].max())/2
+        beta = system.morpher.radii[-1] / R_rim0
+        system.network.box.points = extend_radially(system.network.box.points, R_rim0, beta)
+        for branch in system.network.branches:
+            branch.points = extend_radially(branch.points, R_rim0, beta)
+
     if type(system.morpher).__name__ == "Leaf":
         system.morpher.box_history = system.morpher.box_history[:int(max_step+1)]
         system.network.box = system.morpher.box_history[-1].copy()

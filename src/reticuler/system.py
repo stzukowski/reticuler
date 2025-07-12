@@ -123,18 +123,21 @@ class System:
             # if type(self.extender.pde_solver).__name__ == "FreeFEM":
             export_solver = {
                 "type": type(self.extender.pde_solver).__name__,
-                "description": "Equation legend: 0-Laplace, 1-Poisson. Bifurcation legend: 0-no bifurcations, 1-a1, 2-a3/a1, 3-random.",
+                "description": "",
                 "is_script_saved": self.extender.pde_solver.is_script_saved,
                 "equation": self.extender.pde_solver.equation,
                 "eta": self.extender.pde_solver.eta,
                 "ds": self.extender.pde_solver.ds,
-                "bifurcation_type": self.extender.pde_solver.bifurcation_type,
-                "bifurcation_thresh": self.extender.pde_solver.bifurcation_thresh,
-                "bifurcation_angle": self.extender.pde_solver.bifurcation_angle,
-                "inflow_thresh": self.extender.pde_solver.inflow_thresh,
-                "distance_from_bif_thresh": self.extender.pde_solver.distance_from_bif_thresh,
             }
+            if type(self.extender.pde_solver).__name__ == "FreeFEM":
+                export_solver["description"] = "Equation legend: 0-Laplace, 1-Poisson. Bifurcation legend: 0-no bifurcations, 1-a1, 2-a3/a1, 3-random."
+                export_solver["bifurcation_type"] = self.extender.pde_solver.bifurcation_type
+                export_solver["bifurcation_thresh"] = self.extender.pde_solver.bifurcation_thresh
+                export_solver["bifurcation_angle"] = self.extender.pde_solver.bifurcation_angle
+                export_solver["inflow_thresh"] = self.extender.pde_solver.inflow_thresh
+                export_solver["distance_from_bif_thresh"] = self.extender.pde_solver.distance_from_bif_thresh
             if type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
+                export_solver["description"] = "Equation legend: 0-Laplace, 1-Poisson, 2-elasticity."
                 export_solver["finger_width"] = self.extender.pde_solver.finger_width
                 export_solver["mobility_ratio"] = self.extender.pde_solver.mobility_ratio
                 

@@ -10,7 +10,7 @@ import copy
 
 
 class BackwardModifiedEulerMethod:
-    """A class to integrate tip trajectories with reversed modified Euler's method and streamline algorithm.
+    r"""A class to integrate tip trajectories with reversed modified Euler's method and streamline algorithm.
 
     Reversed modified Euler's method:
 
