@@ -20,7 +20,7 @@ from reticuler.user_interface import clippers
 plt.rcParams.update(
     {
         "figure.dpi": 150,
-        "text.usetex": True,
+        # "text.usetex": True,
         "xtick.labelsize": 7,
         "ytick.labelsize": 7,
         "axes.linewidth": 0.5,
