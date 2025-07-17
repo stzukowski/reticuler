@@ -70,16 +70,17 @@ def prepare_contour(border_contour, inside_buildmesh, i, points, label, border_n
     return border_contour, inside_buildmesh
     
 def prepare_contour_list(border_contour, inside_buildmesh, i, points, label, ns_border=1, border_name="contour", i_tsh=1023):
-    if not np.isscalar(ns_border):
-        ns_border = arr2str(ns_border)
+    # print(border_name,ns_border)
+    # if not np.isscalar(ns_border):
+    #     ns_border = arr2str(ns_border)
     border_contour = (
         border_contour
-        + "real[int] {b_n}{i}X({n}); real[int] {b_n}{i}Y({n}); int[int] {b_n}{i}N({n}-1); {b_n}{i}N={N};".format(b_n=border_name, i=i, n=len(points), N=ns_border)
+        + "real[int] {b_n}{i}X({n}); real[int] {b_n}{i}Y({n}); int[int] {b_n}{i}N({n}-1);".format(b_n=border_name, i=i, n=len(points))
         )
     if not np.isscalar(label):
         border_contour = (
         border_contour
-        + "int[int] {b_n}{i}BC({n});".format(b_n=border_name, i=i, n=len(points))
+        + "int[int] {b_n}{i}BC({n});\n".format(b_n=border_name, i=i, n=len(points))
         )
     for j in range((len(points)-1)//i_tsh+1):
         border_contour = (
@@ -87,14 +88,23 @@ def prepare_contour_list(border_contour, inside_buildmesh, i, points, label, ns_
             + "\n{b_n}{i}X({ind0}:{ind1})={pointsX};\n{b_n}{i}Y({ind0}:{ind1})={pointsY};\n".format( \
                         b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, \
                         pointsX=arr2str(points[j*i_tsh:(j+1)*i_tsh,0]),
-                        pointsY=arr2str(points[j*i_tsh:(j+1)*i_tsh,1])
+                        pointsY=arr2str(points[j*i_tsh:(j+1)*i_tsh,1]),
+                        N=arr2str(points[j*i_tsh:(j+1)*i_tsh,1])
                             ) 
             )
+        if not np.isscalar(ns_border):
+            border_contour = (
+            border_contour
+            + "{b_n}{i}N({ind0}:{ind1})={N};\n".format(b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, \
+                                                       N=arr2str(ns_border[j*i_tsh:(j+1)*i_tsh]))
+            )            
         if not np.isscalar(label):
             border_contour = (
             border_contour
-            + "{b_n}{i}BC({ind0}:{ind1})={bcs};\n".format(b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, bcs=arr2str(label))
-            )     
+            + "{b_n}{i}BC({ind0}:{ind1})={bcs};\n".format(b_n=border_name, i=i, ind0=j*i_tsh, ind1=(j+1)*i_tsh, \
+                                                          bcs=arr2str(label[j*i_tsh:(j+1)*i_tsh]))
+            )
+        
 
     if not np.isscalar(label):
         label = "{b_n}{i}BC(i)".format(b_n=border_name, i=i)
@@ -655,8 +665,8 @@ class FreeFEM:
         border_network = ""
         inside_buildmesh = self.__script_inside_buildmesh_box
         for i, branch in enumerate(network.branches):
-            # border_network, inside_buildmesh = prepare_contour_list(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
-            border_network, inside_buildmesh = prepare_contour(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
+            border_network, inside_buildmesh = prepare_contour_list(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
+            # border_network, inside_buildmesh = prepare_contour(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
             if branch in network.active_branches:
                 ind = network.active_branches.index(branch)
                 tips[ind, 0] = branch.BC # boundary condition

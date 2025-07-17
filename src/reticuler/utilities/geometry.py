@@ -648,32 +648,38 @@ class Network:
             reconnection_distance = 0.01*pde_solver.ds
             reconnection_distance_bt = 0.01*pde_solver.ds
             
-        # branch.ID, branch ind,
-        # starting pt. ind., ending pt. ind.,
-        # starting x, starting y, ending x, ending y
-        all_segments_branches = np.empty((0,8))
-        for i, branch in enumerate(self.branches):
-            n_points = len(branch.points)
-            all_segments_branches = np.vstack(( all_segments_branches, \
-                np.column_stack( ( np.ones(n_points-1)*branch.ID,
-                                  np.ones(n_points-1)*i,
-                                  np.arange(n_points-1), np.arange(1, n_points),
-                                  branch.points[:-1], branch.points[1:] )
-                                )
-                ) )
+        def index_branches():
+            # branch.ID, branch ind,
+            # starting pt. ind., ending pt. ind.,
+            # starting x, starting y, ending x, ending y
+            all_segments_branches = np.empty((0,8))
+            for i, branch in enumerate(self.branches):
+                n_points = len(branch.points)
+                all_segments_branches = np.vstack(( all_segments_branches, \
+                    np.column_stack( ( np.ones(n_points-1)*branch.ID,
+                                    np.ones(n_points-1)*i,
+                                    np.arange(n_points-1), np.arange(1, n_points),
+                                    branch.points[:-1], branch.points[1:] )
+                                    )
+                    ) )
+            return all_segments_branches
         
-        mask_outlet = np.logical_or(self.box.boundary_conditions==DIRICHLET_GLOB_FLUX,
-                                    self.box.boundary_conditions==DIRICHLET_0)
-                                    # self.box.boundary_conditions==NEUMANN_1,)
-        inds_outlet = np.where(mask_outlet)[0]
-        # starting pt. ind.,
-        # starting x, starting y, ending x, ending y
-        pts_outlet = self.box.points[self.box.connections[inds_outlet]]
-        all_segments_outlet = np.column_stack( ( inds_outlet,
-                                                  pts_outlet[:,0],
-                                                  pts_outlet[:,1])
-                                                )
-        
+        def index_outlet():
+            mask_outlet = np.logical_or(self.box.boundary_conditions==DIRICHLET_GLOB_FLUX,
+                                        self.box.boundary_conditions==DIRICHLET_0)
+                                        # self.box.boundary_conditions==NEUMANN_1,)
+            inds_outlet = np.where(mask_outlet)[0]
+            # starting pt. ind.,
+            # starting x, starting y, ending x, ending y
+            pts_outlet = self.box.points[self.box.connections[inds_outlet]]
+            all_segments_outlet = np.column_stack( ( inds_outlet,
+                                                    pts_outlet[:,0],
+                                                    pts_outlet[:,1])
+                                                    )
+            return all_segments_outlet
+
+        all_segments_branches = index_branches()
+        all_segments_outlet = index_outlet()
         did_reconnect = False
         for branch in self.active_branches:
             # BREAKTHROUGH
@@ -723,6 +729,8 @@ class Network:
                     branch.steps = np.append(branch.steps, [step+1])
                     self.active_branches.remove(branch)
                     self.add_connection([branch.ID, -1])
+
+                    all_segments_outlet = index_outlet()
             
             # RECONNECTION TO OTHER BRANCHES
             elif len(self.branches)>1 and branch.length() > 2*reconnection_distance:
@@ -746,7 +754,7 @@ class Network:
 
                 if min_distance < reconnection_distance:
                     did_reconnect = True
-                    # to make more realistich reconnections we stretch tip further
+                    # to make more realistic reconnections we stretch tip further
                     dr = branch.points[-1] - branch.points[-2]
                     dr = dr/np.linalg.norm(dr) * pde_solver.finger_width/2 # !!!
                     tip = branch.points[-1] + dr
@@ -754,7 +762,7 @@ class Network:
                                     find_reconnection_point(tip, \
                                                         all_segments_branches[mask,4:6], \
                                                         all_segments_branches[mask,6:], 
-                                                        too_close=1e-3) 
+                                                        too_close=1e-3)
                     
                     # reconnect to a branch
                     branch2_id = int(all_segments_branches[mask][ind_min,0])
@@ -785,6 +793,10 @@ class Network:
                                               branch2.points[:-1], branch2.points[1:] )
                                             )
                             ) )
+                    
+                    all_segments_branches = index_branches()
+
+                
         return did_reconnect
                 
 

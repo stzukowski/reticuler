@@ -36,7 +36,7 @@ class ModifiedEulerMethod:
         self,
         pde_solver,
         is_reconnecting=False,
-        max_approximation_step=3
+        max_approximation_step=0
     ):
         """Initialize ModifiedEulerMethod_Streamline.
 
@@ -44,7 +44,7 @@ class ModifiedEulerMethod:
         ----------
         pde_solver : object of class pde_solvers
         is_reconnecting : bool, default False
-        max_approximation_step : int, default 3
+        max_approximation_step : int, default 0
 
         Returns
         -------
