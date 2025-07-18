@@ -273,7 +273,7 @@ def main():
                         radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2]), 
                         **args.morpher_params[0]
                         )
-        elif args.initial_condition[0]==6:
+        elif args.initial_condition[0]==6 or args.initial_condition[0]==7 or args.initial_condition[0]==8:
             morpher = morphers.Leaf(box_history=[box.copy()], **args.morpher_params[0])
         else:
             morpher = None
