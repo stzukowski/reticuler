@@ -163,11 +163,11 @@ class System:
                 export_morpher = {
                     "morpher": {
                         "type": type(self.morpher).__name__,
-                        "radii": self.morpher.radii,
                         "timescale": self.morpher.timescale,
                         "v_rim": self.morpher.v_rim,
                         "sprouting_thresh": self.morpher.sprouting_thresh,
                         "sprouting_stochastic_factor": self.morpher.sprouting_stochastic_factor,
+                        "radii": self.morpher.radii,
                         }
                     }
             elif type(self.morpher).__name__ == "Leaf":
@@ -384,6 +384,11 @@ class System:
                     pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
                 elif json_solver["type"] == "FreeFEM_ThickFingers":
                     pde_solver_class = pde_solvers.FreeFEM_ThickFingers
+                    json_solver.pop("bifurcation_type", None)
+                    json_solver.pop("bifurcation_thresh", None)
+                    json_solver.pop("bifurcation_angle", None)
+                    json_solver.pop("inflow_thresh", None)
+                    json_solver.pop("distance_from_bif_thresh", None)
                 elif json_solver["type"] == "FreeFEM_ThickFingers_Elasticity":
                     pde_solver_class = pde_solvers.FreeFEM_ThickFingers_Elasticity
                     

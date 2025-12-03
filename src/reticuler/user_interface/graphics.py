@@ -60,7 +60,7 @@ def plot_polygon(ax, poly, **kwargs):
     return collections
 
 
-def plot_tree(ax, system, 
+def plot_tree(system, ax,
               rot_angle=None, is_thick=None, 
               xmin=None, xmax=None, 
               ymin=None, ymax=None,
