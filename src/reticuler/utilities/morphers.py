@@ -141,15 +141,25 @@ class Leaf:
     ----------
     box_history : list, default []
         History of the box at each step.
+    pts_min_separation : float, default 0.015
+        Minimum separation between boundary points.
+    pts_max_separation : float, default 0.03
+        Maximum separation between boundary points.
     v_rim : float, default 1.0
         How fast the rim grows.
+    response_func : str, default "linear"
+        Function to map fluxes to boundary growth velocity.
+    response_func_params : dict, default {}
+        Parameters for the response function.
     """ 
     def __init__(
         self,
         box_history=[],
-        v_rim=1,
         pts_min_separation=0.015,
-        pts_max_separation=0.03
+        pts_max_separation=0.03,
+        v_rim=1,
+        response_func="linear",
+        response_func_params={},
     ):
         """Initialize Leaf.
 
@@ -157,6 +167,11 @@ class Leaf:
         ----------
         box_history : list, default []
         v_rim : float, default 1.0
+        pts_min_separation : float, default 0.015
+        pts_max_separation : float, default 0.03
+        v_rim : float, default 1.0
+        response_func : str, default "linear"
+        response_func_params : dict, default {}
 
         Returns
         -------
@@ -167,7 +182,17 @@ class Leaf:
         self.v_rim = v_rim
         self.pts_min_separation = pts_min_separation
         self.pts_max_separation = pts_max_separation
+        if response_func == "linear":
+            self.response_func = self.linear
+        if response_func == "sigmoid":
+            self.response_func = self.sigmoid
+        self.response_func_params = response_func_params
     
+    def linear(self, fluxes):
+            return fluxes
+    def sigmoid(self, fluxes, shift=0.5, rate=10, height=1):
+        return height / ( 1 + np.exp((fluxes-shift)*rate))
+
     def morph(self, network, out_growth, step):
         
         ###### IMPORT FLUXES ######
@@ -178,34 +203,31 @@ class Leaf:
         x = top_xy_flux[:,0]
         y = top_xy_flux[:,1]
         fluxes = top_xy_flux[:,2]
+        dt = out_growth[0]
         
-        # print(len(fluxes))
-        # ax2.plot(x, fluxes)
+        # VELOCITY
+        velocity = self.response_func(fluxes, **self.response_func_params)
         # plt.pause(0.01)
-        
-        # SIGMOIDA
-        # fluxes0=fluxes;
-        # fluxes = fluxes0.max()/(1+np.exp((np.quantile(fluxes0,0.6)-fluxes0)*3))
-        # # fluxes0.max()/(1+np.exp((np.mean(fluxes0)-fluxes0)*100))
+        # velocity = fluxes.max()/(1+np.exp((np.quantile(fluxes0,0.6)-fluxes0)*3))
         # ax2.clear()
-        # ax2.plot(np.arctan2(y,x),fluxes0, '.-', ms=5)
         # ax2.plot(np.arctan2(y,x),fluxes, '.-', ms=5)
+        # ax2.plot(np.arctan2(y,x),velocity, '.-', ms=5)
         # plt.pause(0.01)
 
         ####### PUSH THE BOUNDARY ######
-        s=self.v_rim*out_growth[0] # mnożnik fluxów
-        vx=np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = symetria względem ostatniego punktu
-        vy=np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
+        vx = np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = symetria względem ostatniego punktu
+        vy = np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
         if network.box.initial_condition==300:
-            vy=np.diff(y,prepend=y[1],append=y[-2]) # warunki na brzegach = odbicie względem osi pionowej (tylko dla prostokątów)
+            vy = np.diff(y,prepend=y[1],append=y[-2]) # warunki na brzegach = odbicie względem osi pionowej (tylko dla prostokątów)
         if network.box.initial_condition==350:
-            vx=np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne (tylko dla pełnego koła)
-            vy=np.diff(y,prepend=y[-1],append=y[0])
-        alfa=(np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
-        sx=s*fluxes*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
-        sy=s*fluxes*np.sin(alfa)
-        x+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
-        y+=(2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
+            vx = np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne (tylko dla pełnego koła)
+            vy = np.diff(y,prepend=y[-1],append=y[0])
+        alfa = (np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
+        s = self.v_rim*dt
+        sx = s*velocity*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
+        sy = s*velocity*np.sin(alfa)
+        x += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
+        y += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
         
         ###### CONTROL POINT DENSITY ######
         points = np.array([x, y]).T

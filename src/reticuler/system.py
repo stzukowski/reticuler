@@ -188,8 +188,12 @@ class System:
                 export_morpher = {
                     "morpher": {
                         "type": type(self.morpher).__name__,
+                        "box_history": "pickled", # export_box_history,
+                        "pts_min_separation": self.morpher.pts_min_separation,
+                        "pts_max_separation": self.morpher.pts_max_separation,
                         "v_rim": self.morpher.v_rim,
-                        "box_history": "pickled" # export_box_history
+                        "response_func" : self.morpher.response_func.__name__,
+                        "response_func_params" : self.morpher.response_func_params,     
                         }
                     }                
         else:
@@ -364,9 +368,14 @@ class System:
                                 initial_condition=initial_condition,
                             )  
                             boxes.append(box.copy())
+                            
                     morpher = morphers.Leaf(
-                                    v_rim=json_morpher["v_rim"],
                                     box_history=boxes,
+                                    pts_min_separation=json_morpher["pts_min_separation"],
+                                    pts_max_separation=json_morpher["pts_max_separation"],
+                                    v_rim=json_morpher["v_rim"],
+                                    response_func=json_morpher["response_func"],
+                                    response_func_params=json_morpher["response_func_params"],
                                     )
 
             else:
