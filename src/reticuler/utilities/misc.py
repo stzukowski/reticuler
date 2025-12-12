@@ -149,3 +149,14 @@ class NumpyEncoder(json.JSONEncoder):
         if isinstance(obj, np.int32) or isinstance(obj, np.int64): 
             return int(obj)
         return json.JSONEncoder.default(self, obj)
+    
+def sigmoid(x, sig_shift, sig_rate, sig_h):
+    """Sigmoid function, numerically stable implementation."""
+    is_scalar = np.isscalar(x)
+    z = np.atleast_1d(-(x - sig_shift) / sig_rate)
+    result = np.empty_like(z)
+    result[z<=0] = sig_h / (1 + np.exp(z[z<=0]))
+    result[z>0] = sig_h * np.exp(-z[z>0]) / (np.exp(-z[z>0]) + 1.0)
+    if is_scalar:
+        result = result[0]
+    return result

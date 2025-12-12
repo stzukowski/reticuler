@@ -7,7 +7,7 @@ Classes:
 import numpy as np
 
 from reticuler.utilities.geometry import Branch
-from reticuler.utilities.misc import cyl2cart, cart2cyl, extend_radially, find_reconnection_point
+from reticuler.utilities.misc import cyl2cart, cart2cyl, extend_radially, find_reconnection_point, sigmoid
 from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
 
 class Jellyfish:
@@ -18,16 +18,21 @@ class Jellyfish:
     radii : array, default [0]
         How radius changed in time (corresponds to system.timestamps).       
     timescale : float, default 1
-        1) (earlier) Factor to match the time when the first sprout connects to stomach.
+        1) (v0, v2now) Factor to match the time when the first sprout connects to stomach.
         dt = dt * timescale
-        2) (now) timescale = pde_solver.ds / v_sprout_desired
-        Assuming that the fastest sprout grows at constant speed v_sprout_desired => dt = timescale = ds / v_sprout_desired
+        2) (v1) timescale = pde_solver.ds / v_sprout_desired
+        Assuming that the fastest sprout grows at constant speed v_sprout_desired 
+        => dt = timescale = ds / v_sprout_desired
     v_rim : float, default 1.4
         Jellyfish radius growth rate [mm/day].
+    sprouting_stochastic_shift : float, default 0.2
+        Factor to randomize the position of new sprouts.  
     sprouting_thresh : float, default 1.5
         Threshold for inserting new sprouts [mm].
-    sprouting_stochastic_factor : float, default 0.2
-        Factor to randomize the position of new sprouts [mm].        
+    sprouting_sig_rate : float, default 0.15
+        Sigmoid rate for sprouting probability.
+    sprouting_sig_h : float, default 10
+        Maximum sprouting hazard.      
 
     """ 
     def __init__(
@@ -35,8 +40,10 @@ class Jellyfish:
         radii=None,
         timescale=1,
         v_rim=1.4,
+        sprouting_stochastic_shift=0.25,
         sprouting_thresh=1.5,
-        sprouting_stochastic_factor=0.25,
+        sprouting_sig_rate=0.15,
+        sprouting_sig_h=10,
     ):
         """Initialize Jellyfish.
 
@@ -45,16 +52,20 @@ class Jellyfish:
         radii : array, default [0]
         timescale : float, default 1
         v_rim : float, default 1.4
+        sprouting_stochastic_shift : float, default 0.25
         sprouting_thresh : float, default 1.5
-        sprouting_stochastic_factor : float, default 0.2        
+        sprouting_sig_rate : float, default 0.15
+        sprouting_sig_h : float, default 10
 
         Returns
         -------
         None.
 
         """
+        self.sprouting_stochastic_shift = sprouting_stochastic_shift
         self.sprouting_thresh = sprouting_thresh
-        self.sprouting_stochastic_factor = sprouting_stochastic_factor
+        self.sprouting_sig_rate = sprouting_sig_rate
+        self.sprouting_sig_h = sprouting_sig_h
         self.radii = np.array([0]) if radii is None else radii
         self.timescale = timescale
         self.v_rim = v_rim
@@ -82,26 +93,41 @@ class Jellyfish:
             return new_radii, R_rim01, distances_ang, mid_pos_ang
 
         # growth factor
-        out_growth[0] = self.timescale # * out_growth[0]
-        dt = out_growth[0]
+        dt = self.timescale * out_growth[0]
+        out_growth[0] = dt # to export properly
         R_rim0 = self.radii[-1]
         beta = 1 + self.v_rim * dt / R_rim0 
 
         self.radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
+        
+        ds = distances_ang * (self.radii[-1] - self.radii[-2])
+        Ps = ds * sigmoid(distances_ang*R_rim0, \
+                            sig_shift=self.sprouting_thresh, \
+                            sig_rate=self.sprouting_sig_rate, sig_h=self.sprouting_sig_h)
+        is_triggered = np.random.rand(len(Ps)) < Ps
+        # is_triggered = distances_ang*R_rim0>=self.sprouting_thresh
+        # canals_pos_ang.extend(mid_pos_ang[is_triggered])
 
         if len(network.active_branches)==0 and \
-          not any(distances_ang*R_rim0>=self.sprouting_thresh):
-            print("No sprouts and no space for new ones. Additional jellyfish growth.")
-            R_rim1 = (self.sprouting_thresh+1e-4) / max(distances_ang)
-            beta = R_rim1 / R_rim0
-            out_growth[0] = [dt, (R_rim1 - R_rim0)/self.v_rim]
+          not any(is_triggered):
+            dr = 1/5 * (self.sprouting_thresh / max(distances_ang) - R_rim0)/self.v_rim 
+            ds = distances_ang * dr
+            while not any(is_triggered):
+                R_rim1 = R_rim0 + dr
+                beta = R_rim1 / R_rim0
+                new_radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
+                Ps = ds * sigmoid(distances_ang*R_rim0, \
+                            sig_shift=self.sprouting_thresh, \
+                            sig_rate=self.sprouting_sig_rate, sig_h=self.sprouting_sig_h)
+                is_triggered = np.random.rand(len(Ps)) < Ps
+            self.radii = new_radii
+            out_growth[0] = [dt, (self.radii[-1] - self.radii[-2])/self.v_rim]
             step = step + 1
-            self.radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
-            
+            print("No sprouts and no space for new ones. Additional jellyfish growth.")
+        
         max_branch_id = len(network.branches) - 1
-        for i, theta in enumerate(mid_pos_ang[distances_ang*R_rim0>=self.sprouting_thresh]):
-            theta = theta + np.random.uniform(low=-1, high=1)*self.sprouting_stochastic_factor/R_rim0
-            print(f"Initiating new sprout at theta={theta/np.pi*180:.2f} deg.")
+        for i, theta in enumerate(mid_pos_ang[is_triggered]):
+            theta = theta + np.random.uniform(low=-1, high=1)*self.sprouting_stochastic_shift/R_rim0
             branch = Branch(
                     ID=max_branch_id+i+1,
                     points=np.vstack( cyl2cart(np.array([R_rim0, R_rim0-0.075]), \
@@ -115,8 +141,8 @@ class Jellyfish:
             # place seed at the boundary
             seed = branch.points[0]
             _, ind_min, is_pt_new, _ , ind_min_end = find_reconnection_point(seed, \
-                                                    network.box.points[:-1], \
-                                                    network.box.points[1:], \
+                                                    network.box.points, \
+                                                    np.roll(network.box.points, -1, axis=0), \
                                                     too_close=1e-3)
             if not is_pt_new:
                 network.box.points[ind_min+ind_min_end] = seed
@@ -128,6 +154,11 @@ class Jellyfish:
 
             network.box.seeds_connectivity[network.box.seeds_connectivity[:,0]>ind_min, 0] = network.box.seeds_connectivity[network.box.seeds_connectivity[:,0]>ind_min, 0] + 1
             network.box.seeds_connectivity = np.vstack((network.box.seeds_connectivity, [ind_min+1, branch.ID]))
+        
+        if any(is_triggered):
+            thetas = [f"{t:.3f}" for t in mid_pos_ang[is_triggered]/np.pi*180]
+            print(f"Initiating {sum(is_triggered)} new sprouts at \n theta={', '.join(thetas)} deg.")
+        print(f"Radius: {self.radii[-1]:.3f} mm")
         
         return out_growth
   

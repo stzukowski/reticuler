@@ -220,8 +220,8 @@ def main():
                     clippers.clip_to_step(system, s)
                 fig, ax = plt.subplots()
                 graphics.plot_tree(
-                    ax,
                     system=system,
+                    ax=ax,
                     xmax=args.xmax[0],
                     ymax=args.ymax[0],
                     rot_angle=args.rot_angle[0],

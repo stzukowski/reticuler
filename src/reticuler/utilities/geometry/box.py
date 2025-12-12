@@ -101,7 +101,7 @@ class Box:
                 - IC = 300: DIRICHLET_1 BC on growing top
             IC = 200, 201: jellyfish (an octant) with a trifork
                 - IC = 200: Dirichlet on bottom and top, but rescaled such that global flux is constant
-                - IC = 201: u=0 on top and Neumann on bottom
+                - IC = 201: u=0 on top and NEUMANN_1 on bottom
             IC = 301: leaf semiellipse with seeds at the bottom boundary
             IC = 350: leaf circle with seeds in the center
             IC = 351: leaf slice with seeds in the center
@@ -394,7 +394,8 @@ class Box:
             )
             # sprouts
             # eps = np.array([0.013 , -0.012, 0.008, -0.011])
-            eps = np.random.uniform(low=-1, high=1, size=4)*0.2/R_rim
+            eps = [0]*4
+            # eps = np.random.uniform(low=-1, high=1, size=4)*0.2/R_rim
             for i, theta in enumerate(np.arange(-3/8,3.1/8,1/4)*angular_width):
                 branch = Branch(
                         ID=3+i,

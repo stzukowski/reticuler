@@ -620,6 +620,7 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         self._script_adaptmesh = self._script_adaptmesh.replace("\n// Solving the problem", \
                                           script_distance+"\n// Solving the problem")
         self._script_adaptmesh = self._script_adaptmesh.replace("nvAroundTips.min < 250", "nvAroundTips.min < 100")
+        self._script_adaptmesh = self._script_adaptmesh.replace("adaptCounter<=3", "adaptCounter<=2")
         # self._script_adaptmesh = self._script_adaptmesh.replace("Th = adaptmesh(Th,1,", "// Th = adaptmesh(Th,1,")
         self._script_adaptmesh = add_after(self._script_adaptmesh, "keepbackvertices=1",",requirededges=reqEdgs")
         self._script_adaptmesh = add_after( self._script_adaptmesh, \
