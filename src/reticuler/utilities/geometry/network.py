@@ -228,9 +228,9 @@ class Network:
                     if is_pt_new:
                         branch2_ind = int(all_segments_branches[mask][ind_min,1])
                         branch2 = self.branches[branch2_ind]
-                        ind_pt = int(all_segments_branches[mask][ind_min, 2])
+                        ind_pt = int(all_segments_branches[mask][ind_min, 2]) # ind_min is the index of the closest segment
                         branch2.points = np.insert(branch2.points, ind_pt+1, reconnection_pt, axis=0)
-                        branch2.steps = np.insert(branch2.steps, ind_pt+1, branch2.steps[ind_pt], axis=0)
+                        branch2.steps = np.insert(branch2.steps, ind_pt+1, branch2.steps[ind_pt+1], axis=0)
 
                         # update all_segments_branches (in case something else reconnects to the same branch)
                         all_segments_branches = all_segments_branches[ all_segments_branches[:,0]!=branch2_id]

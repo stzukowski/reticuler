@@ -393,7 +393,8 @@ class Box:
                 )
             )
             # sprouts
-            eps = np.array([0.013 , -0.012, 0.008, -0.011])
+            # eps = np.array([0.013 , -0.012, 0.008, -0.011])
+            eps = [0]*4
             # eps = np.random.uniform(low=-1, high=1, size=4)*0.2/R_rim
             for i, theta in enumerate(np.arange(-3/8,3.1/8,1/4)*angular_width):
                 branch = Branch(

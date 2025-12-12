@@ -165,8 +165,10 @@ class System:
                         "type": type(self.morpher).__name__,
                         "timescale": self.morpher.timescale,
                         "v_rim": self.morpher.v_rim,
+                        "sprouting_stochastic_shift": self.morpher.sprouting_stochastic_shift,
                         "sprouting_thresh": self.morpher.sprouting_thresh,
-                        "sprouting_stochastic_factor": self.morpher.sprouting_stochastic_factor,
+                        "sprouting_sig_rate": self.morpher.sprouting_sig_rate,
+                        "sprouting_sig_h": self.morpher.sprouting_sig_h,
                         "radii": self.morpher.radii,
                         }
                     }
@@ -331,17 +333,23 @@ class System:
                 if json_morpher["type"] == "Jellyfish":
                     # !!! Backward compatibility
                     try:
+                        sprouting_stochastic_shift=json_morpher["sprouting_stochastic_shift"]
                         sprouting_thresh=json_morpher["sprouting_thresh"]
-                        sprouting_stochastic_factor=json_morpher["sprouting_stochastic_factor"]
+                        sprouting_sig_rate=json_morpher["sprouting_sig_rate"]
+                        sprouting_sig_h=json_morpher["sprouting_sig_h"]     
                     except Exception as error:
+                        sprouting_stochastic_shift = 0.2
                         sprouting_thresh = 1.5
-                        sprouting_stochastic_factor = 0.2                    
+                        sprouting_sig_rate = 0.15
+                        sprouting_sig_h = 10      
                     morpher = morphers.Jellyfish(
                                     radii=json_morpher["radii"],
                                     timescale=json_morpher["timescale"],
                                     v_rim=json_morpher["v_rim"],
+                                    sprouting_stochastic_shift=sprouting_stochastic_shift,
                                     sprouting_thresh=sprouting_thresh,
-                                    sprouting_stochastic_factor=sprouting_stochastic_factor,
+                                    sprouting_sig_rate=sprouting_sig_rate,
+                                    sprouting_sig_h=sprouting_sig_h,
                                     )
                 elif json_morpher["type"] == "Leaf":
                     # !!! Backward compatibility
