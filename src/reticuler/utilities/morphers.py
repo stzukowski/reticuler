@@ -166,7 +166,7 @@ class Jellyfish:
 # fig2,ax2 = plt.subplots()
 # np.savez_compressed() to save box_history?
 class Leaf:
-    """A class to handle evolution of the boundary.
+    r"""A class to handle evolution of the boundary.
 
     Attributes
     ----------
@@ -177,11 +177,12 @@ class Leaf:
     pts_max_separation : float, default 0.03
         Maximum separation between boundary points.
     v_rim : float, default 1.0
-        How fast the rim grows.
+        How fast the rim grows. The factor: $\sqrt{R/L}*\alfa_{boundary} / \alfa_{tip}$ in Maciej's Pawlus thesis.
     response_func : str, default "linear"
         Function to map fluxes to boundary growth velocity.
     response_func_params : dict, default {}
         Parameters for the response function.
+
     """ 
     def __init__(
         self,
@@ -197,7 +198,6 @@ class Leaf:
         Parameters
         ----------
         box_history : list, default []
-        v_rim : float, default 1.0
         pts_min_separation : float, default 0.015
         pts_max_separation : float, default 0.03
         v_rim : float, default 1.0
@@ -215,14 +215,15 @@ class Leaf:
         self.pts_max_separation = pts_max_separation
         if response_func == "linear":
             self.response_func = self.linear
-        if response_func == "sigmoid":
-            self.response_func = self.sigmoid
+        if response_func == "linsig":
+            self.response_func = self.linear_sigmoid
+
         self.response_func_params = response_func_params
     
     def linear(self, fluxes):
-            return fluxes
-    def sigmoid(self, fluxes, shift=0.5, rate=10, height=1):
-        return height / ( 1 + np.exp((fluxes-shift)*rate))
+        return self.v_rim*fluxes
+    def linear_sigmoid(self, fluxes, sig_shift=0.5, sig_rate=10):
+        return self.v_rim * fluxes * sigmoid(fluxes, sig_shift=sig_shift, sig_rate=sig_rate, sig_h=1)
 
     def morph(self, network, out_growth, step):
         
@@ -254,9 +255,9 @@ class Leaf:
             vx = np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne (tylko dla pełnego koła)
             vy = np.diff(y,prepend=y[-1],append=y[0])
         alfa = (np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
-        s = self.v_rim*dt
-        sx = s*velocity*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
-        sy = s*velocity*np.sin(alfa)
+        s = velocity*dt
+        sx = s*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
+        sy = s*np.sin(alfa)
         x += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
         y += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
         
