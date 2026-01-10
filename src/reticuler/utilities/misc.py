@@ -20,7 +20,7 @@ import os
 # Labels for boundary conditions
 DIRICHLET_0 = 1 # u=0
 DIRICHLET_1 = 2 # u=1
-DIRICHLET_GLOB_FLUX = 3 # global flux constant (rescaled Dirichlet)
+DIRICHLET_0_GLOB_FLUX = 3 # global flux constant (rescaled Dirichlet)
 NEUMANN_0 = 4 # zero flux boundary condition
 NEUMANN_1 = 5 # constant flux = -1 (influx)
 RIGHT_WALL_PBC = 999
@@ -156,7 +156,7 @@ def sigmoid(x, sig_shift, sig_rate, sig_h):
     z = np.atleast_1d(-(x - sig_shift) / sig_rate)
     result = np.empty_like(z)
     result[z<=0] = sig_h / (1 + np.exp(z[z<=0]))
-    result[z>0] = sig_h * np.exp(-z[z>0]) / (np.exp(-z[z>0]) + 1.0)
+    result[z>0] = sig_h * np.exp(-z[z>0]) / (np.exp(-z[z>0]) + 1)
     if is_scalar:
         result = result[0]
     return result

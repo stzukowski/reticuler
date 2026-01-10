@@ -6,7 +6,7 @@ import shapely
 from shapely.ops import linemerge 
 from shapely.geometry import LineString, MultiLineString, LinearRing, Polygon
 
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_0_GLOB_FLUX
 from reticuler.utilities.misc import rotation_matrix
 
 from reticuler.extending_kernels.pde_solvers.freefem import FreeFEM
@@ -75,11 +75,11 @@ class FreeFEM_ThickFingers(FreeFEM):
         self.mobility_ratio = mobility_ratio
         
         # parts of the script
-        DIRICHLET_GLOB_FLUX_script = ""
-        if (network.box.boundary_conditions==DIRICHLET_GLOB_FLUX).any(): 
-            DIRICHLET_GLOB_FLUX_script = f"""
-            // Normalize "u" if DIRICHLET_GLOB_FLUX BC
-            real globFlux=int1d(Th, {DIRICHLET_GLOB_FLUX})( abs([dxu,dyu]'*[N.x,N.y])*mobility );
+        DIRICHLET_0_GLOB_FLUX_script = ""
+        if (network.box.boundary_conditions==DIRICHLET_0_GLOB_FLUX).any(): 
+            DIRICHLET_0_GLOB_FLUX_script = f"""
+            // Normalize "u" if DIRICHLET_0_GLOB_FLUX BC
+            real globFlux=int1d(Th, {DIRICHLET_0_GLOB_FLUX})( abs([dxu,dyu]'*[N.x,N.y])*mobility );
             u=u/globFlux;
             // Recalculate gradients
             dxu=dx(u);
@@ -153,11 +153,11 @@ class FreeFEM_ThickFingers(FreeFEM):
                      int2d(Th)(mobility*(dx(u)*dx(v) + dy(u)*dy(v)))
                                 // -int2d(Th)(v) // rain in domain
                                 -int1d(Th,{NEUMANN_1})(mobility*v)  // constant flux (local)
-                                +on({DIRICHLET_GLOB_FLUX},u=0) // constant flux (global)
+                                +on({DIRICHLET_0_GLOB_FLUX},u=0) // constant flux (global)
                                 +on({DIRICHLET_0},u=0) // constant field
                                 +on({DIRICHLET_1},u=1);
             """
-        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, DIRICHLET_GLOB_FLUX=DIRICHLET_GLOB_FLUX, DIRICHLET_1=DIRICHLET_1, DIRICHLET_0=DIRICHLET_0)
+        ).format(pbc=self.pbc, NEUMANN_1=NEUMANN_1, DIRICHLET_0_GLOB_FLUX=DIRICHLET_0_GLOB_FLUX, DIRICHLET_1=DIRICHLET_1, DIRICHLET_0=DIRICHLET_0)
 
         if self.equation==1:
             self._script_problem = self._script_problem.replace(
@@ -224,7 +224,7 @@ class FreeFEM_ThickFingers(FreeFEM):
             dyu=dy(u);
             // du=(dxu^2+dyu^2)^0.5;
             // plot(du, wait=true, fill=true);
-            {DIRICHLET_GLOB_FLUX_script}            
+            {DIRICHLET_0_GLOB_FLUX_script}            
             // Deteremining the flux coming to the tip
             // More on reading the field values in specific points:
             // https://www.ljll.math.upmc.fr/pipermail/freefempp/2013-July/002798.html
@@ -263,7 +263,7 @@ class FreeFEM_ThickFingers(FreeFEM):
                 // cout << totGrad << "," << maxAngle << ",";
             }}
             cout << "kopytko" << "end";
-            """.format(DIRICHLET_GLOB_FLUX_script=DIRICHLET_GLOB_FLUX_script)
+            """.format(DIRICHLET_0_GLOB_FLUX_script=DIRICHLET_0_GLOB_FLUX_script)
         )
 
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):

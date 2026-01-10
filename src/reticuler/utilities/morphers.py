@@ -8,7 +8,7 @@ import numpy as np
 
 from reticuler.utilities.geometry import Branch
 from reticuler.utilities.misc import cyl2cart, cart2cyl, extend_radially, find_reconnection_point, sigmoid
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_0_GLOB_FLUX
 
 class Jellyfish:
     """A class to handle jellyfish simulations. Includes global growth and adding new sprouts.
@@ -51,7 +51,7 @@ class Jellyfish:
         ----------
         radii : array, default [0]
         timescale : float, default 1
-        v_rim : float, default 1.4
+        v_rim : float, default 1.4 [mm/day]
         sprouting_stochastic_shift : float, default 0.25
         sprouting_thresh : float, default 1.5
         sprouting_sig_rate : float, default 0.15
@@ -110,7 +110,10 @@ class Jellyfish:
 
         if len(network.active_branches)==0 and \
           not any(is_triggered):
-            dr = 1/5 * (self.sprouting_thresh / max(distances_ang) - R_rim0)/self.v_rim 
+            if self.sprouting_thresh < max(distances_ang) * R_rim0:
+                dr = 5*(self.radii[-1] - self.radii[-2])
+            else:
+                dr = 1/5 * (self.sprouting_thresh / max(distances_ang) - R_rim0)
             ds = distances_ang * dr
             while not any(is_triggered):
                 R_rim1 = R_rim0 + dr
@@ -215,14 +218,14 @@ class Leaf:
         self.pts_max_separation = pts_max_separation
         if response_func == "linear":
             self.response_func = self.linear
-        if response_func == "linsig":
+        if response_func == "linear_sigmoid":
             self.response_func = self.linear_sigmoid
 
         self.response_func_params = response_func_params
     
     def linear(self, fluxes):
         return self.v_rim*fluxes
-    def linear_sigmoid(self, fluxes, sig_shift=0.5, sig_rate=10):
+    def linear_sigmoid(self, fluxes, sig_shift, sig_rate):
         return self.v_rim * fluxes * sigmoid(fluxes, sig_shift=sig_shift, sig_rate=sig_rate, sig_h=1)
 
     def morph(self, network, out_growth, step):

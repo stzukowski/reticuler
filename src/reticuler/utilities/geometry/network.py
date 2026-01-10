@@ -10,7 +10,7 @@ import numpy as np
 import copy
 
 from reticuler.utilities.geometry.branch import Branch
-from reticuler.utilities.misc import DIRICHLET_0, DIRICHLET_GLOB_FLUX, NEUMANN_0
+from reticuler.utilities.misc import DIRICHLET_0, DIRICHLET_0_GLOB_FLUX, NEUMANN_0
 from reticuler.utilities.misc import find_reconnection_point
 
 class Network:
@@ -113,7 +113,7 @@ class Network:
             return all_segments_branches
         
         def index_outlet():
-            mask_outlet = (self.box.boundary_conditions==DIRICHLET_GLOB_FLUX) | \
+            mask_outlet = (self.box.boundary_conditions==DIRICHLET_0_GLOB_FLUX) | \
                             (self.box.boundary_conditions==DIRICHLET_0) | \
                                 (self.box.boundary_conditions==NEUMANN_0)
             inds_outlet = np.where(mask_outlet)[0]

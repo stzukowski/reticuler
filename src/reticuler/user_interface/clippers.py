@@ -16,7 +16,7 @@ def clip_to_step(system, max_step):
     branches_to_iterate = system.network.branches.copy()
     for branch in branches_to_iterate:
         to_trash  = branch.steps > max_step
-        if sum(to_trash)+1 >= len(branch.steps):
+        if sum(to_trash)+1 >= len(branch.steps): # delete whole branch
             mask = system.network.branch_connectivity[:,1]!=branch.ID
             if sum(~mask)==1:
                 mother_ID = system.network.branch_connectivity[~mask,0][0]
@@ -24,17 +24,21 @@ def clip_to_step(system, max_step):
                 if not mother_branch in system.network.active_branches:
                     system.network.active_branches.append(mother_branch)
             system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
+            
+            mask = system.network.branch_connectivity[:,0]!=branch.ID # reconnected branches
+            system.network.branch_connectivity = system.network.branch_connectivity[mask,...]
             system.network.branches.remove(branch)
             if branch in system.network.active_branches:
                 system.network.active_branches.remove(branch)
             if branch in system.network.sleeping_branches:
                 system.network.sleeping_branches.remove(branch)
-        elif sum(to_trash):
+        elif sum(to_trash): # trim branch
             branch.points = branch.points[~to_trash]
             branch.steps = branch.steps[~to_trash]
+
+            # reconnected branches
             mask = system.network.branch_connectivity[:,0]==branch.ID
             if mask.any():
-            # if (system.network.branch_connectivity[~mask,1]==-1).any():
                 system.network.branch_connectivity = system.network.branch_connectivity[~mask,...]
                 system.network.active_branches.append(branch)
             

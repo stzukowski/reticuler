@@ -10,7 +10,7 @@ import numpy as np
 import copy
 
 from reticuler.utilities.geometry.branch import Branch
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_GLOB_FLUX
+from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_0_GLOB_FLUX
 from reticuler.utilities.misc import cyl2cart
 
 class Box:
@@ -27,7 +27,7 @@ class Box:
         corresponding to links in ``connections`` list.
             - 1: DIRICHLET_0, absorbing BC (vanishing field)
             - 2: DIRICHLET_1
-            - 3: DIRICHLET_GLOB_FLUX, constant global flux
+            - 3: DIRICHLET_0_GLOB_FLUX, constant global flux
             - 4: NEUMANN_0, reflective BC (vanishing normal derivative)
             - 5: NEUMANN_1
             - 998: LEFT_WALL_PBC
@@ -100,8 +100,10 @@ class Box:
                 - IC = 103: DIRICHLET_1 BC on top
                 - IC = 300: DIRICHLET_1 BC on growing top
             IC = 200, 201: jellyfish (an octant) with a trifork
-                - IC = 200: Dirichlet on bottom and top, but rescaled such that global flux is constant
-                - IC = 201: u=0 on top and NEUMANN_1 on bottom
+                - IC = 200: DIRICHLET_1 bottom and DIRICHLET_0_GLOB_FLUX on top
+                            (u=1/0, but rescaled such that global flux is constant)
+                - IC = 201: DIRICHLET_1 top and NEUMANN_1 bottom OR elasticity
+                - IC = 202: DIRICHLET_1 bottom and DIRICHLET_0 bottom
             IC = 301: leaf semiellipse with seeds at the bottom boundary
             IC = 350: leaf circle with seeds in the center
             IC = 351: leaf slice with seeds in the center
@@ -342,18 +344,22 @@ class Box:
             ).T
             box.__add_connection(
                 connections_to_add,
-                boundary_conditions=DIRICHLET_1
+                boundary_conditions=DIRICHLET_1 # all walls DIRICHLET_1
                 * np.ones(len(connections_to_add), dtype=int),
             )
-            # right, left Neumann:
+            # right, left wall:
             box.boundary_conditions[0] = NEUMANN_0
             box.boundary_conditions[n_points_stomach+1] = NEUMANN_0
-            # top DIRICHLET_GLOB_FLUX
-            box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_GLOB_FLUX
-            if initial_condition==201:
+            if initial_condition==200:
+                box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0_GLOB_FLUX # top
+            elif initial_condition==201:
                 box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0 # top
                 box.boundary_conditions[n_points_stomach+2:] = NEUMANN_1 # bottom
-            
+            elif initial_condition==202:
+                box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0 # top
+            else:
+                raise ValueError(f"Initial condition {initial_condition} is incorrect! Choose another one.")
+
             # points_to_plot = box.points[box.connections]
             # for i, pts in enumerate(points_to_plot):
             #     plt.plot(*pts.T, '.-', color="{}".format(box.boundary_conditions[i]/5), ms=1, lw=5)
@@ -497,6 +503,6 @@ class Box:
             
             branch_connectivity = None
         else:
-            print(f"\n###################\nInitial condition {initial_condition} is incorrect! Choose another one.\n################### \n")
-
+            raise ValueError(f"Initial condition {initial_condition} is incorrect! Choose another one.")
+        
         return box, branches, active_branches, branch_connectivity
