@@ -23,7 +23,7 @@ class Jellyfish:
         2) (v1) timescale = pde_solver.ds / v_sprout_desired
         Assuming that the fastest sprout grows at constant speed v_sprout_desired 
         => dt = timescale = ds / v_sprout_desired
-    v_rim : float, default 1.4
+    v_rim : float, default 1.3
         Jellyfish radius growth rate [mm/day].
     sprouting_stochastic_shift : float, default 0.2
         Factor to randomize the position of new sprouts.  
@@ -39,7 +39,7 @@ class Jellyfish:
         self,
         radii=None,
         timescale=1,
-        v_rim=1.4,
+        v_rim=1.3,
         sprouting_stochastic_shift=0.25,
         sprouting_thresh=1.5,
         sprouting_sig_rate=0.15,
@@ -51,7 +51,7 @@ class Jellyfish:
         ----------
         radii : array, default [0]
         timescale : float, default 1
-        v_rim : float, default 1.4 [mm/day]
+        v_rim : float, default 1.3 [mm/day]
         sprouting_stochastic_shift : float, default 0.25
         sprouting_thresh : float, default 1.5
         sprouting_sig_rate : float, default 0.15
@@ -99,6 +99,9 @@ class Jellyfish:
         beta = 1 + self.v_rim * dt / R_rim0 
 
         self.radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
+        # updated sprouting_thresh (L0)!
+        # self.sprouting_thresh = 2.9+0.03*R_rim0
+        self.sprouting_thresh = 0.04*R_rim0
         
         ds = distances_ang * (self.radii[-1] - self.radii[-2])
         Ps = ds * sigmoid(distances_ang*R_rim0, \
@@ -111,14 +114,17 @@ class Jellyfish:
         if len(network.active_branches)==0 and \
           not any(is_triggered):
             if self.sprouting_thresh < max(distances_ang) * R_rim0:
-                dr = 5*(self.radii[-1] - self.radii[-2])
+                dr = self.radii[-1] - self.radii[-2]
             else:
-                dr = 1/5 * (self.sprouting_thresh / max(distances_ang) - R_rim0)
+                dr = 1/20 * (self.sprouting_thresh / max(distances_ang) - R_rim0)
             ds = distances_ang * dr
             while not any(is_triggered):
                 R_rim1 = R_rim0 + dr
                 beta = R_rim1 / R_rim0
                 new_radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
+                # updated sprouting_thresh (L0) and width!
+                # self.sprouting_thresh = 2.9+0.03*R_rim0
+                self.sprouting_thresh = 0.04*R_rim0
                 Ps = ds * sigmoid(distances_ang*R_rim0, \
                             sig_shift=self.sprouting_thresh, \
                             sig_rate=self.sprouting_sig_rate, sig_h=self.sprouting_sig_h)

@@ -103,7 +103,7 @@ class Box:
                 - IC = 200: DIRICHLET_1 bottom and DIRICHLET_0_GLOB_FLUX on top
                             (u=1/0, but rescaled such that global flux is constant)
                 - IC = 201: DIRICHLET_1 top and NEUMANN_1 bottom OR elasticity
-                - IC = 202: DIRICHLET_1 bottom and DIRICHLET_0 bottom
+                - IC = 202: DIRICHLET_1 bottom and DIRICHLET_0 top
             IC = 301: leaf semiellipse with seeds at the bottom boundary
             IC = 350: leaf circle with seeds in the center
             IC = 351: leaf slice with seeds in the center
@@ -134,6 +134,8 @@ class Box:
                     Radius of the semicircle/circle
                 angular_width: float, default 2*np.pi
                     Angular width of the slice. If 2*np.pi, then initial_condition = 350.
+                circle_BC: int, default 2 (DIRICHLET_1)
+                    Boundary condition on the circle. Enter 5 for constant flux (NEUMANN_1).
 
         Returns
         -------
@@ -306,7 +308,7 @@ class Box:
         # Jellyfish
         elif initial_condition//100==2:
             angular_width = 2*np.pi / 8
-            R_rim = 5 # mm
+            R_rim = 4 # mm
             R_stom = 0.45 * R_rim
             h0 = R_rim - R_stom
                 
@@ -399,19 +401,19 @@ class Box:
                 )
             )
             # sprouts
-            # eps = np.array([0.013 , -0.012, 0.008, -0.011])
-            eps = [0]*4
             # eps = np.random.uniform(low=-1, high=1, size=4)*0.2/R_rim
-            for i, theta in enumerate(np.arange(-3/8,3.1/8,1/4)*angular_width):
+            # eps = np.array([0.013 , -0.012, 0.008, -0.011])
+            pos_ang_0 = np.arange(-3/8,3.1/8,1/4)*angular_width # + eps
+            for i, theta in enumerate(pos_ang_0):
                 branch = Branch(
                         ID=3+i,
-                        points=cyl2cart(np.array([R_rim, R_rim-0.075]), theta+eps[i], R_rim),
+                        points=cyl2cart(np.array([R_rim, R_rim-0.075]), theta, R_rim),
                         steps=np.array([0, 0])
                     )
                 branches.append(branch)       
                 active_branches.append(branch)
                 # ind = box.seeds_connectivity[3+i, 0]
-                ind = 2+n_points_stomach + np.argmin(np.abs(rim_pts_angs - (theta+eps[i])))
+                ind = 2+n_points_stomach + np.argmin(np.abs(rim_pts_angs - (theta)))
                 box.points[ind] = branch.points[0]
                 
             branch_connectivity = np.array([[0,-1],[1,0],[2,0]])
@@ -424,18 +426,25 @@ class Box:
                 "branch_BCs": [DIRICHLET_0],
                 "radius": 0.5,
                 "angular_width": 2*np.pi,
+                "circle_BC": DIRICHLET_1, # 5 for NEUMANN_1
             }
             options_construct.update(kwargs_construct)
-            if options_construct["angular_width"]==2*np.pi:
+            if options_construct["angular_width"]>=2*np.pi-0.0001:
                 initial_condition = 350 # full circle
                 box.initial_condition = 350 # full circle
             elif options_construct["angular_width"]<2*np.pi:
                 initial_condition = 351 # slice
                 box.initial_condition = 351 # slice
 
-            if type(options_construct["seeds_phi"])==int:
-                options_construct["seeds_phi"]=2*np.pi/options_construct["seeds_phi"]*np.arange(options_construct["seeds_phi"])
-                
+            if type(options_construct["seeds_phi"])==int and box.initial_condition==350:
+                options_construct["seeds_phi"] = 2*np.pi/options_construct["seeds_phi"]*np.arange(options_construct["seeds_phi"])
+            elif type(options_construct["seeds_phi"])==int and box.initial_condition==351:
+                ang_dist = options_construct["angular_width"]/options_construct["seeds_phi"]
+                options_construct["seeds_phi"] = np.arange(-options_construct["angular_width"]/2+ang_dist/2, options_construct["angular_width"]/2, ang_dist)
+            if type(options_construct["seeds_phi"])==float:
+                options_construct["seeds_phi"] = [options_construct["seeds_phi"]]
+
+
             if not len(options_construct["initial_lengths"])==len(options_construct["seeds_phi"]):
                 options_construct["initial_lengths"] = (
                     np.ones(len(options_construct["seeds_phi"]))
@@ -478,7 +487,7 @@ class Box:
             ).T
             box.__add_connection(
                 connections_to_add,
-                boundary_conditions=DIRICHLET_1
+                boundary_conditions=options_construct["circle_BC"]
                 * np.ones(len(connections_to_add), dtype=int),
             )
             if initial_condition==351:
@@ -493,7 +502,7 @@ class Box:
                 branch = Branch(
                         ID=i,
                         points=np.array(
-                            [[0, 0], [-IL*np.sin(phi), IL*np.cos(phi)]]
+                            [[0, 0], [IL*np.sin(phi), IL*np.cos(phi)]]
                         ),
                         steps=np.array([0, 0]),
                         BC=BC

@@ -137,7 +137,8 @@ def plot_tree(system, ax,
                                  cap_style=1, join_style=1, resolution=99)
         thick_tree = box.intersection(thick_tree)
     
-        plot_polygon(ax, thick_tree, transform=rot+base, 
+        plot_polygon(ax, thick_tree, transform=rot+base,
+                     linewidth=options_tree_plot["linewidth"],
                      edgecolor="0", facecolor=options_tree_plot["color"])
     # for branch in system.network.branches:
     #     line = branch.points

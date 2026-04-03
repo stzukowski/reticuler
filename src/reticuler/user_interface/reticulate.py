@@ -224,6 +224,18 @@ def main():
 
     # Morpher
     parser.add_argument(
+    "--morpher",
+    type=str,
+    nargs=1,
+    metavar="name",
+    help=textwrap.dedent(
+        """\
+        Morpher
+        default = None"""
+    ),
+    default=[None],
+    )
+    parser.add_argument(
         "--morpher_params",
         type=json.loads,
         nargs=1,
@@ -284,11 +296,14 @@ def main():
         
         # Morpher
         if args.initial_condition[0]//100==2:
+            args.morpher = "Jellyfish"
+        
+        if args.morpher == "Jellyfish":
             morpher = morphers.Jellyfish(
                         radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2]), 
                         **args.morpher_params[0]
                         )
-        elif args.initial_condition[0]//100==3:
+        elif args.morpher == "Leaf":
             morpher = morphers.Leaf(box_history=[box.copy()], **args.morpher_params[0])
         else:
             morpher = None
