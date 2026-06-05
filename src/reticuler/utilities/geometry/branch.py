@@ -26,8 +26,6 @@ class Branch:
         The boundary condition on fingers, when solving the equations for the field.
         DIRICHLET_0 (u=0)
         DIRICHLET_1 (u=1)
-    dR : array or 0, default 0
-        A 1-2 array of tip progression ([dx, dy]).
     is_bifurcating : bool, default False
         A boolean condition if branch is bifurcating or not.
         (Based on the bifurcation_type and bifurcation_thresh from extender.)
@@ -53,18 +51,16 @@ class Branch:
         self.points = points  # in order of creation
         self.steps = steps  # at which step of the evolution the point was added
         self.BC = BC # boundary condition
-        
-        self.dR = 0
 
-    def extend(self, step=0):
-        """Add a new point to ``self.points`` (progressed tip)."""
-        if np.linalg.norm(self.dR) < 9e-5:
+    def extend(self, step, dR):
+        """Add a new point to ``self.points`` (progressed tip) and update ``self.steps``."""
+        if np.linalg.norm(dR) < 9e-5:
             print("! Extremely small dR, tip {} not extended but shifted !".format(self.ID))
             tip_versor = self.points[-1] - self.points[-2]
             tip_versor = tip_versor / np.linalg.norm(tip_versor)
-            self.points[-1] = self.points[-1] + tip_versor * self.dR
+            self.points[-1] = self.points[-1] + tip_versor * dR
         else:
-            self.points = np.vstack((self.points, self.points[-1] + self.dR))
+            self.points = np.vstack((self.points, self.points[-1] + dR))
             self.steps = np.append(self.steps, step)
 
     def length(self):

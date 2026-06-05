@@ -144,12 +144,10 @@ def plot_tree(system, ax,
     #     line = branch.points
     #     ax.plot(*line.T, '.-', ms=5, transform=rot+base)
 
-    # if xmin is not None or xmax is not None \
-    #     or ymin is not None or ymax is not None:
     xmin = np.min(system.network.box.points[:,0]) if xmin is None else xmin
     xmax = np.max(system.network.box.points[:,0]) if xmax is None else xmax
     ymin = np.min(system.network.box.points[:,1]) if ymin is None else ymin
-    ymax_tree = np.min( (np.max(system.network.box.points[:,1]), ymax_tree) )
+    ymax_tree = np.min( (np.max(system.network.box.points[:,1]), ymax_tree) ) # np.max(system.network.box.points[:,1])*1.05
     ymax = ymax_tree if ymax is None else ymax
     
     xmin, ymin = np.dot(rotation_matrix(rot_angle/180*np.pi), [xmin, ymin])
@@ -220,7 +218,7 @@ def animate_tree(system0,
         clippers.clip_to_time(system, i)
         
         etwas = [] # for tree buffer
-        if type(system.morpher).__name__ == "Leaf":
+        if type(system.extender.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary":
             # update box
             box = Polygon(system.network.box.points)
             etwas.append(*plot_polygon(ax, box, 

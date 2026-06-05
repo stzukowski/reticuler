@@ -256,12 +256,6 @@ def main():
             morphers.Jellyfish.__doc__[
                 morphers.Jellyfish.__doc__.find("radii"):
             ]
-        )
-        + "2. Leaf\n"
-        + textwrap.dedent(
-            morphers.Leaf.__doc__[
-                morphers.Leaf.__doc__.find("box_history"):
-            ]
         ),
         default=[{}],
     )
@@ -303,24 +297,25 @@ def main():
                         radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2]), 
                         **args.morpher_params[0]
                         )
-        elif args.morpher == "Leaf":
-            morpher = morphers.Leaf(box_history=[box.copy()], **args.morpher_params[0])
         else:
             morpher = None
           
         # Extender
         if args.extender[0] == "ModifiedEulerMethod":
+            extender_class = extenders.ModifiedEulerMethod
             # Solver
             if args.pde_solver[0] == "FreeFEM_ThinFingers":
-                pde_solver = pde_solvers.FreeFEM_ThinFingers(network, **args.pde_solver_params[0])
-            elif args.pde_solver[0] == "FreeFEM_ThinFingers_Boundary":
-                pde_solver = pde_solvers.FreeFEM_ThinFingers_Boundary(network, **args.pde_solver_params[0])                
+                pde_solver_class = pde_solvers.FreeFEM_ThinFingers
             elif args.pde_solver[0] == "FreeFEM_ThickFingers":
-                pde_solver = pde_solvers.FreeFEM_ThickFingers(network, **args.pde_solver_params[0])
+                pde_solver_class = pde_solvers.FreeFEM_ThickFingers
             elif args.pde_solver[0] == "FreeFEM_ThickFingers_Elasticity":
-                pde_solver = pde_solvers.FreeFEM_ThickFingers_Elasticity(network, **args.pde_solver_params[0])                  
+                pde_solver_class = pde_solvers.FreeFEM_ThickFingers_Elasticity
+        if args.extender[0] == "ModifiedEulerMethod_Boundary":
+            extender_class = extenders.ModifiedEulerMethod_Boundary
+            pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
             
-            extender = extenders.ModifiedEulerMethod(
+        pde_solver = pde_solver_class(network, **args.pde_solver_params[0])
+        extender = extender_class(
                 pde_solver=pde_solver, **args.extender_params[0]
             )          
 

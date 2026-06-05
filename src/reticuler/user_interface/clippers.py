@@ -56,9 +56,9 @@ def clip_to_step(system, max_step):
         for branch in system.network.branches:
             branch.points = extend_radially(branch.points, R_rim0, beta)
 
-    if type(system.morpher).__name__ == "Leaf":
-        system.morpher.box_history = system.morpher.box_history[:int(max_step+1)]
-        system.network.box = system.morpher.box_history[-1].copy()
+    if type(system.extender.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary":
+        system.extender.pde_solver.box_history = system.extender.pde_solver.box_history[:int(max_step+1)]
+        system.network.box = system.extender.pde_solver.box_history[-1].copy()
 
 
 def clip_to_length(system, max_length):

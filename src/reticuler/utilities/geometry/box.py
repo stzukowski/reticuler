@@ -426,7 +426,7 @@ class Box:
                 "branch_BCs": [DIRICHLET_0],
                 "radius": 0.5,
                 "angular_width": 2*np.pi,
-                "circle_BC": DIRICHLET_1, # 5 for NEUMANN_1
+                "circle_BC": DIRICHLET_1, # DIRICHLET_1: 2, NEUMANN_1: 5
             }
             options_construct.update(kwargs_construct)
             if options_construct["angular_width"]>=2*np.pi-0.0001:
@@ -443,7 +443,8 @@ class Box:
                 options_construct["seeds_phi"] = np.arange(-options_construct["angular_width"]/2+ang_dist/2, options_construct["angular_width"]/2, ang_dist)
             if type(options_construct["seeds_phi"])==float:
                 options_construct["seeds_phi"] = [options_construct["seeds_phi"]]
-
+            if type(options_construct["initial_lengths"])==float:
+                options_construct["initial_lengths"] = [options_construct["initial_lengths"]]
 
             if not len(options_construct["initial_lengths"])==len(options_construct["seeds_phi"]):
                 options_construct["initial_lengths"] = (
@@ -457,7 +458,7 @@ class Box:
                 )
             options_construct["branch_BCs"]=np.array(options_construct["branch_BCs"])        
             
-            n_points_rim = int(100*options_construct["radius"]*options_construct["angular_width"])
+            n_points_rim = 1+int(1/0.02*options_construct["radius"]*options_construct["angular_width"])
             
             # circular rim
             box.__add_points(

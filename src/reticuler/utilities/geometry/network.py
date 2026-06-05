@@ -247,28 +247,3 @@ class Network:
 
                 
         return did_reconnect
-                
-
-    def move_tips(self, step=0):
-        """Move tips (with bifurcations and killing if is_testing==False)."""
-
-        # shallow copy of active_branches (creates new list instance, but the elements are still the same)
-        branches_to_iterate = self.active_branches.copy()
-        for branch in branches_to_iterate:
-            if branch.dR.ndim==1:
-                branch.extend(step)
-            else:
-                max_branch_id = len(self.branches) - 1
-                for j, dR in enumerate(branch.dR):
-                    points = np.array(
-                        [branch.points[-1], branch.points[-1] + dR])
-                    branch_new = Branch(
-                        ID=max_branch_id + j + 1,
-                        BC=branch.BC,
-                        points=points,
-                        steps=np.array([step - 1, step]),
-                    )
-                    self.branches.append(branch_new)
-                    self.active_branches.append(branch_new)
-                    self.add_connection([branch.ID, branch_new.ID])
-                self.active_branches.remove(branch)

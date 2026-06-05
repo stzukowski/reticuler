@@ -57,21 +57,45 @@ def main():
 
     # Plotting options
     parser.add_argument(
-        "-X",
-        "--xmax",
+        "--xmin",
         type=float,
         nargs=1,
         metavar="num",
         help=textwrap.dedent(
             """\
-                            xlim of the plot. If None xmax=max x of the box.
+                            xlim of the plot. If None xmin=min x of the box.
                             default = None
                             """
         ),
         default=[None],
     )
     parser.add_argument(
-        "-Y",
+        "--xmax",
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+                            xlim of the plot. If None xmin=max x of the box.
+                            default = None
+                            """
+        ),
+        default=[None],
+    )    
+    parser.add_argument(
+        "--ymin",
+        type=float,
+        nargs=1,
+        metavar="num",
+        help=textwrap.dedent(
+            """\
+                            ymax of the plot. If None ymin=min y of the network.
+                            default = None
+                            """
+        ),
+        default=[None],
+    )
+    parser.add_argument(
         "--ymax",
         type=float,
         nargs=1,
@@ -83,7 +107,7 @@ def main():
                             """
         ),
         default=[None],
-    )
+    )    
     parser.add_argument(
         "--plot_params",
         type=json.loads,
@@ -192,7 +216,9 @@ def main():
         if args.animate:
             ani = graphics.animate_tree(
                 system0=system0,
+                xmin=args.xmin[0],
                 xmax=args.xmax[0],
+                ymin=args.ymin[0],
                 ymax=args.ymax[0],
                 speed_factor=args.speed_factor[0],
                 rot_angle=args.rot_angle[0],
@@ -222,7 +248,9 @@ def main():
                 graphics.plot_tree(
                     system=system,
                     ax=ax,
+                    xmin=args.xmin[0],
                     xmax=args.xmax[0],
+                    ymin=args.ymin[0],
                     ymax=args.ymax[0],
                     rot_angle=args.rot_angle[0],
                     **args.plot_params[0]

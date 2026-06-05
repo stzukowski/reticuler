@@ -121,7 +121,7 @@ class System:
             },
         }
 
-        if type(self.extender).__name__ == "ModifiedEulerMethod":
+        if "ModifiedEulerMethod" in type(self.extender).__name__:
             export_solver = {
                 "type": type(self.extender.pde_solver).__name__,
                 "description": "",
@@ -137,6 +137,18 @@ class System:
                 export_solver["bifurcation_angle"] = self.extender.pde_solver.bifurcation_angle
                 export_solver["inflow_thresh"] = self.extender.pde_solver.inflow_thresh
                 export_solver["distance_from_bif_thresh"] = self.extender.pde_solver.distance_from_bif_thresh
+            if type(self.extender.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary":
+                with open(self.exp_name + "_box_history.pkl", "wb") as f:
+                    pickle.dump(self.extender.pde_solver.box_history, f)
+                export_solver_1 = {
+                        "box_history": "pickled", # export_box_history,
+                        "boundary_pts_min_sep": self.extender.pde_solver.boundary_pts_min_sep,
+                        "boundary_pts_max_sep": self.extender.pde_solver.boundary_pts_max_sep,
+                        "v_rim": self.extender.pde_solver.v_rim,
+                        "response_func" : self.extender.pde_solver.response_func.__name__,
+                        "response_func_params" : self.extender.pde_solver.response_func_params,     
+                        }      
+                export_solver = export_solver | export_solver_1
             elif type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
                 export_solver["description"] = "Equation legend: 0-Laplace, 1-Poisson."
                 export_solver["finger_width"] = self.extender.pde_solver.finger_width
@@ -171,33 +183,7 @@ class System:
                         "sprouting_sig_h": self.morpher.sprouting_sig_h,
                         "radii": self.morpher.radii,
                         }
-                    }
-            elif type(self.morpher).__name__ == "Leaf":
-                # export_box_history = {}
-                # for i, bx in enumerate(self.morpher.box_history):
-                #     box_dict = { f"box{i}": {
-                #         "points": bx.points,
-                #         "connections_and_bc": bx.connections_bc(),
-                #         "seeds_connectivity": bx.seeds_connectivity,
-                #         "initial_condition": bx.initial_condition,
-                #         }
-                #     }
-                #     export_box_history = export_box_history | box_dict
-                
-                with open(self.exp_name + "_box_history.pkl", "wb") as f:
-                    pickle.dump(self.morpher.box_history, f)
-
-                export_morpher = {
-                    "morpher": {
-                        "type": type(self.morpher).__name__,
-                        "box_history": "pickled", # export_box_history,
-                        "pts_min_separation": self.morpher.pts_min_separation,
-                        "pts_max_separation": self.morpher.pts_max_separation,
-                        "v_rim": self.morpher.v_rim,
-                        "response_func" : self.morpher.response_func.__name__,
-                        "response_func_params" : self.morpher.response_func_params,     
-                        }
-                    }                
+                    }             
         else:
             export_morpher = {}
                 
@@ -355,12 +341,24 @@ class System:
                                     sprouting_sig_rate=sprouting_sig_rate,
                                     sprouting_sig_h=sprouting_sig_h,
                                     )
-                elif json_morpher["type"] == "Leaf":
-                    # !!! Backward compatibility
+            else:
+                morpher = None
+            
+            # Extender and solver
+            json_extender = json_load["extender"]
+            if "ModifiedEulerMethod" in json_extender["type"]:
+                # PDE Solver
+                json_solver = json_load["extender"]["pde_solver"]
+                # !!! Backward compatibility
+                if morpher is None and (json_solver["type"] == "FreeFEM" or json_solver["type"] == "FreeFEM_ThinFingers"):
+                    pde_solver_class = pde_solvers.FreeFEM_ThinFingers
+                elif json_solver["type"] == "FreeFEM_ThinFingers_Boundary":
+                    pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
+
                     try:
                         with open(input_file + "_box_history.pkl", "rb") as f:
                             boxes = pickle.load(f)
-                    except Exception as error:
+                    except Exception as error: # !!! Backward compatibility
                         print(type(error).__name__, ": ", error)
                         print("Importing box history the old way.")
                         boxes = []
@@ -376,29 +374,7 @@ class System:
                                 initial_condition=initial_condition,
                             )  
                             boxes.append(box.copy())
-                            
-                    morpher = morphers.Leaf(
-                                    box_history=boxes,
-                                    pts_min_separation=json_morpher["pts_min_separation"],
-                                    pts_max_separation=json_morpher["pts_max_separation"],
-                                    v_rim=json_morpher["v_rim"],
-                                    response_func=json_morpher["response_func"],
-                                    response_func_params=json_morpher["response_func_params"],
-                                    )
-
-            else:
-                morpher = None
-            
-            # Extender and solver
-            json_extender = json_load["extender"]
-            if json_extender["type"] == "ModifiedEulerMethod":  
-                # Solver
-                json_solver = json_load["extender"]["pde_solver"]
-                # !!! Backward compatibility
-                if morpher is None and (json_solver["type"] == "FreeFEM" or json_solver["type"] == "FreeFEM_ThinFingers"):
-                    pde_solver_class = pde_solvers.FreeFEM_ThinFingers
-                elif json_solver["type"] == "FreeFEM_ThinFingers_Boundary" or json_morpher["type"] == "Leaf":
-                    pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
+                    json_solver["box_history"] = boxes
                 elif json_solver["type"] == "FreeFEM_ThickFingers":
                     pde_solver_class = pde_solvers.FreeFEM_ThickFingers
                     json_solver.pop("bifurcation_type", None)
@@ -412,8 +388,14 @@ class System:
                 json_solver.pop("type")
                 json_solver.pop("description")
                 pde_solver = pde_solver_class(network, **json_solver)
+                
                 # Extender
-                extender = extenders.ModifiedEulerMethod(
+                if json_extender["type"]=="ModifiedEulerMethod":
+                    extender_class = extenders.ModifiedEulerMethod
+                elif json_extender["type"]=="ModifiedEulerMethod_Boundary":
+                    extender_class = extenders.ModifiedEulerMethod_Boundary
+
+                extender = extender_class(
                     pde_solver=pde_solver,
                     is_reconnecting=json_extender["is_reconnecting"],
                     max_approximation_step=json_extender["max_approximation_step"],
@@ -487,7 +469,7 @@ class System:
             out_growth = self.extender.integrate(network=self.network, \
                                                  step=self.growth_gauges[0])
             
-            # morphing the system: jellyfish, leaf
+            # morphing the system: Jellyfish
             if self.morpher is not None:
                 # ax.plot(*out_growth[1][:,:2].T, '.-', ms=5, color="tab:orange")
                 out_growth = self.morpher.morph(network=self.network, \
