@@ -152,13 +152,10 @@ class System:
             elif type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers":
                 export_solver["description"] = "Equation legend: 0-Laplace, 1-Poisson."
                 export_solver["finger_width"] = self.extender.pde_solver.finger_width
-                export_solver["mobility_ratio"] = self.extender.pde_solver.mobility_ratio
             elif type(self.extender.pde_solver).__name__ == "FreeFEM_ThickFingers_Elasticity":
                 export_solver["description"] = "Equation legend: 2-elasticity."
                 export_solver["finger_width"] = self.extender.pde_solver.finger_width
-                export_solver["youngs_modulus_inside"] = self.extender.pde_solver.youngs_modulus_inside
                 export_solver["youngs_modulus_outside"] = self.extender.pde_solver.youngs_modulus_outside
-                export_solver["poissons_ratio_inside"] = self.extender.pde_solver.poissons_ratio_inside
                 export_solver["poissons_ratio_outside"] = self.extender.pde_solver.poissons_ratio_outside
                 
             export_extender = {

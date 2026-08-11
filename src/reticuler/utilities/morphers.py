@@ -101,7 +101,7 @@ class Jellyfish:
         self.radii, R_rim0, distances_ang, mid_pos_ang = extend_box_check_distances()
         # updated sprouting_thresh (L0)!
         # self.sprouting_thresh = 2.9+0.03*R_rim0
-        self.sprouting_thresh = 0.04*R_rim0
+        self.sprouting_thresh = 0.4 + 0.166*R_rim0 # 0.04*R_rim0
         
         ds = distances_ang * (self.radii[-1] - self.radii[-2])
         Ps = ds * sigmoid(distances_ang*R_rim0, \
@@ -142,7 +142,8 @@ class Jellyfish:
                     points=np.vstack( cyl2cart(np.array([R_rim0, R_rim0-0.075]), \
                                                theta, \
                                                R_rim0) ),
-                    steps=np.array([step, step])
+                    steps=np.array([step, step]),
+                    BC=network.branches[-1].BC,
                 )
             network.branches.append(branch)
             network.active_branches.append(branch)

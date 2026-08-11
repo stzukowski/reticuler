@@ -99,16 +99,17 @@ class Box:
                 - IC = 102: PBC right and left wall + DIRICHLET_1 BC on top
                 - IC = 103: DIRICHLET_1 BC on top
                 - IC = 300: DIRICHLET_1 BC on growing top
-            IC = 200, 201: jellyfish (an octant) with a trifork
+            IC = 200, 201, 202: jellyfish (an octant) with a trifork
                 - IC = 200: DIRICHLET_1 bottom and DIRICHLET_0_GLOB_FLUX on top
                             (u=1/0, but rescaled such that global flux is constant)
-                - IC = 201: DIRICHLET_1 top and NEUMANN_1 bottom OR elasticity
+                - IC = 201: DIRICHLET_1 top and NEUMANN_1 bottom
                 - IC = 202: DIRICHLET_1 bottom and DIRICHLET_0 top
+                - IC = 203: elasticity
             IC = 301: leaf semiellipse with seeds at the bottom boundary
             IC = 350: leaf circle with seeds in the center
             IC = 351: leaf slice with seeds in the center
         kwargs_construct:
-            IC = 100, 101, 102, 103, 106, 300 (seeds vertically at the bottom)
+            IC = 100, 101, 102, 103, 300 (seeds vertically at the bottom)
                 seeds_x : array, default [0.5]
                     A 1-n array of x positions at the bottom boundary (y=0).
                 initial_lengths : array, default [0.01]
@@ -136,6 +137,13 @@ class Box:
                     Angular width of the slice. If 2*np.pi, then initial_condition = 350.
                 circle_BC: int, default 2 (DIRICHLET_1)
                     Boundary condition on the circle. Enter 5 for constant flux (NEUMANN_1).
+            IC = 200, 201, 202, 203 (jellyfish)
+                branch_BCs: array, default [see below]
+                    Properties of the canals.
+                    Length must match seeds_x or be equal to 1 
+                    (then the same initial length will be set for all seeds).                                
+                    - 200-202 (diffusive): mobility ratio, default [1000]
+                    - 203 (elastic): [Young's modulus, Poisson's ratio], default [[100, 0.3]]
 
         Returns
         -------
@@ -150,7 +158,7 @@ class Box:
         box = cls(initial_condition=initial_condition)
 
         # Rectangular box of specified width and height
-        if initial_condition//100==1 or initial_condition==300 or initial_condition==301:
+        if initial_condition//100==1 or initial_condition//30==10:
             options_construct = {
                 "seeds_x": [0.5],
                 "initial_lengths": [0.01],
@@ -203,30 +211,29 @@ class Box:
                         [0, 0]
                     ]
                 )
-            else:
+            else: # moving top boundary - denser mesh
                 n_points_top=int(50*options_construct["width"])
-            
-            if initial_condition==301:
-                # semi ellipse
-                box.__add_points(
-                    np.vstack(( options_construct["width"]*np.cos(np.linspace(0, np.pi, n_points_top)),
-                              options_construct["height"]*np.sin(np.linspace(0, np.pi, n_points_top)) )).T
-                )
-            if initial_condition==300:
-                # bottom right corner
-                box.__add_points([[options_construct["width"], 0]])
-                # top including left and right corners
-                box.__add_points(
-                        np.vstack(
-                            [
-                                np.linspace(options_construct["width"], 0, n_points_top), #array of x
-                                options_construct["height"]*np.ones(n_points_top), #array of y (constant)
-                            ]
-                        ).T
+                if initial_condition==301:
+                    # semi ellipse
+                    box.__add_points(
+                        np.vstack(( options_construct["width"]*np.cos(np.linspace(0, np.pi, n_points_top)),
+                                options_construct["height"]*np.sin(np.linspace(0, np.pi, n_points_top)) )).T
                     )
-                #bottom left corner
-                box.__add_points([[0, 0]])
-                
+                if initial_condition==300:
+                    # bottom right corner
+                    box.__add_points([[options_construct["width"], 0]])
+                    # top including left and right corners
+                    box.__add_points(
+                            np.vstack(
+                                [
+                                    np.linspace(options_construct["width"], 0, n_points_top), # array of x
+                                    options_construct["height"]*np.ones(n_points_top), # array of y (constant)
+                                ]
+                            ).T
+                        )
+                    #bottom left corner
+                    box.__add_points([[0, 0]])
+                    
             # seeds at the bottom boundary
             box.__add_points(
                 np.vstack(
@@ -266,16 +273,15 @@ class Box:
 
             # right, left, top Neumann:
             box.boundary_conditions[:-1-sum(~mask_seeds_from_outlet)] = NEUMANN_0
-            # or top constant flux:
-            if initial_condition==100:
+            if initial_condition==100: # or top constant flux:
                 box.boundary_conditions[1] = NEUMANN_1
-            if initial_condition==102:
+            if initial_condition==102: # or top DIRICHLET_1 and PBC:
                 box.boundary_conditions[1] = DIRICHLET_1
                 box.boundary_conditions[0] = RIGHT_WALL_PBC
                 box.boundary_conditions[2] = LEFT_WALL_PBC
-            if initial_condition==103 or initial_condition==300:
+            if initial_condition in [103, 300]: # or top DIRICHLET_1:
                 box.boundary_conditions[1:-2-sum(~mask_seeds_from_outlet)] = DIRICHLET_1
-            if initial_condition==301:
+            if initial_condition==301: # or top DIRICHLET_1 and bottom no flux
                 box.boundary_conditions[:-1-sum(~mask_seeds_from_outlet)] = DIRICHLET_1
                 box.boundary_conditions[-1-sum(~mask_seeds_from_outlet):] = NEUMANN_0
             # Creating initial branches
@@ -305,16 +311,30 @@ class Box:
             active_branches = branches.copy()
             branch_connectivity = None
                 
-        # Jellyfish
+        # Jellyfish - octant
         elif initial_condition//100==2:
+            if initial_condition in [200, 201, 202]:
+                branch_BCs = [1000]
+            if initial_condition == 203:
+                branch_BCs = [[100, 0.3]]
+            
             angular_width = 2*np.pi / 8
             R_rim = 4 # mm
             R_stom = 0.45 * R_rim
             h0 = R_rim - R_stom
-                
+            
+            options_construct = {
+                "branch_BCs": branch_BCs,
+                "seeds_phi": np.arange(-3/8,3.1/8,1/4)*angular_width
+            }                
+            options_construct.update(kwargs_construct)
+            if not len(options_construct["branch_BCs"]) == len(options_construct["seeds_phi"])+3:
+                options_construct["branch_BCs"] = \
+                    options_construct["branch_BCs"]*(len(options_construct["seeds_phi"])+3)
+    
+            # BOX
             # right boundary
             box.__add_points([cyl2cart(R_rim, angular_width/2, R_rim)])
-            
             # stomach
             n_points_stomach = 48 # n_points_rim % 2 == 0
             box.__add_points(
@@ -327,7 +347,7 @@ class Box:
                 cyl2cart(R_rim, rim_pts_angs, R_rim)
             )
             
-            
+
             # seeds indices
             n0_rim = n_points_stomach+2
             box.seeds_connectivity = np.column_stack(
@@ -349,35 +369,36 @@ class Box:
                 boundary_conditions=DIRICHLET_1 # all walls DIRICHLET_1
                 * np.ones(len(connections_to_add), dtype=int),
             )
-            # right, left wall:
+            # right, left wall BCs:
             box.boundary_conditions[0] = NEUMANN_0
             box.boundary_conditions[n_points_stomach+1] = NEUMANN_0
             if initial_condition==200:
                 box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0_GLOB_FLUX # top
-            elif initial_condition==201:
+            elif initial_condition in [201, 203]:
                 box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0 # top
                 box.boundary_conditions[n_points_stomach+2:] = NEUMANN_1 # bottom
             elif initial_condition==202:
                 box.boundary_conditions[1:n_points_stomach+1] = DIRICHLET_0 # top
             else:
-                raise ValueError(f"Initial condition {initial_condition} is incorrect! Choose another one.")
+                raise ValueError(f"Jelly IC {initial_condition} is incorrect! Choose another one.")
 
             # points_to_plot = box.points[box.connections]
             # for i, pts in enumerate(points_to_plot):
             #     plt.plot(*pts.T, '.-', color="{}".format(box.boundary_conditions[i]/5), ms=1, lw=5)
             
-            # Creating initial branches
+            # INITIAL BRANCHES
             branches = []
             active_branches = []
-            # interradial canal
+            # INTERRADIAL CANAL
             n_inter = 42 # n_inter % 3 == 0
             branches.append(Branch(
                     ID=0,
                     points=cyl2cart(np.linspace(R_rim, R_stom, n_inter+1), 0, R_rim),
                     steps=np.zeros(n_inter+1),
+                    BC=options_construct["branch_BCs"][0]
                 )
             )
-            # trifork left
+            # TRIFORK LEFT
             n_trifork = 42
             t = np.linspace(angular_width/8, np.pi/2,n_trifork)
             r1 = np.sqrt( (2*R_rim*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
@@ -387,9 +408,10 @@ class Box:
                     ID=1,
                     points=np.vstack((box.points[n0_rim+n_points_rim//4],np.vstack((x,y)).T)),
                     steps=np.zeros(n_trifork+1),
+                    BC=options_construct["branch_BCs"][1]
                 )
             )
-            # trifork right
+            # TRIFORK RIGHT
             t = np.linspace(np.pi-angular_width/8, np.pi/2,n_trifork)
             r1 = np.sqrt( (2*R_rim*np.sin(angular_width/8))**2 - (2/3*h0*np.sin(angular_width/16))**2)/np.cos(angular_width/16)
             x = R_rim - r1 * np.cos(t)
@@ -398,17 +420,17 @@ class Box:
                     ID=2,
                     points=np.vstack((box.points[n0_rim+n_points_rim//4*3],np.vstack((x,y)).T)),
                     steps=np.zeros(n_trifork+1),
+                    BC=options_construct["branch_BCs"][2]
                 )
             )
-            # sprouts
-            # eps = np.random.uniform(low=-1, high=1, size=4)*0.2/R_rim
-            # eps = np.array([0.013 , -0.012, 0.008, -0.011])
-            pos_ang_0 = np.arange(-3/8,3.1/8,1/4)*angular_width # + eps
+            # SPROUTS
+            pos_ang_0 =  options_construct["seeds_phi"] # + eps
             for i, theta in enumerate(pos_ang_0):
                 branch = Branch(
                         ID=3+i,
                         points=cyl2cart(np.array([R_rim, R_rim-0.075]), theta, R_rim),
-                        steps=np.array([0, 0])
+                        steps=np.array([0, 0]),
+                        BC=options_construct["branch_BCs"][3+i]
                     )
                 branches.append(branch)       
                 active_branches.append(branch)

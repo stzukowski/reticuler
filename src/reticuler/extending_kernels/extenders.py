@@ -92,38 +92,43 @@ class ModifiedEulerMethod:
         did_reconnect = False
         if self.is_reconnecting:
             did_reconnect = network.reconnect(self.pde_solver, step)
+            if did_reconnect:
+                print("Reconnected branch, skipping Modified Euler Method steps.")
+
+        dRs_test = dRs_0.copy()
+        approximation_step = 0
+        # APPROXIMATION LOOP - we end 'max_approximation_step' steps
+        while approximation_step < self.max_approximation_step:
+            approximation_step = approximation_step + 1
+    
+            self.pde_solver.solve_PDE(network)
             
-        if did_reconnect:
-            print("Reconnected branch, skipping Modified Euler Method steps.")
-        else:
-            dRs_test = dRs_0.copy()
-            approximation_step = 0
-            # APPROXIMATION LOOP - we end 'max_approximation_step' steps
-            while approximation_step < self.max_approximation_step:
-                approximation_step = approximation_step + 1
-        
-                self.pde_solver.solve_PDE(network)
+            # v[ x(n+1)] ]: finding velocity at the next point
+            dRs_1, _ = self.pde_solver.find_test_dRs(network, is_dr_normalized)
+            
+            # average dR
+            dRs_test = (dRs_0 + dRs_1) / 2
+            if is_dr_normalized:
+                dRs_test = self.pde_solver.ds * dRs_test / np.max(  np.linalg.norm(dRs_test, axis=1) )
                 
-                # v[ x(n+1)] ]: finding velocity at the next point
-                dRs_1, _ = self.pde_solver.find_test_dRs(network, is_dr_normalized)
+                # normally division dX/a1^eta would give single dt
+                # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
+                # dt is not perfectly the same for different tips, so we take a mean
+                dt = np.mean( np.linalg.norm(dRs_test, axis=1) / \
+                                self.pde_solver.flux_info[...,0]**self.pde_solver.eta )
                 
-                # average dR
-                dRs_test = (dRs_0 + dRs_1) / 2
-                if is_dr_normalized:
-                    dRs_test = self.pde_solver.ds * dRs_test / np.max(  np.linalg.norm(dRs_test, axis=1) )
-                    
-                    # normally division dX/a1^eta would give single dt
-                    # due to the modified Euler's algorithm (dR = (dRs_0+dRs_1)/2 )
-                    # dt is not perfectly the same for different tips, so we take a mean
-                    dt = np.mean( np.linalg.norm(dRs_test, axis=1) / \
-                                 self.pde_solver.flux_info[...,0]**self.pde_solver.eta )
-                    
-                # adjust tip positions in test_network
-                for i, branch in enumerate(network.active_branches):
-                    branch.points[-1] = network1.active_branches[i].points[-1] - dRs_0[i] + dRs_test[i]
-                
-                # print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
-                # print('dRs: ', dRs_test)    
+            # adjust tip positions in test_network
+            for i, branch in enumerate(network.active_branches):
+                branch.points[-1] = network1.active_branches[i].points[-1] - dRs_0[i] + dRs_test[i]
+            
+            # print('Forth loop, approximation step: {step}.'.format(step=approximation_step) )
+            # print('dRs: ', dRs_test) 
+            
+            if self.is_reconnecting:
+                did_reconnect = network.reconnect(self.pde_solver, step)
+                if did_reconnect:
+                    print("Reconnected branch, (possibly) skipping Modified Euler Method steps.")
+                    break
         
         return [dt, out_solver]
 

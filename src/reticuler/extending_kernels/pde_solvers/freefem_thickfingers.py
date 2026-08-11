@@ -25,12 +25,6 @@ class FreeFEM_ThickFingers(FreeFEM):
 
     finger_width : float, default 0.02
         The width of the fingers.
-    mobility_ratio : float, default 1e4
-        Diffusive case (equation=0, 1):
-            Mobility ratio between the inside and outside of the fingers.
-            mobility_outside = 1, mobilty_inside = ``mobility_ratio``
-        Elastic case (equation=2):
-            Young's modulus of the canals (with E=100 for the tissue).
 
 
     References
@@ -49,20 +43,19 @@ class FreeFEM_ThickFingers(FreeFEM):
             eta=1.0,
             ds=0.01,
             is_script_saved=False,
-            finger_width=0.02, 
-            mobility_ratio=1e4,
+            finger_width=0.02,
         ):
         """Initialize FreeFEM_ThickFingers.
 
         Parameters
         ----------
         network : Network
-        finger_width : float, default 0.02
-        mobility_ratio : float, default 1e4
         equation : int, default 0
         eta : float, default 1.0
         ds : float, default 0.01
         is_script_saved : bool, default False
+        
+        finger_width : float, default 0.02
 
         Returns
         -------
@@ -72,7 +65,6 @@ class FreeFEM_ThickFingers(FreeFEM):
         super().__init__(equation, eta, ds, is_script_saved)
         
         self.finger_width = finger_width
-        self.mobility_ratio = mobility_ratio
         
         # parts of the script
         DIRICHLET_0_GLOB_FLUX_script = ""
@@ -188,7 +180,7 @@ class FreeFEM_ThickFingers(FreeFEM):
             int adaptCounter=0;
             int[int] nvOnTips = countNvOnTips(Th, tipLabels, nbTips);
             plot(Th, wait=true);
-            while(nvOnTips.min < 70 || adaptCounter<1)
+            while(nvOnTips.min < 30 || adaptCounter<1)
             {{
                 cout << "Adaptation step: " << adaptCounter;
                 cout << ", nvOnTip.min = " << nvOnTips.min << endl;
@@ -243,7 +235,8 @@ class FreeFEM_ThickFingers(FreeFEM):
                 cout<<"fluxes"<<tipLabels(k)<<fluxes<<"fluxes"<<tipLabels(k)<<"end"<<endl;
                 real totGrad =  int1d(Th, tipLabels(k))( abs([dxu,dyu]'*[N.x,N.y]) );
             	cout<<"tot_flux"<<tipLabels(k)<<"1 "<<totGrad<<"tot_flux"<<tipLabels(k)<<"end"<<endl;
-                
+                plot([angles, fluxes],wait=true);
+
                 // real maxGrad=0, maxAngle=pi/2;
                 // real[int] fluxesMvAvg(ndof-avgWindow+1), anglesMvAvg(ndof-avgWindow+1);
                 // for (int i=0; i<=(ndof-avgWindow); i++){{
@@ -302,11 +295,18 @@ class FreeFEM_ThickFingers(FreeFEM):
     
     def fingers_and_box_contours(self, network):
         """ Prepares contours of the thickened tree using shapely library. """
+        QUAD_SEGS = int(self.finger_width/2*np.pi/0.01) # number of points on a pi/2 arc after buffer
+        QUAD_SEGS = np.min([60, np.max([15, QUAD_SEGS])])
+        kwargs_buffer = {
+            "distance": self.finger_width/2,
+            "cap_style": 'round',
+            "join_style": 'round',
+            "quad_segs": QUAD_SEGS,
+        }
+
         pts = []
-        pts_in = [] # points inside subdomains with higher mobility
-        tips_all = []; tips_active = [];
+        tips_free = []; tips_active = []
         for branch in network.branches:
-            
             # # don't take too much points
             # skeleton = [branch.points[0]]
             # segment_lengths = np.linalg.norm(branch.points[2:]-branch.points[1:-1], axis=1)
@@ -318,26 +318,22 @@ class FreeFEM_ThickFingers(FreeFEM):
             #         skeleton.append(branch.points[j+2])
             # skeleton[-1] = branch.points[-1]
             # pts.append(np.array(skeleton))
-            
+
             pts.append(branch.points)
-            
             if len(network.branch_connectivity)==0 or \
                     branch.ID not in network.branch_connectivity[:,0]:
-                
-                tips_all.append([1000+branch.ID, branch.points[-1]])
-                pts_in.append(branch.points[-1])
-                
+                tips_free.append([1000+branch.ID, branch.points[-1]])
                 if branch in network.active_branches:
                     tips_active.append([1000+branch.ID, \
                                         branch.points[-1, 0], \
                                         branch.points[-1, 1] ]) # tip label, x, y
         tips_active = np.asarray(tips_active)
-        
-        # thicken tree and find intersection with the box
+
+        # thicken tree and find intersection with the box (for box_ring_simp and box_ring)
         tree = MultiLineString(pts)
-        thick_tree = tree.buffer(distance=self.finger_width/2, cap_style=1, join_style=1, quad_segs=25)
+        thick_tree = tree.buffer(**kwargs_buffer)
         box_ring = LinearRing(network.box.points)
-        lines_to_merge = [] 
+        lines_to_merge = []
         br_diff_tree = box_ring.difference(thick_tree)
         br_intersec_tree = box_ring.intersection(thick_tree)
         lines_to_merge = [g.simplify(tolerance=1e-4) for g in br_diff_tree.geoms] + \
@@ -347,38 +343,76 @@ class FreeFEM_ThickFingers(FreeFEM):
         box_polygon = Polygon(box_ring)
         box_ring = linemerge( [*box_ring.difference(thick_tree).geoms,
                           *box_ring.intersection(thick_tree).geoms])
-        thick_tree = box_polygon.intersection(thick_tree)
-        
+
+        # per-branch regions: each branch buffered individually, overlaps resolved via branch_connectivity
+        branch_regions = {}
+        kids_buf_union = {}  # parent_id -> union of all kids buf_clipped
+
+        br_conn = network.branch_connectivity
+        br_conn_no_brkth = br_conn[br_conn[:,1]!=-1] # branch connectivity non breakthrough
+        for branch in network.branches:
+            buf_pts = branch.points.copy()
+            if branch.ID in br_conn_no_brkth[:,0]:
+                dr = buf_pts[-1] - buf_pts[-2]
+                dr = dr / np.linalg.norm(dr)
+                buf_pts[-1] = buf_pts[-1] - dr*self.finger_width/2/2
+            
+            buf = LineString(buf_pts).buffer(**kwargs_buffer)
+            branch_regions[branch.ID] = box_polygon.intersection(buf)
+
+        for kid_id, parent_id in br_conn_no_brkth:
+            buf_kid_clipped = branch_regions[kid_id]
+            buf_parent_clipped = branch_regions[parent_id]
+
+            branch_regions[kid_id] = buf_kid_clipped.difference(buf_parent_clipped)
+            if parent_id not in kids_buf_union:
+                kids_buf_union[parent_id] = buf_kid_clipped
+            else:
+                kids_buf_union[parent_id] = kids_buf_union[parent_id].union(buf_kid_clipped)
+
+        # plt.plot(*np.array(box_ring.coords).T, '.-', ms=10);plt.gca().set_aspect(1);
+        # plt.plot(*np.array(buf_kid.exterior.coords).T, '.-', ms=8);
+        # plt.plot(*np.array(buf_kid_clipped.exterior.coords).T, '.-', ms=6);
+        # plt.plot(*np.array(((buf_kid_clipped.exterior).difference(box_ring)).coords).T, '.-', ms=4);
+        # import matplotlib.pyplot as plt
+        # cmap = plt.colormaps["tab10"]
+        # plt.figure();plt.gca().set_aspect(1)
+        # for i, b in enumerate(network.branches):
+        #     poly = branch_regions[b.ID]
+        #     polys = [poly] if poly.geom_type=="Polygon" else poly.geoms
+        #     for poly in polys:
+        #         plt.plot(*np.array(poly.exterior.coords).T, '.-', color=cmap(i), ms=5)
+
         # polygons to contours_tree
-        polygons = [thick_tree] if thick_tree.geom_type=="Polygon" else thick_tree.geoms
+        pts_in = []
         contours_tree = []
-        for poly in polygons:
+        for branch in network.branches:
+            bid = branch.ID
+            poly = branch_regions[bid]
             pts_in.append(poly.representative_point().coords[0])
-            poly = shapely.geometry.polygon.orient(poly) # now, exterior is ccw, but interiors are cw
-            
-            # exteriors
-            # poly_exterior = poly.exterior.simplify(tolerance=1e-4)
-            # poly_exterior = poly_exterior.difference(box_ring)
-            poly_exterior = poly.exterior.difference(box_ring)
-            lines = [poly_exterior] if poly_exterior.geom_type=="LineString" else poly_exterior.geoms
+
+            poly = shapely.geometry.polygon.orient(poly) # exterior ccw, holes cw
+            # exteriors: strip box edges; for parents strip junction arcs;
+            poly_exterior = poly.exterior
+            poly_exterior = shapely.snap(poly_exterior, box_ring, tolerance=1e-6)
+            poly_exterior = poly_exterior.difference(box_ring)
+            if bid in kids_buf_union:
+                poly_exterior = shapely.snap(poly_exterior, kids_buf_union[bid], tolerance=1e-6)
+                poly_exterior = poly_exterior.difference(kids_buf_union[bid])
+            lines = [poly_exterior] if poly_exterior.geom_type=="LineString" else \
+                    poly_exterior.geoms
             for line in lines:
-                line1 = line.simplify(tolerance=1e-4)
+                line1 = line.simplify(tolerance=1e-5)
                 contours_tree.append( np.array(line1.coords) )
-            
-            # interiors
-            for ring in poly.interiors:
-                ring1 = ring.simplify(tolerance=1e-4)
-                contours_tree.append( np.asarray(ring1.coords) )
-        
         contours_tree_bc = []
         for cont in contours_tree:
             contours_tree_bc.append(888)
-            for b_label, tip_xy in tips_all:
+            for b_label, tip_xy in tips_free:
                 mask = np.linalg.norm(cont-tip_xy,axis=1)<self.finger_width/2*1.01
                 mask = np.convolve(mask, [1,1], mode='valid')>1
                 if mask.any():
                     contours_tree_bc[-1] = ~mask*888 + mask*b_label
-        
+
         return box_ring_simp, contours_tree, contours_tree_bc, tips_active, pts_in
 
     def prepare_script_box(self, network, box_ring):
@@ -477,35 +511,32 @@ class FreeFEM_ThickFingers(FreeFEM):
     def prepare_script(self, network):
         """Return a full FreeFEM script with the ``network`` geometry."""
         # contours based on the thickened tree
-        box_ring, contours_tree, contours_tree_bc, tips, points_in = \
+        box_ring, contours_tree, contours_tree_bc, tips, pts_in = \
             self.fingers_and_box_contours(network)
-           
+
         self._script_border_box, self._script_inside_buildmesh_box = \
             self.prepare_script_box(network, box_ring)
 
         buildmesh, tip_information = self.prepare_script_network(network, \
                                             contours_tree, contours_tree_bc, tips)
-        
-        # Regions 
-        regions = ""
-        script_regions = self._script_regions
-        for i, p in enumerate(points_in):
-            script_regions = script_regions + \
-                textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
-                    i=i, x=p[0], y=p[1] ))
-            regions = regions + "region==indRegion{i} || ".format(i=i)
-        
+
+        # Regions
         #-> Diffusive specific
+        terms_M = ["1"]
+        script_regions = self._script_regions
+        for i, (branch, p) in enumerate(zip(network.branches, pts_in)):
+            script_regions = script_regions + \
+                f"\nint indRegionBranch{i} = Th({p[0]:.6e}, {p[1]:.6e}).region;"
+            terms_M.append(f"({branch.BC} - 1) * (region == indRegionBranch{i})")
         script_regions = script_regions + textwrap.dedent(
             """
             fespace Vh0(Th, P0{pbc});
-            Vh0 mobility = {mobilityOutside}*!({regions}) + {mobilityInside}*({regions});
+            Vh0 mobility = {all_terms_mob};
             plot(mobility, wait=true, cmm="mobility", fill=true, value=true);
-            """.format(mobilityOutside=1, mobilityInside=self.mobility_ratio, 
-                        regions = regions[:-4], pbc=self.pbc)
+            """.format(all_terms_mob=" + ".join(terms_M), pbc=self.pbc)
             )
         #<-
-        
+
         # whole script
         script = self._script_init + buildmesh + tip_information + script_regions
         #-> Diffusive specific
@@ -550,34 +581,56 @@ class FreeFEM_ThickFingers(FreeFEM):
         # flux_info = np.fromstring(out_freefem.stdout[out_freefem.stdout.find(b"kopytko")+7:], sep=",")
         # self.flux_info = flux_info.reshape(len(flux_info) // 2, 2)
         
-        # determining flux_info 
+        # determining flux_info
+        if self.is_script_saved:
+            import matplotlib.pyplot as plt
+            from datetime import datetime
+            fig, ax = plt.subplots()
+            cmap = plt.colormaps["tab10"]
         angles=[]; fluxes=[]; 
         self.flux_info = np.zeros((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
             tip_label = 1000+branch.ID
-            angles.append(self.array_from_string(out_freefem.stdout, f"angles{tip_label}"))
-            fluxes.append(self.array_from_string(out_freefem.stdout, f"fluxes{tip_label}"))
-            ind_cut = np.where(np.diff(angles[-1])<0)[0]
-            if ind_cut.size:
-                angles[-1][ind_cut[0]+1:] = angles[-1][ind_cut[0]+1:] + 2*np.pi
-            order = np.argsort(angles[-1])
-            angles[-1] = angles[-1][order]
-            fluxes[-1] = fluxes[-1][order]
+            angles_1 = self.array_from_string(out_freefem.stdout, f"angles{tip_label}")
+            fluxes_1 = self.array_from_string(out_freefem.stdout, f"fluxes{tip_label}")
+            # idx = np.argsort(angles_0)
+            # angles_1 = angles_0[idx]
+            # fluxes_1 = fluxes_0[idx]
+            angles_1 = np.unwrap(angles_1)
+            order = np.argsort(angles_1)
+            angles_2 = angles_1[order]
+            angles_2 -= np.round((angles_2.mean()) / (2*np.pi)) * 2*np.pi
+            fluxes_2 = fluxes_1[order]
+            angles.append(angles_2)
+            fluxes.append(fluxes_2)
             
             # gaussian convolution
             # (https://stackoverflow.com/questions/22291567/smooth-data-and-find-maximum)
             f = scipy.interpolate.interp1d(angles[-1], fluxes[i])
             xx = np.linspace(angles[-1][0], angles[-1][-1], 1000)
             yy = f(xx)
-            window = scipy.signal.windows.gaussian(100, 1000)
-            smoothed = scipy.signal.convolve(yy, window/window.sum(), \
-                                             mode="same")
+            # window = scipy.signal.windows.gaussian(100, 1000)
+            # smoothed = scipy.signal.convolve(yy, window/window.sum(), \
+            #                                  mode="same")
+            smoothed = scipy.ndimage.uniform_filter1d(yy, size=100, mode='nearest')
+            ang_max = xx[np.argmax(smoothed)]
 
             # Total flux:
-            self.flux_info[i,0] = self.array_from_string(out_freefem.stdout, f"tot_flux{tip_label}")
+            self.flux_info[i,0] = super().array_from_string(out_freefem.stdout, f"tot_flux{tip_label}")[0]
             # Highest gradiend direction (angle with X axis)
-            ang_max = xx[np.argmax(smoothed)]
             self.flux_info[i,1] = (ang_max + np.pi) % (2*np.pi) - np.pi
+            if self.is_script_saved:
+                ax.plot(angles[-1], fluxes[-1], c=cmap(i), label=f"b.ID={branch.ID}, ang={ang_max:.2f}")
+                ax.plot(xx, smoothed,'k--', alpha=0.75)
+                ax.axvline(ang_max, c=cmap(i), lw=0.5)
+        if self.is_script_saved:
+            ax.legend(frameon=True, loc='lower left')
+            ax.set_xlabel("Angle")
+            ax.set_ylabel("Flux")
+            ax.set_title(f"Field at the tip, step {self.system.growth_gauges[0]:.0f}")
+            fig_name = self.system.exp_name + f"_{datetime.now().strftime('%Y_%m_%d-%p%I_%M_%S')}.jpg"
+            fig.savefig(fig_name)
+            plt.close()
             
         with np.printoptions(formatter={"float": "{:.6g}".format}):
             print("flux_info: ", self.flux_info[...,0])
@@ -593,13 +646,9 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
     equation, eta, ds, is_script_saved inherited from FreeFEM
 
     flux_info, finger_width inherited from FreeFEM_ThickFingers
-    
-    youngs_modulus_inside : float, default 10
-        Young's modulus inside the network.
+
     youngs_modulus_outside : float, default 100
         Young's modulus outside of the network.
-    poissons_ratio_inside : float, default 0.3
-        Poisson's inside the network.
     poissons_ratio_outside : float, default 0.49
         Poisson's outside of the network.
         
@@ -619,10 +668,8 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
             eta=1.0,
             ds=0.01,
             is_script_saved=False,
-            finger_width=0.02, 
-            youngs_modulus_inside=10,
+            finger_width=0.02,
             youngs_modulus_outside=100,
-            poissons_ratio_inside=0.3,
             poissons_ratio_outside=0.49
         ):
         """Initialize FreeFEM_ThickFingers.
@@ -636,9 +683,7 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
         is_script_saved : bool, default False
 
         finger_width : float, default 0.02
-        youngs_modulus_inside : float, default 10
         youngs_modulus_outside : float, default 100
-        poissons_ratio_inside : float, default 0.3
         poissons_ratio_outside : float, default 0.49        
 
         Returns
@@ -648,9 +693,7 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
         """
         super().__init__(network, equation, eta, ds, is_script_saved, finger_width)
 
-        self.youngs_modulus_inside = youngs_modulus_inside
         self.youngs_modulus_outside = youngs_modulus_outside
-        self.poissons_ratio_inside = poissons_ratio_inside
         self.poissons_ratio_outside = poissons_ratio_outside
 
         self._script_problem = textwrap.dedent(
@@ -700,6 +743,7 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
 
         self._script_adaptmesh = self._script_adaptmesh.replace("potential;", \
                                 "Elasticity;\n    sigmavM = vonMises(stress(ur,uq)[0],stress(ur,uq)[3],stress(ur,uq)[1]);")
+        self._script_adaptmesh = self._script_adaptmesh.replace("error=0.01;", "error=0.1;")
         self._script_adaptmesh = self._script_adaptmesh.replace("u/u[]", "sigmavM/sigmavM[]")
         self._script_adaptmesh = self._script_adaptmesh.replace("u=u;", "ur=ur; uq=uq;")
         self._script_adaptmesh = self._script_adaptmesh.replace("mobility=mobility;", "E=E; nu=nu;")
@@ -740,35 +784,38 @@ class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
     def prepare_script(self, network):
         """Return a full FreeFEM script with the ``network`` geometry."""
         # contours based on the thickened tree
-        box_ring, contours_tree, contours_tree_bc, tips, points_in = \
+        box_ring, contours_tree, contours_tree_bc, tips, pts_in = \
             self.fingers_and_box_contours(network)
-           
+
         self._script_border_box, self._script_inside_buildmesh_box = \
             super().prepare_script_box(network, box_ring)
 
         buildmesh, tip_information = self.prepare_script_network(network, \
                                             contours_tree, contours_tree_bc, tips)
-        
-        # Regions 
-        regions = ""
-        script_regions = self._script_regions
-        for i, p in enumerate(points_in):
-            script_regions = script_regions + \
-                textwrap.dedent("""\nint indRegion{i} = Th({x}, {y}).region;""".format(
-                    i=i, x=p[0], y=p[1] ))
-            regions = regions + "region==indRegion{i} || ".format(i=i)
-        
+
+        # Regions
         #-> Elastic specific
+        terms_E = [""]
+        terms_nu = [""]
+        script_regions = self._script_regions
+        for i, (branch, p) in enumerate(zip(network.branches, pts_in)):
+            script_regions = script_regions + \
+                f"\nint indRegionBranch{i} = Th({p[0]:.6e}, {p[1]:.6e}).region;"
+            
+            EInside, nuInside = branch.BC
+            terms_E.append(f"({EInside} - {self.youngs_modulus_outside})*(region == indRegionBranch{i})")
+            terms_nu.append(f"({nuInside} - {self.poissons_ratio_outside})*(region == indRegionBranch{i})")
+
         script_regions = script_regions + textwrap.dedent(
             """
             fespace Vh0(Th, P0{pbc});
-            Vh0 E = {EOutside}*!({regions}) + {EInside}*({regions});
-            Vh0 nu = {nuOutside}*!({regions}) + {nuInside}*({regions});
+            Vh0 E = {EOutside} + {all_terms_E};
+            Vh0 nu = {nuOutside} + {all_terms_nu};
             plot(E, wait=true, cmm="E", fill=true, value=true);
             plot(nu, wait=true, cmm="nu", fill=true, value=true);
-            """.format(EOutside=self.youngs_modulus_outside, EInside=self.youngs_modulus_inside,
-                        nuOutside=self.poissons_ratio_outside, nuInside=self.poissons_ratio_inside,
-                            regions = regions[:-4], pbc=self.pbc)
+            """.format(EOutside=self.youngs_modulus_outside, all_terms_E=" + ".join(terms_E),
+                        nuOutside=self.poissons_ratio_outside, all_terms_nu=" + ".join(terms_nu),
+                        pbc=self.pbc)
             )
         #<-
 

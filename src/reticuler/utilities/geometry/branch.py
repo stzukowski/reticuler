@@ -22,10 +22,16 @@ class Branch:
         Chronological order (tip is the last point).
     steps : array
         A 1-n array with evolution steps at which corresponding points were added.
-    BC : int, default 0
+    BC : int or array, default DIRICHLET_0
         The boundary condition on fingers, when solving the equations for the field.
-        DIRICHLET_0 (u=0)
-        DIRICHLET_1 (u=1)
+        1. FreeFEM_ThinFingers:
+            - DIRICHLET_0 (u=0)
+            - DIRICHLET_1 (u=1)
+        2. FreeFEM_ThickFingers (diffusive case)
+            Mobility ratio between the inside and outside of the fingers.
+            mobility_outside = 1, mobilty_inside = branch.BC
+        2. FreeFEM_ThickFingers_Elasticity (elastic case)
+            Young's modulus and Poisson's ratio of the canals.
     is_bifurcating : bool, default False
         A boolean condition if branch is bifurcating or not.
         (Based on the bifurcation_type and bifurcation_thresh from extender.)
@@ -40,6 +46,7 @@ class Branch:
         ID : int
         points : array
         steps : array
+        BC : int or array
 
         Returns
         -------
