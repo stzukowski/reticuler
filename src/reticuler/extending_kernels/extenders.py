@@ -98,7 +98,7 @@ class ModifiedEulerMethod:
         dRs_test = dRs_0.copy()
         approximation_step = 0
         # APPROXIMATION LOOP - we end 'max_approximation_step' steps
-        while approximation_step < self.max_approximation_step:
+        while approximation_step < self.max_approximation_step and not did_reconnect:
             approximation_step = approximation_step + 1
     
             self.pde_solver.solve_PDE(network)

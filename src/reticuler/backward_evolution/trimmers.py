@@ -50,11 +50,11 @@ class BackwardModifiedEulerMethod:
         self,
         pde_solver,
         eta=0.0,
-        crit_shields_param = 0,
         ds=0.01,
         max_approximation_step=3,
-        sleep_frac_thresh = 0.05,
         min_distance = 5e-4,
+        sleep_frac_thresh = 0.05,
+        crit_shields_param = 0,
     ):
         """Initialize BackwardModifiedEulerMethod.
 
@@ -62,11 +62,11 @@ class BackwardModifiedEulerMethod:
         ----------
         pde_solver : PDESolver
         eta : float, default 1.0
-        crit_shields_param : float, default 0
         ds : float, default 0.01
         max_approximation_step : int, default 3
-        sleep_frac_thresh : float, default 0.05
         min_distance : float, default 5e-4
+        sleep_frac_thresh : float, default 0.05
+        crit_shields_param : float, default 0        
 
         Returns
         -------
