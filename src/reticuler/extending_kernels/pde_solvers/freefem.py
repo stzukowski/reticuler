@@ -14,7 +14,7 @@ class FreeFEM:
         - 1: Poisson
         - 2: elasticity (ThickFingers)
     eta : float
-        The growth exponent (v=a1**eta).
+        The growth exponent (v = a1**``eta'').
         High values increase competition between the branches.
         Low values stabilize the growth.
     ds : float

@@ -135,15 +135,16 @@ class System:
                 export_solver["bifurcation_type"] = self.extender.pde_solver.bifurcation_type
                 export_solver["bifurcation_thresh"] = self.extender.pde_solver.bifurcation_thresh
                 export_solver["bifurcation_angle"] = self.extender.pde_solver.bifurcation_angle
-                export_solver["inflow_thresh"] = self.extender.pde_solver.inflow_thresh
                 export_solver["distance_from_bif_thresh"] = self.extender.pde_solver.distance_from_bif_thresh
+                export_solver["sleep_frac_thresh"] = self.extender.pde_solver.sleep_frac_thresh
+                export_solver["crit_shields_param"] = self.extender.pde_solver.crit_shields_param
             if type(self.extender.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary":
                 with open(self.exp_name + "_box_history.pkl", "wb") as f:
                     pickle.dump(self.extender.pde_solver.box_history, f)
                 export_solver_1 = {
                         "box_history": "pickled", # export_box_history,
-                        "boundary_pts_min_sep": self.extender.pde_solver.boundary_pts_min_sep,
-                        "boundary_pts_max_sep": self.extender.pde_solver.boundary_pts_max_sep,
+                        "boundary_pts_sep_min": self.extender.pde_solver.boundary_pts_sep_min,
+                        "boundary_pts_sep_max": self.extender.pde_solver.boundary_pts_sep_max,
                         "v_rim": self.extender.pde_solver.v_rim,
                         "response_func" : self.extender.pde_solver.response_func.__name__,
                         "response_func_params" : self.extender.pde_solver.response_func_params,     
@@ -346,7 +347,7 @@ class System:
             if "ModifiedEulerMethod" in json_extender["type"]:
                 # PDE Solver
                 json_solver = json_load["extender"]["pde_solver"]
-                # !!! Backward compatibility
+                # !!! Backward compatibility (FreeFEM)
                 if morpher is None and (json_solver["type"] == "FreeFEM" or json_solver["type"] == "FreeFEM_ThinFingers"):
                     pde_solver_class = pde_solvers.FreeFEM_ThinFingers
                 elif json_solver["type"] == "FreeFEM_ThinFingers_Boundary":
@@ -374,11 +375,6 @@ class System:
                     json_solver["box_history"] = boxes
                 elif json_solver["type"] == "FreeFEM_ThickFingers":
                     pde_solver_class = pde_solvers.FreeFEM_ThickFingers
-                    json_solver.pop("bifurcation_type", None)
-                    json_solver.pop("bifurcation_thresh", None)
-                    json_solver.pop("bifurcation_angle", None)
-                    json_solver.pop("inflow_thresh", None)
-                    json_solver.pop("distance_from_bif_thresh", None)
                 elif json_solver["type"] == "FreeFEM_ThickFingers_Elasticity":
                     pde_solver_class = pde_solvers.FreeFEM_ThickFingers_Elasticity
                     

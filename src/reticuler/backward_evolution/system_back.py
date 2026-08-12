@@ -187,8 +187,9 @@ class BackwardSystem:
         # forward/backward branch ID is its index in backward_branches
         self.backward_branches, self.backward_bifurcations = self.import_branches(self.system.network)
         self.system.extender.pde_solver.eta = self.trimmer.eta
+        self.system.extender.pde_solver.crit_shields_param = self.trimmer.crit_shields_param
         self.system.extender.pde_solver.bifurcation_type = 0
-        self.system.extender.pde_solver.inflow_thresh = 0
+        self.system.extender.pde_solver.sleep_frac_thresh = 0
         self.system.extender.pde_solver.is_backward = True
         
         self.dump_every = dump_every
@@ -246,7 +247,8 @@ class BackwardSystem:
                 eta=json_trimmer["eta"],
                 ds=json_trimmer["ds"],
                 max_approximation_step=json_trimmer["max_approximation_step"],
-                inflow_thresh=json_trimmer["inflow_thresh"],
+                sleep_frac_thresh=json_trimmer["sleep_frac_thresh"],
+                crit_shields_param=json_trimmer["crit_shields_param"],
             )
 
         # General
@@ -284,10 +286,10 @@ class BackwardSystem:
         }
         
         if type(self.trimmer.pde_solver).__name__ == "FreeFEM_ThinFingers":
-            equation_legend = ["Laplace", "Poisson"]
             export_solver = {
                 "type": type(self.trimmer.pde_solver).__name__,
-                "equation": equation_legend[self.trimmer.pde_solver.equation],
+                "description": "Equation legend: 0-Laplace, 1-Poisson.",
+                "equation": self.trimmer.pde_solver.equation,
             }
         
         if type(self.trimmer).__name__ == "BackwardModifiedEulerMethod":
@@ -297,7 +299,8 @@ class BackwardSystem:
                         "eta": self.trimmer.eta,
                         "ds": self.trimmer.ds,
                         "max_approximation_step": self.trimmer.max_approximation_step,
-                        "inflow_thresh": self.trimmer.inflow_thresh,
+                        "sleep_frac_thresh": self.trimmer.sleep_frac_thresh,
+                        "crit_shields_param": self.trimmer.crit_shields_param,
                         "pde_solver": {**export_solver},
                     }
                 }

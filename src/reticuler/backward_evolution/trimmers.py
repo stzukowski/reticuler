@@ -31,9 +31,12 @@ class BackwardModifiedEulerMethod:
             - >1: modified Euler's method   
     min_distance : float, default 5e-4
         Minimal distance between two nodes after trimming.
-    inflow_thresh : float, default 0.05
-        Threshold to put asleep the tips with less than ``inflow_thresh``
-        of max flux/velocity.
+    sleep_frac_thresh : float, default 0.05
+        Numerical threshold to put asleep tips that are slower than
+        ``sleep_frac_thresh`` * max velocity.
+    crit_shields_param : float, default 0
+        Threshold entering the growth law:
+        v = (flux - ``crit_shields_param``)**``eta''
 
     References
     ----------
@@ -47,9 +50,10 @@ class BackwardModifiedEulerMethod:
         self,
         pde_solver,
         eta=0.0,
+        crit_shields_param = 0,
         ds=0.01,
         max_approximation_step=3,
-        inflow_thresh = 0.05,
+        sleep_frac_thresh = 0.05,
         min_distance = 5e-4,
     ):
         """Initialize BackwardModifiedEulerMethod.
@@ -58,9 +62,10 @@ class BackwardModifiedEulerMethod:
         ----------
         pde_solver : PDESolver
         eta : float, default 1.0
+        crit_shields_param : float, default 0
         ds : float, default 0.01
         max_approximation_step : int, default 3
-        inflow_thresh : float, default 0.05
+        sleep_frac_thresh : float, default 0.05
         min_distance : float, default 5e-4
 
         Returns
@@ -71,21 +76,22 @@ class BackwardModifiedEulerMethod:
         self.pde_solver = pde_solver
 
         self.eta = eta
+        self.crit_shields_param = crit_shields_param
         self.ds = ds
 
         self.max_approximation_step = max_approximation_step
         self.min_distance = min_distance  # avoid two nodes very close to each other after trimming
         
-        # less than `inflow_thresh` of max flux/velocity puts branches asleep
-        self.inflow_thresh = inflow_thresh
+        # less than `sleep_frac_thresh` of max flux puts branches asleep
+        self.sleep_frac_thresh = sleep_frac_thresh
         
     def __check_moving_conditions(self, network):
         """Check moving conditions."""
-        a1 = self.pde_solver.flux_info[:, 0]
-        max_a1 = np.max(a1)
+        a1s = self.pde_solver.flux_info[:, 0]
+        max_a1 = np.max(a1s)
         # (first condition for low eta, second for high)
-        are_moving = np.logical_and(a1/max_a1 > self.inflow_thresh,
-                                   (a1/max_a1)**self.eta > self.inflow_thresh)
+        are_moving = np.logical_and(  a1s < self.crit_shields_param,
+                                   ( (a1s-self.crit_shields_param) / (max_a1-self.crit_shields_param) )**self.eta < self.sleep_frac_thresh )
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = network.active_branches.copy()
         for i, branch in enumerate(branches_to_iterate):
@@ -280,13 +286,14 @@ class BackwardModifiedEulerMethod:
         
         # v[x(n)]: finding velocity at the starting point
         self.pde_solver.solve_PDE(network)
-        velocity_0 = self.pde_solver.flux_info[:, 0]**self.eta
-        dt_0 = self.ds / np.max(velocity_0)
-        drs_0 = dt_0 * velocity_0
 
         # are moving?
         are_moving = self.__check_moving_conditions(network) # here we put branches to sleep
-        drs_0 = drs_0[are_moving]
+        if not are_moving.any():
+            raise Exception("Not a single branch is moving. The critical Shields parameter might be too high.")
+        velocity_0 = (self.pde_solver.flux_info[are_moving, 0] - self.crit_shields_param)**self.eta
+        dt_0 = self.ds / np.max(velocity_0)
+        drs_0 = dt_0 * velocity_0
         initial_network = network.copy()
         
         # x(n-1): trimming drs_0 from test_network
@@ -312,7 +319,7 @@ class BackwardModifiedEulerMethod:
 
             # v[x(n-1)]: finding velocity at the x(n-1) point
             self.pde_solver.solve_PDE(test_network)
-            velocity_1 = self.pde_solver.flux_info[:, 0]**self.eta
+            velocity_1 = np.maximum((self.pde_solver.flux_info[:, 0] - self.crit_shields_param), 0)**self.eta
             drs_1 = dt_0 * velocity_1
 
             # 0.5 * dt * (v[x(n)] + v[x(n-1)]): average drs

@@ -32,12 +32,15 @@ class FreeFEM_ThinFingers(FreeFEM):
         Angle between the daughter branches after bifurcation.
         Default angle (72 degrees) corresponds to the analytical solution
         for fingers in a diffusive field.
-    inflow_thresh : float, default 0.05
-        Threshold to put asleep the tips with less than ``inflow_thresh``
-        of max flux/velocity.
     distance_from_bif_thresh : float, default 2.1*``ds``
         A minimal distance the tip has to move from the previous bifurcations
         to split again.
+    sleep_frac_thresh : float, default 0.05
+        Numerical threshold to put asleep tips that are slower than
+        ``sleep_frac_thresh`` * max velocity.
+    crit_shields_param : float, default 0
+        Threshold in the growth law:
+        v = (flux - ``crit_shields_param``)**``eta''        
 
     is_backward : bool, default False
         If True, solve_PDE returns flux_info.
@@ -62,8 +65,9 @@ class FreeFEM_ThinFingers(FreeFEM):
             bifurcation_type=0,
             bifurcation_thresh=None,
             bifurcation_angle=2 * np.pi / 5,
-            inflow_thresh=0.05,
             distance_from_bif_thresh=None,
+            sleep_frac_thresh=0.05,
+            crit_shields_param=0,            
             is_backward=False,
         ):
         """Initialize FreeFEM_ThinFingers.
@@ -77,8 +81,9 @@ class FreeFEM_ThinFingers(FreeFEM):
         bifurcation_type : int, default 0
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
-        inflow_thresh : float, default 0.05
         distance_from_bif_thresh : float, default 2.1*``ds``
+        sleep_frac_thresh : float, default 0.05
+        crit_shields_param : float, default 0        
         is_backward : bool, default False
 
         Returns
@@ -87,7 +92,7 @@ class FreeFEM_ThinFingers(FreeFEM):
 
         """
         super().__init__(equation, eta, ds, is_script_saved)
-        
+        self.crit_shields_param = crit_shields_param # v = (flux - crit_shields_param)**eta
         self.is_backward = is_backward
         
         self.bifurcation_type = bifurcation_type  # no bifurcations, a1, a3/a1, random
@@ -98,14 +103,14 @@ class FreeFEM_ThinFingers(FreeFEM):
             elif self.bifurcation_type == 2:
                 self.bifurcation_thresh = -0.1  # a3/a1 bifurcations
             elif self.bifurcation_type == 3:
-                self.bifurcation_thresh = 3 * ds # random bifurcations: bif_probability
+                self.bifurcation_thresh = 5 * ds # random bifurcations: bif_probability
             else:
                 self.bifurcation_thresh = 0
         self.bifurcation_angle = bifurcation_angle  # 2*np.pi/5
-
-        # less than ``inflow_thresh`` of max flux/velocity puts branches asleep
-        self.inflow_thresh = inflow_thresh
         self.distance_from_bif_thresh = 2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
+
+        # less than ``sleep_frac_thresh`` of max flux/velocity puts branches asleep
+        self.sleep_frac_thresh = sleep_frac_thresh
         
         # parts of the script
         self._script_init = textwrap.dedent(
@@ -363,7 +368,8 @@ class FreeFEM_ThinFingers(FreeFEM):
         max_a1 = np.max(self.flux_info[..., 0])
         if is_dr_normalized:
             # normalize dr, so that the fastest tip moves over ds
-            dt = self.ds / max_a1 ** self.eta
+            v_max = np.maximum( (max_a1 - self.self.crit_shields_param)** self.eta, 1e-12)
+            dt = self.ds / v_max
         else:
             dt = self.ds
         
@@ -379,10 +385,16 @@ class FreeFEM_ThinFingers(FreeFEM):
             is_bifurcating = False
             is_moving = True
             if is_zero_approx_step:
+                # moving condition
+                if a1 < self.crit_shields_param and \
+                    ( (a1-self.crit_shields_param) / (max_a1-self.crit_shields_param) )**self.eta < self.sleep_frac_thresh:
+                    is_moving = False
+
                 # bifurcation
                 if (
                     self.bifurcation_type
                     and branch.length() > self.distance_from_bif_thresh
+                    and is_moving
                 ):
                     # the condition above is used to avoid many bifurcations
                     # in almost one point which can occur while ds is very small
@@ -395,17 +407,13 @@ class FreeFEM_ThinFingers(FreeFEM):
                         r = np.random.uniform(0, 1)  # uniform distribution [0,1)
                         if p > r:
                             is_bifurcating = True
-                # moving condition
-                if a1/max_a1 < self.inflow_thresh or \
-                    (a1/max_a1)**self.eta < self.inflow_thresh:
-                    is_moving = False
             
             if is_moving:
                 # __streamline_extension formula is derived in the coordinate
                 # system where the tip segment lies on a negative Y axis;
                 # hence, we rotate obtained dR vector to that system
                 tip_angle = np.pi / 2 - branch.tip_angle()
-                dr = dt * a1**self.eta
+                dr = dt * (a1 - self.crit_shields_param)**self.eta
                 beta = a1 / a2
                 dRs_test[i] = np.dot(
                     rotation_matrix(
@@ -419,10 +427,7 @@ class FreeFEM_ThinFingers(FreeFEM):
 
             if is_bifurcating:
                 print("! Branch {ID} bifurcated !".format(ID=branch.ID))
-                dR = np.dot(
-                    rotation_matrix(
-                        tip_angle), self.__streamline_extension(beta, dr)
-                )
+                dR = dRs_test[i].copy() 
                 dRs_test[i] = -10
                 dRs_test = np.vstack( (dRs_test, [
                     np.dot(
@@ -564,13 +569,14 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
     equation, eta, ds, is_script_saved inherited from FreeFEM
 
     flux_info, bifurcation_type, bifurcation_thresh, 
-        bifurcation_angle, inflow_thresh, distance_from_bif_thresh inherited from FreeFEM_ThinFingers
+        bifurcation_angle, distance_from_bif_thresh, 
+        sleep_frac_thresh, crit_shields_param inherited from FreeFEM_ThinFingers
 
     flux_info_boundary : array
         A 1-n array of fluxes at each point of the moving-boundary.
-    boundary_pts_min_sep : float, default 0.015
+    boundary_pts_sep_min : float, default 0.015
         Minimum separation between boundary points. If too small introduces numerical noise.
-    boundary_pts_max_sep : float, default 0.03
+    boundary_pts_sep_max : float, default 0.03
         Maximum separation between boundary points.
     box_history : list, default []
         History of the box at each step.
@@ -601,10 +607,11 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
             bifurcation_type=0,
             bifurcation_thresh=None,
             bifurcation_angle=2 * np.pi / 5,
-            inflow_thresh=0.05,
             distance_from_bif_thresh=None,
-            boundary_pts_min_sep=0.019,
-            boundary_pts_max_sep=0.021,
+            sleep_frac_thresh=0.05,
+            crit_shields_param=0,
+            boundary_pts_sep_min=0.019,
+            boundary_pts_sep_max=0.021,
             box_history=None,
             v_rim=1,
             response_func="linear",
@@ -621,10 +628,11 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         bifurcation_type : int, default 0
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
-        inflow_thresh : float, default 0.05
         distance_from_bif_thresh : float, None
-        boundary_pts_min_sep : float, default 0.015
-        boundary_pts_max_sep : float, default 0.03
+        sleep_frac_thresh : float, default 0.05
+        crit_shields_param : float, default 0
+        boundary_pts_sep_min : float, default 0.015
+        boundary_pts_sep_max : float, default 0.03
         box_history : list, default []
         v_rim : float, default 1.0
         response_func : str, default "linear"
@@ -637,9 +645,9 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         """
         super().__init__(network, equation, eta, ds, is_script_saved, \
                          bifurcation_type, bifurcation_thresh, bifurcation_angle, \
-                         inflow_thresh, distance_from_bif_thresh)
-        self.boundary_pts_min_sep = boundary_pts_min_sep
-        self.boundary_pts_max_sep = boundary_pts_max_sep
+                         distance_from_bif_thresh, sleep_frac_thresh, crit_shields_param)
+        self.boundary_pts_sep_min = boundary_pts_sep_min
+        self.boundary_pts_sep_max = boundary_pts_sep_max
         if box_history is None:
             self.box_history = [network.box.copy()]
         else:
@@ -788,16 +796,16 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
             current_point = boundary_pts[i]
             distance = np.linalg.norm(current_point - last_kept_point)
             # Too far apart -> Insert interpolated points
-            if distance > self.boundary_pts_max_sep:
-                # Calculate how many segments of self.boundary_pts_max_sep length fit between the points
-                num_segments = int(np.ceil(distance / self.boundary_pts_max_sep))
+            if distance > self.boundary_pts_sep_max:
+                # Calculate how many segments of self.boundary_pts_sep_max length fit between the points
+                num_segments = int(np.ceil(distance / self.boundary_pts_sep_max))
                 # Use linear interpolation to generate the intermediate points
                 t_values = np.linspace(0, 1, num_segments + 1)
                 interpolated_points = (1 - t_values[:, np.newaxis]) * last_kept_point + t_values[:, np.newaxis] * current_point
                 # Add all new points to the list, except the first (which is last_kept_point)
                 processed_points.extend(interpolated_points[1:])
             # Accepted separation range -> Keep the point
-            elif distance >= self.boundary_pts_min_sep:
+            elif distance >= self.boundary_pts_sep_min:
                 processed_points.append(current_point)
             # If the last two points are too close, replace the penultimate point with the last
             elif i==len(boundary_pts)-1:
