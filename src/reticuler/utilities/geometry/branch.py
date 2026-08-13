@@ -6,9 +6,12 @@ Classes:
     Network
 """
 
+import logging
 import numpy as np
 
 from reticuler.utilities.misc import DIRICHLET_0
+
+logger = logging.getLogger("reticuler")
 
 class Branch:
     """A class of a single branch in a network.
@@ -62,7 +65,7 @@ class Branch:
     def extend(self, step, dR):
         """Add a new point to ``self.points`` (progressed tip) and update ``self.steps``."""
         if np.linalg.norm(dR) < 9e-5:
-            print("! Extremely small dR, tip {} not extended but shifted !".format(self.ID))
+            logger.warning("! Extremely small dR, tip %d not extended but shifted !", self.ID)
             tip_versor = self.points[-1] - self.points[-2]
             tip_versor = tip_versor / np.linalg.norm(tip_versor)
             self.points[-1] = self.points[-1] + tip_versor * dR

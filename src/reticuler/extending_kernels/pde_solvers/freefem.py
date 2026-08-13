@@ -1,8 +1,11 @@
+import logging
 import os
 import subprocess
 import numpy as np
 from datetime import datetime
 from tempfile import NamedTemporaryFile
+
+logger = logging.getLogger("reticuler")
 
 class FreeFEM:
     """A parent class for PDE solvers based on the finite element method implemented in FreeFEM [Ref2]_.
@@ -194,9 +197,9 @@ class FreeFEM:
                 
         if out_freefem.returncode or "nan" in out_freefem.stdout.decode():
             script_name = self.system.exp_name + f"_{datetime.now().strftime('%Y_%m_%d-%p%I_%M_%S')}_failed.edp"
-            print(f"\nFreeFem++ failed... Saving the script: {script_name}\n")
-            print("stdout:", out_freefem.stdout.decode())
-            print("stderr:", out_freefem.stderr.decode())
+            logger.error("FreeFem++ failed... Saving the script: %s", script_name)
+            logger.error("stdout: %s", out_freefem.stdout.decode())
+            logger.error("stderr: %s", out_freefem.stderr.decode())
             with open(script_name, "w") as edp_temp_file:
                 edp_temp_file.write(script)
             

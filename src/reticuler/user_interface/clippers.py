@@ -6,10 +6,13 @@ Functions:
     clip_to_height(system, max_height)
 
 """
+import logging
 import numpy as np
 
 from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem, BackwardBranch
+
+logger = logging.getLogger("reticuler")
 from reticuler.utilities.misc import extend_radially
 
 def clip_to_step(system, max_step):
@@ -159,7 +162,7 @@ if __name__ == "__main__":
     backward_system.system.exp_name = dir_name+"original_tree"
 
     clip_to_BEA_step(system, backward_system, max_BEA_step=23)
-    print(backward_system.backward_branches[-1].steps)
+    logger.info("backward_branches[-1].steps: %s", backward_system.backward_branches[-1].steps)
 
     # backward_system.system.export_json()         
     # backward_system.export_json()      

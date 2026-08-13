@@ -1,7 +1,10 @@
+import logging
 import textwrap
 import numpy as np
 
 from reticuler import DIRICHLET_1, DIRICHLET_0, NEUMANN_1
+
+logger = logging.getLogger("reticuler")
 from reticuler import rotation_matrix
 
 from reticuler.utilities.misc import sigmoid
@@ -423,10 +426,10 @@ class FreeFEM_ThinFingers(FreeFEM):
                 dRs_test[i] = -10
                 network.sleeping_branches.append(branch)
                 network.active_branches.remove(branch)
-                print("! Branch {ID} is sleeping !".format(ID=branch.ID))
+                logger.info("! Branch %d is sleeping !", branch.ID)
 
             if is_bifurcating:
-                print("! Branch {ID} bifurcated !".format(ID=branch.ID))
+                logger.info("! Branch %d bifurcated !", branch.ID)
                 dR = dRs_test[i].copy() 
                 dRs_test[i] = -10
                 dRs_test = np.vstack( (dRs_test, [
@@ -537,7 +540,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         
         out_freefem = super().run_freefem(script)
         if out_freefem.returncode or "nan" in out_freefem.stdout.decode():
-            print("\nTrying again...\n")
+            logger.warning("Trying again...")
             # script_perturbed = script.replace("nvAroundTips.min < 250","nvAroundTips.min < 350")
             lookfor = "boxN(0:1023)=["
             ind = script.find(lookfor) + len(lookfor)
@@ -550,9 +553,9 @@ class FreeFEM_ThinFingers(FreeFEM):
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
         
         with np.printoptions(formatter={"float": "{:.6e}".format}):
-            print("a1a2a3") # , self.flux_info)
+            logger.info("a1a2a3")
             for i, branch in enumerate(network.active_branches):
-                print(f"Branch {branch.ID}: {self.flux_info[i]}, l={branch.length():.3g}")
+                logger.info("Branch %d: %s, l=%.3g", branch.ID, self.flux_info[i], branch.length())
         
         if self.is_backward:
             return self.flux_info.copy()

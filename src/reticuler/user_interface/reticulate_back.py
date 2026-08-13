@@ -1,5 +1,6 @@
 """Command line script to run the Backward Evolution Algorithm"""
 
+import logging
 import argparse
 import json
 import textwrap
@@ -11,6 +12,7 @@ from reticuler.backward_evolution import trimmers
 
 # %%
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     parser = argparse.ArgumentParser(
         description="Run the Backward Evolution Algorithm.", formatter_class=argparse.RawTextHelpFormatter
     )

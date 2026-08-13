@@ -8,8 +8,8 @@ Classes:
     
 """
 
+import logging
 import numpy as np
-import datetime
 import time
 import copy
 import json
@@ -25,6 +25,9 @@ from reticuler.extending_kernels import pde_solvers
 from reticuler.utilities import morphers
 
 from reticuler.user_interface import graphics
+
+logger = logging.getLogger("reticuler")
+
 
 class System:
     """A class containing all the elements to run a network simulation.
@@ -357,8 +360,8 @@ class System:
                         with open(input_file + "_box_history.pkl", "rb") as f:
                             boxes = pickle.load(f)
                     except Exception as error: # !!! Backward compatibility
-                        print(type(error).__name__, ": ", error)
-                        print("Importing box history the old way.")
+                        logger.warning("%s: %s", type(error).__name__, error)
+                        logger.warning("Importing box history the old way.")
                         boxes = []
                         for box_ind in json_morpher["box_history"]:
                             json_box = json_morpher["box_history"][box_ind]
@@ -406,8 +409,8 @@ class System:
                 exp_name=input_file,
             )
         except Exception as error:
-            print(type(error).__name__, ": ", error)
-            print("!WARNING! Extender/PDE solver/morpher not imported.")
+            logger.warning("%s: %s", type(error).__name__, error)
+            logger.warning("!WARNING! Extender/PDE solver/morpher not imported.")
             pde_solver = pde_solvers.FreeFEM_ThinFingers(network)
             extender = extenders.ModifiedEulerMethod(
                 pde_solver=pde_solver,)
@@ -429,11 +432,10 @@ class System:
             self.growth_gauges[3] = self.growth_gauges[3] + dt_i
             self.timestamps = np.append( self.timestamps, self.growth_gauges[3] )
 
-        print("Active branches: {n:d}".format(
-            n=len(self.network.active_branches)))
-        print("Network height: {h:.3f}".format(h=self.growth_gauges[1]))
-        print("Network length: {l:.3f}".format(l=self.growth_gauges[2]))
-        print("Evolution time: {t:.3f}".format(t=self.growth_gauges[3]))
+        logger.info("Active branches: %d", len(self.network.active_branches))
+        logger.info("Network height: %.3f", self.growth_gauges[1])
+        logger.info("Network length: %.3f", self.growth_gauges[2])
+        logger.info("Evolution time: %.3f", self.growth_gauges[3])
 
     def evolve(self, ax=None):
         """Run the simulation.
@@ -451,12 +453,8 @@ class System:
         while self.growth_gauges[self.growth_thresh_type] < self.growth_thresh \
                 and len(self.network.active_branches) > 0:
             self.growth_gauges[0] = self.growth_gauges[0] + 1
-            print(
-                "\n-------------------   Growth step: {step:.0f}   -------------------\n".format(
-                    step=self.growth_gauges[0]
-                )
-            )
-            print("Date and time: ", datetime.datetime.now())
+            logger.info("-----------------------------")
+            logger.info("------ Growth step: %.0f ------", self.growth_gauges[0])
 
             # network evolution
             out_growth = self.extender.integrate(network=self.network, \
@@ -473,7 +471,7 @@ class System:
             # Updating gauges, etc.
             self.__update_growth_gauges(out_growth[0])
             t_diff = time.time() - start_clock
-            print(f"Computation time: {int(t_diff/3600):d}h {int((t_diff%3600)/60):d}min")
+            logger.info("Computation time: %dh %dmin", int(t_diff/3600), int((t_diff%3600)/60))
             
             if not self.growth_gauges[0] % self.dump_every:
                 self.export_json()
@@ -487,7 +485,7 @@ class System:
                     plt.pause(0.01)
                     
         self.export_json()
-        print("\n End of the simulation")
+        logger.info("End of the simulation")
 
 if __name__ == "__main__":
     box, branches, active_branches = Box.construct(

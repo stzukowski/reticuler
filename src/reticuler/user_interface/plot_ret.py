@@ -1,6 +1,7 @@
 """Command line script to plot a network"""
 
 import glob
+import logging
 import argparse
 import json
 import textwrap
@@ -10,6 +11,8 @@ import numpy as np
 from reticuler.system import System
 from reticuler.user_interface import graphics, clippers
 from reticuler.utilities.misc import create_dir
+
+logger = logging.getLogger("reticuler")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -240,7 +243,7 @@ def main():
                 output_name = f"frames_{exp_name}/" + output_name
              
             for s in steps:
-                print(f"Plotting {exp_name}, step {s}")
+                logger.info("Plotting %s, step %d", exp_name, s)
                 system = system0.copy()
                 if args.frames:
                     clippers.clip_to_step(system, s)

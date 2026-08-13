@@ -6,10 +6,13 @@ Classes:
     Network
 """
 
-import numpy as np 
+import logging
+import numpy as np
 import copy
 
 from reticuler.utilities.geometry.branch import Branch
+
+logger = logging.getLogger("reticuler")
 from reticuler.utilities.misc import DIRICHLET_0, DIRICHLET_0_GLOB_FLUX, NEUMANN_0
 from reticuler.utilities.misc import find_reconnection_point
 
@@ -92,7 +95,7 @@ class Network:
             reconnection_distance = pde_solver.finger_width + 5e-3
             reconnection_distance_bt = pde_solver.finger_width/2 + 5e-3 # 0.05*pde_solver.ds
         else:
-            print("Reconnections for thin fingers? Check carefully!")
+            logger.warning("Reconnections for thin fingers? Check carefully!")
             reconnection_distance = 0.01*pde_solver.ds
             reconnection_distance_bt = 0.01*pde_solver.ds
             
@@ -143,10 +146,10 @@ class Network:
                 # remove False in if and uncomment pde_solver.ds=... in else below
                 if False and pde_solver.ds>=1e-5:
                     pde_solver.ds = pde_solver.ds / 10
-                    print("! Branch {ID} is reaching the outlet ! ds = {ds}".format(ID=branch.ID, ds=pde_solver.ds))
+                    logger.info("! Branch %d is reaching the outlet ! ds = %s", branch.ID, pde_solver.ds)
                 else:
                     did_reconnect = True
-                    print("! Branch {ID} broke through !".format(ID=branch.ID))
+                    logger.info("! Branch %d broke through !", branch.ID)
                     # pde_solver.ds = 0.01
 
                     if is_pt_new:
@@ -215,7 +218,7 @@ class Network:
                     
                     # reconnect to a branch
                     branch2_id = int(all_segments_branches[mask][ind_min,0])
-                    print("! Branch {ID} reconnected to branch {ID2} !".format(ID=branch.ID, ID2=branch2_id))
+                    logger.info("! Branch %d reconnected to branch %d !", branch.ID, branch2_id)
                     
                     if "FreeFEM_ThickFingers" in type(pde_solver).__name__:
                         branch.points = np.vstack( (branch.points, [tip]) )

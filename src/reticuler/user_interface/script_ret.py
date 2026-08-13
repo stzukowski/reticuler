@@ -1,10 +1,13 @@
 """Command line script to prepare FreeFEM scripts based on the system"""
 
 import glob
+import logging
 import argparse
 import textwrap
 
 from reticuler.system import System
+
+logger = logging.getLogger("reticuler")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -62,7 +65,7 @@ def main():
         system = System.import_json(input_file=exp_name)
 
         if len(system.network.active_branches)==0:
-            print("Cannot create the script - no active tips. Clip network.")
+            logger.warning("Cannot create the script - no active tips. Clip network.")
         else:
             script = system.extender.pde_solver.prepare_script(system.network)
             if args.output_file is None:

@@ -7,15 +7,17 @@ Classes:
     
 """
 
+import logging
 import time
 import copy
-import datetime
 import numpy as np
 import importlib.metadata
 import json
 
 from reticuler.system import NumpyEncoder
 from reticuler.backward_evolution import trimmers
+
+logger = logging.getLogger("reticuler")
 
 
 class BackwardBranch:
@@ -456,15 +458,11 @@ class BackwardSystem:
         # while branches list is not empty
         while not len(self.system.network.branches)==1 and self.BEA_step < self.BEA_step_thresh:
             self.BEA_step = self.BEA_step + 1
-            print(
-                "\n-------------------   Backward Evolution Algorithm step: {step:.0f}   -------------------\n".format(
-                    step=self.BEA_step
-                )
-            )
-            print("Date and time: ", datetime.datetime.now())
+            logger.info("---------------------------------------------------")
+            logger.info("----- Backward Evolution Algorithm step: %.0f -----", self.BEA_step)
 
             ##### BACKWARD STEPS #####
-            print("Backward steps")
+            logger.info("Backward steps")
             for i in range(self.back_forth_steps_thresh):
                 initial_network, self.system.network, \
                 self.backward_branches, self.backward_bifurcations, \
@@ -478,7 +476,7 @@ class BackwardSystem:
                 continue
 
             ##### FORWARD STEPS #####
-            print("----- Forward steps -----")
+            logger.info("----- Forward steps -----")
             test_network = self.system.network.copy()
             for i in range(self.back_forth_steps_thresh):
                 self.system.extender.pde_solver.ds = backward_dts[i]
@@ -490,10 +488,7 @@ class BackwardSystem:
             self.__compare_networks(
                 initial_network, self.system.network, test_network, flux_info)
 
-            print("Computation time: {clock:.2f}h".format(
-                    clock=(time.time() - start_clock)/3600
-                )
-            )
+            logger.info("Computation time: %.2fh", (time.time() - start_clock)/3600)
             if not self.BEA_step % self.dump_every:
                 self.export_json()
                 # self.system.export_json()
@@ -501,4 +496,4 @@ class BackwardSystem:
         self.export_json()
         # self.system.export_json()
 
-        print("\n End of the Backward Evolution Algorithm.")        
+        logger.info("End of the Backward Evolution Algorithm.")

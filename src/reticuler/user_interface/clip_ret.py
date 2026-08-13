@@ -1,11 +1,14 @@
 """Command line script to clip a network"""
 
+import logging
 import argparse
 import textwrap
 
 from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem
 from reticuler.user_interface import clippers
+
+logger = logging.getLogger("reticuler")
 
 # %%
 def main():
@@ -164,7 +167,7 @@ def main():
               
         backward_system.export_json()          
     else:
-        print("Network not clipped - you must choose one clipping limit!")
+        logger.warning("Network not clipped - you must choose a clipping limit!")
 
     system.export_json()
 

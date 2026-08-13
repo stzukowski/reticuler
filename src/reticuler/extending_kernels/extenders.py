@@ -5,9 +5,12 @@ Classes:
 
 """
 
+import logging
 import numpy as np
 
 from reticuler.utilities.misc import NEUMANN_0, DIRICHLET_0, DIRICHLET_1
+
+logger = logging.getLogger("reticuler")
 
 class ModifiedEulerMethod:
     r"""A class to integrate tip trajectories with modified Euler's method.
@@ -93,7 +96,7 @@ class ModifiedEulerMethod:
         if self.is_reconnecting:
             did_reconnect = network.reconnect(self.pde_solver, step)
             if did_reconnect:
-                print("Reconnected branch, skipping Modified Euler Method steps.")
+                logger.info("Reconnected branch, skipping Modified Euler Method steps.")
 
         dRs_test = dRs_0.copy()
         approximation_step = 0
@@ -127,7 +130,7 @@ class ModifiedEulerMethod:
             if self.is_reconnecting:
                 did_reconnect = network.reconnect(self.pde_solver, step)
                 if did_reconnect:
-                    print("Reconnected branch, (possibly) skipping Modified Euler Method steps.")
+                    logger.info("Reconnected branch, (possibly) skipping Modified Euler Method steps.")
                     break
         
         return [dt, out_solver]
@@ -204,7 +207,7 @@ class ModifiedEulerMethod_Boundary(ModifiedEulerMethod):
             did_reconnect = network.reconnect(self.pde_solver, step)
             
         if did_reconnect:
-            print("Reconnected branch, skipping Modified Euler Method steps.")
+            logger.info("Reconnected branch, skipping Modified Euler Method steps.")
         else:
             dRs_test = dRs_0.copy()
             dRs_boundary_test = dRs_boundary_0.copy()

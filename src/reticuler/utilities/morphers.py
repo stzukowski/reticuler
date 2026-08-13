@@ -4,9 +4,12 @@ Classes:
     Jellyfish
 """
 
+import logging
 import numpy as np
 
 from reticuler.utilities.geometry import Branch
+
+logger = logging.getLogger("reticuler")
 from reticuler.utilities.misc import cyl2cart, cart2cyl, extend_radially, find_reconnection_point, sigmoid
 from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_0_GLOB_FLUX
 
@@ -132,7 +135,7 @@ class Jellyfish:
             self.radii = new_radii
             out_growth[0] = [dt, (self.radii[-1] - self.radii[-2])/self.v_rim]
             step = step + 1
-            print("No sprouts and no space for new ones. Additional jellyfish growth.")
+            logger.warning("No sprouts and no space for new ones. Additional jellyfish growth.")
         
         max_branch_id = len(network.branches) - 1
         for i, theta in enumerate(mid_pos_ang[is_triggered]):
@@ -167,7 +170,7 @@ class Jellyfish:
         
         if any(is_triggered):
             thetas = [f"{t:.3f}" for t in mid_pos_ang[is_triggered]/np.pi*180]
-            print(f"Initiating {sum(is_triggered)} new sprouts at \n theta={', '.join(thetas)} deg.")
-        print(f"Radius: {self.radii[-1]:.3f} mm")
+            logger.info("Initiating %d new sprouts at theta=%s deg.", sum(is_triggered), ', '.join(thetas))
+        logger.info("Radius: %.3f mm", self.radii[-1])
         
         return out_growth

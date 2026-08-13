@@ -1,6 +1,9 @@
+import logging
 import scipy
 import textwrap
 import numpy as np
+
+logger = logging.getLogger("reticuler")
 
 import shapely
 from shapely.ops import linemerge 
@@ -568,7 +571,8 @@ class FreeFEM_ThickFingers(FreeFEM):
         out_freefem = super().run_freefem(script)
         
         if out_freefem.returncode or "nan" in out_freefem.stdout.decode():
-            print("\n\n\nTrying again...")
+            logger.warning("")
+            logger.warning("Trying again...")
             lookfor = "boxN(0:1023)=["
             ind = script.find(lookfor) + len(lookfor)
             ind2 = ind + script[ind:].find("];")
@@ -633,8 +637,8 @@ class FreeFEM_ThickFingers(FreeFEM):
             plt.close()
             
         with np.printoptions(formatter={"float": "{:.6g}".format}):
-            print("flux_info: ", self.flux_info[...,0])
-            print("angles: ", self.flux_info[...,1]*180/np.pi)
+            logger.info("flux_info: %s", self.flux_info[...,0])
+            logger.info("angles: %s", self.flux_info[...,1]*180/np.pi)
 
 class FreeFEM_ThickFingers_Elasticity(FreeFEM_ThickFingers):
     """A PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.

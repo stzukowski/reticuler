@@ -1,5 +1,6 @@
 """Command line script to run the simulation"""
 
+import logging
 import argparse
 import json
 import textwrap
@@ -15,6 +16,7 @@ from reticuler.user_interface import graphics
 
 # %%
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     parser = argparse.ArgumentParser(
         description="Grow a network.", formatter_class=argparse.RawTextHelpFormatter
     )

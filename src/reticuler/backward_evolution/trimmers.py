@@ -5,8 +5,11 @@ Classes:
 
 """
 
+import logging
 import numpy as np
 import copy
+
+logger = logging.getLogger("reticuler")
 
 
 class BackwardModifiedEulerMethod:
@@ -167,7 +170,7 @@ class BackwardModifiedEulerMethod:
                 else:
                     ind_bifurcation = backward_bifurcations.mother_IDs==backward_branch.mother_ID
                     if backward_bifurcations.flags[ind_bifurcation] == 0:
-                        print("! Branch {ID} reached bifurcation {bifID} ! (1st one)".format(ID=backward_branch.ID, bifID=backward_branch.mother_ID))
+                        logger.info("! Branch %d reached bifurcation %d ! (1st one)", backward_branch.ID, backward_branch.mother_ID)
                         backward_bifurcations.flags[ind_bifurcation] = 1
                         are_living_after_bif[i,:] = False
                         # branch is later poped from initial_network (back in the trim method)
@@ -193,7 +196,7 @@ class BackwardModifiedEulerMethod:
                         drs[i] = 0
                         
                     elif backward_bifurcations.flags[ind_bifurcation] == 1:
-                        print("! Branch {ID} reached bifurcation {bifID} ! (2nd one)".format(ID=backward_branch.ID, bifID=backward_branch.mother_ID))
+                        logger.info("! Branch %d reached bifurcation %d ! (2nd one)", backward_branch.ID, backward_branch.mother_ID)
                         backward_bifurcations.flags[ind_bifurcation] = 2
                         
                         mother_branch = [b for b in test_network.branches if b.ID==backward_branch.mother_ID][0]
@@ -303,12 +306,12 @@ class BackwardModifiedEulerMethod:
         are_living_after_bif, inds_after_bif, dt_factor, drs_0 = \
             self.__explicit_network_trim(test_network, drs_0, backward_branches, \
                                          backward_bifurcations, BEA_step)
-        print('dt_factor:', dt_factor)
-        print(inds_after_bif)
-        dt_0 = dt_0 * dt_factor 
-        
+        logger.info("dt_factor: %s", dt_factor)
+        logger.info("inds_after_bif: %s", inds_after_bif)
+        dt_0 = dt_0 * dt_factor
+
         drs = drs_0.copy()
-        print(drs)
+        logger.info("drs: %s", drs)
         dt = dt_0
         approximation_step = 0
         # APPROXIMATION LOOP
@@ -327,7 +330,7 @@ class BackwardModifiedEulerMethod:
             velocity = drs / dt_0
             dt = self.ds / np.max(velocity)
             drs = dt * velocity
-            print(drs)
+            logger.info("drs: %s", drs)
 
             # improved x(n-1)
             backward_branches = copy.deepcopy(backward_branches_0)
@@ -336,9 +339,9 @@ class BackwardModifiedEulerMethod:
             are_living_after_bif, inds_after_bif, dt_factor, drs = \
                 self.__explicit_network_trim(test_network, drs, backward_branches, \
                                              backward_bifurcations, BEA_step)
-            print('dt_factor:', dt_factor)
+            logger.info("dt_factor: %s", dt_factor)
             dt = dt * dt_factor
-            print(inds_after_bif)
+            logger.info("inds_after_bif: %s", inds_after_bif)
         
         initial_network.active_branches = [b for i, b in enumerate(network.active_branches) if are_living_after_bif[i,1]]
         
