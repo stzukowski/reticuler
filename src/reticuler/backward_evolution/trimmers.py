@@ -31,7 +31,7 @@ class BackwardModifiedEulerMethod:
             - >1: modified Euler's method   
     min_distance : float, default 5e-4
         Minimal distance between two nodes after trimming.
-    sleep_frac_thresh : float, default 0.05
+    sleep_frac_thresh : float, default 0.01
         Numerical threshold to put asleep tips that are slower than
         ``sleep_frac_thresh`` * max velocity.
     crit_shields_param : float, default 0
@@ -53,7 +53,7 @@ class BackwardModifiedEulerMethod:
         ds=0.01,
         max_approximation_step=3,
         min_distance = 5e-4,
-        sleep_frac_thresh = 0.05,
+        sleep_frac_thresh = 0.01,
         crit_shields_param = 0,
     ):
         """Initialize BackwardModifiedEulerMethod.
@@ -65,7 +65,7 @@ class BackwardModifiedEulerMethod:
         ds : float, default 0.01
         max_approximation_step : int, default 3
         min_distance : float, default 5e-4
-        sleep_frac_thresh : float, default 0.05
+        sleep_frac_thresh : float, default 0.01
         crit_shields_param : float, default 0        
 
         Returns

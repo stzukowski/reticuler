@@ -35,7 +35,7 @@ class FreeFEM_ThinFingers(FreeFEM):
     distance_from_bif_thresh : float, default 2.1*``ds``
         A minimal distance the tip has to move from the previous bifurcations
         to split again.
-    sleep_frac_thresh : float, default 0.05
+    sleep_frac_thresh : float, default 0.01
         Numerical threshold to put asleep tips that are slower than
         ``sleep_frac_thresh`` * max velocity.
     crit_shields_param : float, default 0
@@ -66,7 +66,7 @@ class FreeFEM_ThinFingers(FreeFEM):
             bifurcation_thresh=None,
             bifurcation_angle=2 * np.pi / 5,
             distance_from_bif_thresh=None,
-            sleep_frac_thresh=0.05,
+            sleep_frac_thresh=0.01,
             crit_shields_param=0,            
             is_backward=False,
         ):
@@ -82,7 +82,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
         distance_from_bif_thresh : float, default 2.1*``ds``
-        sleep_frac_thresh : float, default 0.05
+        sleep_frac_thresh : float, default 0.01
         crit_shields_param : float, default 0        
         is_backward : bool, default False
 
@@ -368,7 +368,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         max_a1 = np.max(self.flux_info[..., 0])
         if is_dr_normalized:
             # normalize dr, so that the fastest tip moves over ds
-            v_max = np.maximum( (max_a1 - self.self.crit_shields_param)** self.eta, 1e-12)
+            v_max = np.maximum( (max_a1 - self.crit_shields_param)** self.eta, 1e-12)
             dt = self.ds / v_max
         else:
             dt = self.ds
@@ -608,7 +608,7 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
             bifurcation_thresh=None,
             bifurcation_angle=2 * np.pi / 5,
             distance_from_bif_thresh=None,
-            sleep_frac_thresh=0.05,
+            sleep_frac_thresh=0.01,
             crit_shields_param=0,
             boundary_pts_sep_min=0.019,
             boundary_pts_sep_max=0.021,
@@ -629,7 +629,7 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
         distance_from_bif_thresh : float, None
-        sleep_frac_thresh : float, default 0.05
+        sleep_frac_thresh : float, default 0.01
         crit_shields_param : float, default 0
         boundary_pts_sep_min : float, default 0.015
         boundary_pts_sep_max : float, default 0.03
