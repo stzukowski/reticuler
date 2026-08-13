@@ -14,6 +14,7 @@ from reticuler.extending_kernels import extenders, pde_solvers
 from reticuler.utilities import morphers
 from reticuler.user_interface import graphics
 
+
 # %%
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
@@ -35,11 +36,9 @@ def main():
         type=str,
         nargs=1,
         metavar="exp_name",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             File to import. If None, the System is prepared based on the rest of the arguments.
-            default = None"""
-        ),
+            default = None"""),
         default=None,
     )
 
@@ -49,12 +48,10 @@ def main():
         type=str,
         nargs=1,
         metavar="exp_name",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             File to export. If we import a file and leave this as default, 
             ``system.exp_name`` will be set to ``input_file``.
-            default = '' """
-        ),
+            default = '' """),
         default=[""],
     )
 
@@ -64,8 +61,7 @@ def main():
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Optional growth parameters.
             
             Pass dictionary in a form (no spaces, 
@@ -73,12 +69,12 @@ def main():
                 "{\"value\":key}"
             default = {} (keeps default values as listed below)
             
-            """
-        )
+            """)
         + textwrap.dedent(
             System.__doc__[
-                System.__doc__.find("growth_thresh_type") : \
-                    System.__doc__.find("exp_name")
+                System.__doc__.find("growth_thresh_type") : System.__doc__.find(
+                    "exp_name"
+                )
             ]
         ),
         default=[{}],
@@ -93,8 +89,9 @@ def main():
         metavar="label",
         help=textwrap.dedent(
             Box.construct.__doc__[
-                Box.construct.__doc__.find("initial_condition") : \
-                    Box.construct.__doc__.find("kwargs_construct")
+                Box.construct.__doc__.find(
+                    "initial_condition"
+                ) : Box.construct.__doc__.find("kwargs_construct")
             ]
         ),
         default=[100],
@@ -104,8 +101,7 @@ def main():
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Kwargs for Box construct method.
             
             Pass dictionary in a form (no spaces, 
@@ -113,12 +109,13 @@ def main():
                 "{\"value\":key}"
             default = {} (keeps default values as listed below)
             
-            """
-        )
+            """)
         + textwrap.dedent(
             Box.construct.__doc__[
-                Box.construct.__doc__.find("kwargs_construct") : \
-                    Box.construct.__doc__.find("Returns") - 2
+                Box.construct.__doc__.find(
+                    "kwargs_construct"
+                ) : Box.construct.__doc__.find("Returns")
+                - 2
             ]
         ),
         default=[{}],
@@ -130,11 +127,9 @@ def main():
         type=str,
         nargs=1,
         metavar="name",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             PDE solver
-            default = FreeFEM_ThinFingers"""
-        ),
+            default = FreeFEM_ThinFingers"""),
         default=["FreeFEM_ThinFingers"],
     )
     parser.add_argument(
@@ -142,8 +137,7 @@ def main():
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Optional parameters for solver.
             
             Pass dictionary in a form (no spaces, 
@@ -151,37 +145,45 @@ def main():
                 "{\"value\":key}"
             default = {} (keeps default values as listed below)
             
-            """
-        )
+            """)
         + "1. FreeFEM_ThinFingers\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM_ThinFingers.__doc__[
-                pde_solvers.FreeFEM_ThinFingers.__doc__.find("equation") : \
-                    pde_solvers.FreeFEM_ThinFingers.__doc__.find("References") - 2
+                pde_solvers.FreeFEM_ThinFingers.__doc__.find(
+                    "equation"
+                ) : pde_solvers.FreeFEM_ThinFingers.__doc__.find("References")
+                - 2
             ]
         )
         + "\n\n\n2. FreeFEM_ThinFingers_Boundary\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM_ThinFingers_Boundary.__doc__[
-                pde_solvers.FreeFEM_ThinFingers_Boundary.__doc__.find("equation") : \
-                    pde_solvers.FreeFEM_ThinFingers_Boundary.__doc__.find("References") - 2
+                pde_solvers.FreeFEM_ThinFingers_Boundary.__doc__.find(
+                    "equation"
+                ) : pde_solvers.FreeFEM_ThinFingers_Boundary.__doc__.find("References")
+                - 2
             ]
         )
         + "\n\n\n3. FreeFEM_ThickFingers\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM_ThickFingers.__doc__[
-                pde_solvers.FreeFEM_ThickFingers.__doc__.find("equation") : \
-                    pde_solvers.FreeFEM_ThickFingers.__doc__.find("References") - 2
+                pde_solvers.FreeFEM_ThickFingers.__doc__.find(
+                    "equation"
+                ) : pde_solvers.FreeFEM_ThickFingers.__doc__.find("References")
+                - 2
             ]
         )
         + "\n\n\n4. FreeFEM_ThickFingers_Elasticity\n"
         + textwrap.dedent(
             pde_solvers.FreeFEM_ThickFingers_Elasticity.__doc__[
-                pde_solvers.FreeFEM_ThickFingers_Elasticity.__doc__.find("equation") : \
-                    pde_solvers.FreeFEM_ThickFingers_Elasticity.__doc__.find("References") - 2
+                pde_solvers.FreeFEM_ThickFingers_Elasticity.__doc__.find(
+                    "equation"
+                ) : pde_solvers.FreeFEM_ThickFingers_Elasticity.__doc__.find(
+                    "References"
+                )
+                - 2
             ]
-        )
-        ,
+        ),
         default=[{}],
     )
 
@@ -191,11 +193,9 @@ def main():
         type=str,
         nargs=1,
         metavar="name",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Extender
-            default = ModifiedEulerMethod"""
-        ),
+            default = ModifiedEulerMethod"""),
         default=["ModifiedEulerMethod"],
     )
     parser.add_argument(
@@ -203,8 +203,7 @@ def main():
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Optional parameters for extender.
             
             Pass dictionary in a form (no spaces, 
@@ -212,13 +211,14 @@ def main():
                 "{\"value\":key}"
             default = {} (keeps default values as listed below)
             
-            """
-        )
+            """)
         + "1. ModifiedEulerMethod\n"
         + textwrap.dedent(
             extenders.ModifiedEulerMethod.__doc__[
-                extenders.ModifiedEulerMethod.__doc__.find("is_reconnecting")
-                 : extenders.ModifiedEulerMethod.__doc__.find("References")-4
+                extenders.ModifiedEulerMethod.__doc__.find(
+                    "is_reconnecting"
+                ) : extenders.ModifiedEulerMethod.__doc__.find("References")
+                - 4
             ]
         ),
         default=[{}],
@@ -226,24 +226,21 @@ def main():
 
     # Morpher
     parser.add_argument(
-    "--morpher",
-    type=str,
-    nargs=1,
-    metavar="name",
-    help=textwrap.dedent(
-        """\
+        "--morpher",
+        type=str,
+        nargs=1,
+        metavar="name",
+        help=textwrap.dedent("""\
         Morpher
-        default = None"""
-    ),
-    default=[None],
+        default = None"""),
+        default=[None],
     )
     parser.add_argument(
         "--morpher_params",
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Optional parameters for morpher.
             
             Pass dictionary in a form (no spaces, 
@@ -251,13 +248,10 @@ def main():
                 "{\"value\":key}"
             default = {} (keeps default values as listed below)
             
-            """
-        )
+            """)
         + "1. Jellyfish\n"
         + textwrap.dedent(
-            morphers.Jellyfish.__doc__[
-                morphers.Jellyfish.__doc__.find("radii"):
-            ]
+            morphers.Jellyfish.__doc__[morphers.Jellyfish.__doc__.find("radii") :]
         ),
         default=[{}],
     )
@@ -267,11 +261,9 @@ def main():
         "-fp",
         "--final_plot",
         action=argparse.BooleanOptionalAction,
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Flag indicating to plot the final network.
-            """
-        ),
+            """),
     )
 
     # parse the arguments from standard input
@@ -286,22 +278,33 @@ def main():
         )
 
         # Network
-        network = Network(box=box, branches=branches, 
-                          active_branches=active_branches, 
-                          branch_connectivity=branch_connectivity)
-        
+        network = Network(
+            box=box,
+            branches=branches,
+            active_branches=active_branches,
+            branch_connectivity=branch_connectivity,
+        )
+
         # Morpher
-        if args.initial_condition[0]//100==2:
+        if args.initial_condition[0] // 100 == 2:
             args.morpher = "Jellyfish"
-        
+
         if args.morpher == "Jellyfish":
             morpher = morphers.Jellyfish(
-                        radii=np.array([(network.box.points[:,0].min()+network.box.points[:,0].max())/2]), 
-                        **args.morpher_params[0]
+                radii=np.array(
+                    [
+                        (
+                            network.box.points[:, 0].min()
+                            + network.box.points[:, 0].max()
                         )
+                        / 2
+                    ]
+                ),
+                **args.morpher_params[0],
+            )
         else:
             morpher = None
-          
+
         # Extender
         if args.extender[0] == "ModifiedEulerMethod":
             extender_class = extenders.ModifiedEulerMethod
@@ -315,11 +318,9 @@ def main():
         if args.extender[0] == "ModifiedEulerMethod_Boundary":
             extender_class = extenders.ModifiedEulerMethod_Boundary
             pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
-            
+
         pde_solver = pde_solver_class(network, **args.pde_solver_params[0])
-        extender = extender_class(
-                pde_solver=pde_solver, **args.extender_params[0]
-            )          
+        extender = extender_class(pde_solver=pde_solver, **args.extender_params[0])
 
         # General
         system = System(
@@ -327,7 +328,7 @@ def main():
             extender=extender,
             morpher=morpher,
             exp_name=args.output_file[0],
-            **args.growth_params[0]
+            **args.growth_params[0],
         )
 
     else:
@@ -341,8 +342,8 @@ def main():
     if args.final_plot:
         fig, ax = plt.subplots()
         graphics.plot_tree(system=system, ax=ax)
-        fig.savefig(system.exp_name + ".jpg", bbox_inches="tight",dpi=300)
-        
+        fig.savefig(system.exp_name + ".jpg", bbox_inches="tight", dpi=300)
+
         # ani = graphics.animate_tree(system0=system)
         # ani.save(system.exp_name + ".avi", writer="ffmpeg", dpi=600)
 

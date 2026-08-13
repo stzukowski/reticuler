@@ -14,6 +14,7 @@ from reticuler.utilities.misc import create_dir
 
 logger = logging.getLogger("reticuler")
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Plot a network.", formatter_class=argparse.RawTextHelpFormatter
@@ -25,10 +26,8 @@ def main():
         type=str,
         nargs=1,
         metavar="file_name",
-        help=textwrap.dedent(
-            """\
-                            File to import"""
-        ),
+        help=textwrap.dedent("""\
+                            File to import"""),
     )
     parser.add_argument(
         "-out",
@@ -36,11 +35,9 @@ def main():
         type=str,
         nargs=1,
         metavar="file_name",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             File to export. If None the same as input.
-                            default = None """
-        ),
+                            default = None """),
         default=None,
     )
 
@@ -50,11 +47,9 @@ def main():
         type=str,
         nargs=1,
         metavar="ext",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             Output extension (".pdf", ".svg", ".png", etc.)
-                            default = ".jpg" """
-        ),
+                            default = ".jpg" """),
         default=[".jpg"],
     )
 
@@ -64,12 +59,10 @@ def main():
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             xlim of the plot. If None xmin=min x of the box.
                             default = None
-                            """
-        ),
+                            """),
         default=[None],
     )
     parser.add_argument(
@@ -77,25 +70,21 @@ def main():
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             xlim of the plot. If None xmin=max x of the box.
                             default = None
-                            """
-        ),
+                            """),
         default=[None],
-    )    
+    )
     parser.add_argument(
         "--ymin",
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             ymax of the plot. If None ymin=min y of the network.
                             default = None
-                            """
-        ),
+                            """),
         default=[None],
     )
     parser.add_argument(
@@ -103,21 +92,18 @@ def main():
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             ymax of the plot. If None ymax=max y of the network.
                             default = None
-                            """
-        ),
+                            """),
         default=[None],
-    )    
+    )
     parser.add_argument(
         "--plot_params",
         type=json.loads,
         nargs=1,
         metavar="dict",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
                             Optional plotting parameters.
                             
                             Pass dictionary in a form (no spaces, 
@@ -125,8 +111,7 @@ def main():
                                 "{\\"value\\":key}"
                             default = {} (keeps default values as listed below)
                             
-                            """
-        )
+                            """)
         + textwrap.dedent(
             graphics.plot_tree.__doc__[
                 graphics.plot_tree.__doc__.find("kwargs_plots")
@@ -135,32 +120,28 @@ def main():
         ),
         default=[{}],
     )
-        
+
     # Plot all files in the directory
     parser.add_argument(
         "-all",
         "--plot_all",
         action=argparse.BooleanOptionalAction,
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Flag indicating to plot networks from all the files in the directory.
-            """
-        ),
-    )    
+            """),
+    )
 
     # Rotate the plot
     parser.add_argument(
         "-rot",
-        "--rot_angle",        
+        "--rot_angle",
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             An angle by which the output will be rotated.
             default = 0
-            """
-        ),
+            """),
         default=[None],
     )
 
@@ -169,22 +150,18 @@ def main():
         "-f",
         "--frames",
         action=argparse.BooleanOptionalAction,
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Flag indicating to plot all frames.
-            """
-        ),
-    )        
+            """),
+    )
     # Animate the growth
     parser.add_argument(
         "-anim",
         "--animate",
         action=argparse.BooleanOptionalAction,
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             Flag indicating to animate the growth of a network.
-            """
-        ),
+            """),
     )
     # Speed factor for the animation
     parser.add_argument(
@@ -193,29 +170,26 @@ def main():
         type=float,
         nargs=1,
         metavar="num",
-        help=textwrap.dedent(
-            """\
+        help=textwrap.dedent("""\
             A speed factor by which the animation will be accelerated.
             default = 1 (animation length = 4s)
-            """
-        ),
+            """),
         default=[None],
-    )        
-        
+    )
 
     # parse the arguments from standard input
     args = parser.parse_args()
-    
+
     if args.plot_all:
         file_names = glob.glob(args.input_file[0] + "*.json")
     else:
-        file_names = [ args.input_file[0]+".json" ]
-    
+        file_names = [args.input_file[0] + ".json"]
+
     for file in file_names:
         exp_name = file[:-5]
         # Import System from JSON file
         system0 = System.import_json(input_file=exp_name)
-    
+
         if args.animate:
             ani = graphics.animate_tree(
                 system0=system0,
@@ -225,7 +199,7 @@ def main():
                 ymax=args.ymax[0],
                 speed_factor=args.speed_factor[0],
                 rot_angle=args.rot_angle[0],
-                **args.plot_params[0]
+                **args.plot_params[0],
             )
             if args.output_file is None:
                 ani.save(exp_name + ".avi", writer="ffmpeg", dpi=600)
@@ -235,13 +209,13 @@ def main():
             output_name = exp_name
             if args.output_file is not None:
                 output_name = args.output_file[0]
-          
+
             steps = [int(system0.growth_gauges[0])]
             if args.frames:
-                steps = np.arange(system0.growth_gauges[0]+1, dtype=int)
+                steps = np.arange(system0.growth_gauges[0] + 1, dtype=int)
                 create_dir(f"frames_{exp_name}/")
                 output_name = f"frames_{exp_name}/" + output_name
-             
+
             for s in steps:
                 logger.info("Plotting %s, step %d", exp_name, s)
                 system = system0.copy()
@@ -256,7 +230,7 @@ def main():
                     ymin=args.ymin[0],
                     ymax=args.ymax[0],
                     rot_angle=args.rot_angle[0],
-                    **args.plot_params[0]
+                    **args.plot_params[0],
                 )
                 if args.frames:
                     fn = output_name + f"_S{s}" + args.output_extension[0]

@@ -8,9 +8,18 @@ logger = logging.getLogger("reticuler")
 from reticuler import rotation_matrix
 
 from reticuler.utilities.misc import sigmoid
-from reticuler.utilities.misc import LEFT_WALL_PBC, RIGHT_WALL_PBC, DIRICHLET_1, DIRICHLET_0, NEUMANN_0, NEUMANN_1, DIRICHLET_0_GLOB_FLUX
+from reticuler.utilities.misc import (
+    LEFT_WALL_PBC,
+    RIGHT_WALL_PBC,
+    DIRICHLET_1,
+    DIRICHLET_0,
+    NEUMANN_0,
+    NEUMANN_1,
+    DIRICHLET_0_GLOB_FLUX,
+)
 from reticuler.utilities.geometry import Branch
 from reticuler.extending_kernels.pde_solvers.freefem import FreeFEM
+
 
 class FreeFEM_ThinFingers(FreeFEM):
     """A PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.
@@ -43,7 +52,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         ``sleep_frac_thresh`` * max velocity.
     crit_shields_param : float, default 0
         Threshold in the growth law:
-        v = (flux - ``crit_shields_param``)**``eta''        
+        v = (flux - ``crit_shields_param``)**``eta''
 
     is_backward : bool, default False
         If True, solve_PDE returns flux_info.
@@ -51,28 +60,28 @@ class FreeFEM_ThinFingers(FreeFEM):
     References
     ----------
     .. [Ref1] "Through history to growth dynamics: backward evolution of spatial networks",
-        S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022). 
+        S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022).
         https://doi.org/10.1038/s41598-022-24656-x
-        
+
     .. [Ref2] https://freefem.org/
 
     """
 
     def __init__(
-            self, 
-            network,
-            equation=0,
-            eta=1.0,
-            ds=0.01,
-            is_script_saved=False,
-            bifurcation_type=0,
-            bifurcation_thresh=None,
-            bifurcation_angle=2 * np.pi / 5,
-            distance_from_bif_thresh=None,
-            sleep_frac_thresh=0.01,
-            crit_shields_param=0,            
-            is_backward=False,
-        ):
+        self,
+        network,
+        equation=0,
+        eta=1.0,
+        ds=0.01,
+        is_script_saved=False,
+        bifurcation_type=0,
+        bifurcation_thresh=None,
+        bifurcation_angle=2 * np.pi / 5,
+        distance_from_bif_thresh=None,
+        sleep_frac_thresh=0.01,
+        crit_shields_param=0,
+        is_backward=False,
+    ):
         """Initialize FreeFEM_ThinFingers.
 
         Parameters
@@ -86,7 +95,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         bifurcation_angle : float, default 2pi/5
         distance_from_bif_thresh : float, default 2.1*``ds``
         sleep_frac_thresh : float, default 0.01
-        crit_shields_param : float, default 0        
+        crit_shields_param : float, default 0
         is_backward : bool, default False
 
         Returns
@@ -95,9 +104,11 @@ class FreeFEM_ThinFingers(FreeFEM):
 
         """
         super().__init__(equation, eta, ds, is_script_saved)
-        self.crit_shields_param = crit_shields_param # v = (flux - crit_shields_param)**eta
+        self.crit_shields_param = (
+            crit_shields_param  # v = (flux - crit_shields_param)**eta
+        )
         self.is_backward = is_backward
-        
+
         self.bifurcation_type = bifurcation_type  # no bifurcations, a1, a3/a1, random
         self.bifurcation_thresh = bifurcation_thresh
         if bifurcation_thresh is None:
@@ -106,18 +117,19 @@ class FreeFEM_ThinFingers(FreeFEM):
             elif self.bifurcation_type == 2:
                 self.bifurcation_thresh = -0.1  # a3/a1 bifurcations
             elif self.bifurcation_type == 3:
-                self.bifurcation_thresh = 5 * ds # random bifurcations: bif_probability
+                self.bifurcation_thresh = 5 * ds  # random bifurcations: bif_probability
             else:
                 self.bifurcation_thresh = 0
         self.bifurcation_angle = bifurcation_angle  # 2*np.pi/5
-        self.distance_from_bif_thresh = 2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
+        self.distance_from_bif_thresh = (
+            2.1 * ds if distance_from_bif_thresh is None else distance_from_bif_thresh
+        )
 
         # less than ``sleep_frac_thresh`` of max flux/velocity puts branches asleep
         self.sleep_frac_thresh = sleep_frac_thresh
-        
+
         # parts of the script
-        self._script_init = textwrap.dedent(
-            """
+        self._script_init = textwrap.dedent("""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INITIALISATION
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,15 +192,13 @@ class FreeFEM_ThinFingers(FreeFEM):
             	
             	return nvAroundTips;
             }
-            """
+            """)
+
+        self._script_border_box, self._script_inside_buildmesh_box = (
+            super().prepare_script_box(network.box.connections_bc(), network.box.points)
         )
-        
-        self._script_border_box, self._script_inside_buildmesh_box = \
-            super().prepare_script_box(network.box.connections_bc(), \
-                                        network.box.points)
-        
-        self._script_problem = textwrap.dedent(
-            """
+
+        self._script_problem = textwrap.dedent("""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // DEFINING PROBLEM AND EQUATION TO SOLVE
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -203,16 +213,16 @@ class FreeFEM_ThinFingers(FreeFEM):
                          -int1d(Th,{NEUMANN_1})(v)  // constant flux
                          +on({DIRICHLET_1},u=dirichletOut) // constant field
                          +on({DIRICHLET_0},u=0);
-            """
-        ).format(NEUMANN_1=NEUMANN_1, DIRICHLET_0=DIRICHLET_0, DIRICHLET_1=DIRICHLET_1)
+            """).format(
+            NEUMANN_1=NEUMANN_1, DIRICHLET_0=DIRICHLET_0, DIRICHLET_1=DIRICHLET_1
+        )
 
-        if self.equation==1:
+        if self.equation == 1:
             self._script_problem = self._script_problem.replace(
-                                            "// -int2d(Th)(v) // rain in domain", 
-                                            "-int2d(Th)(v) // rain in domain")
+                "// -int2d(Th)(v) // rain in domain", "-int2d(Th)(v) // rain in domain"
+            )
 
-        self._script_adaptmesh = textwrap.dedent(
-            """
+        self._script_adaptmesh = textwrap.dedent("""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // ADAPTING THE MESH AND SOLVING FOR THE FIELD
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
@@ -260,12 +270,10 @@ class FreeFEM_ThinFingers(FreeFEM):
             plot(u, wait=true, fill=true, value=true);
             
             real adaptTime=clock() - adaptTime0;
-            """
-        )
+            """)
 
         # // ofstream freefemOutput("{file_name}");
-        self._script_tip_integration = textwrap.dedent(
-            """
+        self._script_tip_integration = textwrap.dedent("""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // INTEGRATING THE FIELD TO GET a_i COEFFICIENTS
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////        
@@ -320,8 +328,7 @@ class FreeFEM_ThinFingers(FreeFEM):
             // cout << endl << "Adaptation took: " << adaptTime; 
             // cout << endl << "Calculating coefficients took: " << clock()- coeffTime0;
             // cout << endl << "Total time: " << clock()-time0 << endl << endl;
-            """.format(DIRICHLET_1=DIRICHLET_1)
-        )
+            """.format(DIRICHLET_1=DIRICHLET_1))
 
     def __streamline_extension(self, beta, dr):
         """Calculate a vector over which the tip is shifted.
@@ -345,11 +352,15 @@ class FreeFEM_ThinFingers(FreeFEM):
         if np.abs(beta) < 1000:
             y = ((beta**2) / 9) * ((27 * dr / (2 * beta**2) + 1) ** (2 / 3) - 1)
         else:
-            y = dr - (9*dr**2)/(4*beta**2) + (27*dr**3) / \
-                (2*beta**4) - (1701*dr**4)/(16*beta**6)
+            y = (
+                dr
+                - (9 * dr**2) / (4 * beta**2)
+                + (27 * dr**3) / (2 * beta**4)
+                - (1701 * dr**4) / (16 * beta**6)
+            )
         x = np.around(
-            np.sign(beta) * 2 * ((y**3 / beta**2) +
-                                 (y / beta) ** 4) ** (1 / 2), 9)                                                      
+            np.sign(beta) * 2 * ((y**3 / beta**2) + (y / beta) ** 4) ** (1 / 2), 9
+        )
         return np.array([x, y])
 
     def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
@@ -371,11 +382,11 @@ class FreeFEM_ThinFingers(FreeFEM):
         max_a1 = np.max(self.flux_info[..., 0])
         if is_dr_normalized:
             # normalize dr, so that the fastest tip moves over ds
-            v_max = np.maximum( (max_a1 - self.crit_shields_param)** self.eta, 1e-12)
+            v_max = np.maximum((max_a1 - self.crit_shields_param) ** self.eta, 1e-12)
             dt = self.ds / v_max
         else:
             dt = self.ds
-        
+
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = network.active_branches.copy()
         dRs_test = np.zeros((len(branches_to_iterate), 2))
@@ -383,14 +394,21 @@ class FreeFEM_ThinFingers(FreeFEM):
             a1 = self.flux_info[i, 0]
             a2 = self.flux_info[i, 1]
             a3 = self.flux_info[i, 2]
-            
+
             # check bifurcations and moving condition
             is_bifurcating = False
             is_moving = True
             if is_zero_approx_step:
                 # moving condition
-                if a1 < self.crit_shields_param and \
-                    ( (a1-self.crit_shields_param) / (max_a1-self.crit_shields_param) )**self.eta < self.sleep_frac_thresh:
+                if (
+                    a1 < self.crit_shields_param
+                    and (
+                        (a1 - self.crit_shields_param)
+                        / (max_a1 - self.crit_shields_param)
+                    )
+                    ** self.eta
+                    < self.sleep_frac_thresh
+                ):
                     is_moving = False
 
                 # bifurcation
@@ -401,7 +419,9 @@ class FreeFEM_ThinFingers(FreeFEM):
                 ):
                     # the condition above is used to avoid many bifurcations
                     # in almost one point which can occur while ds is very small
-                    if (self.bifurcation_type == 1 and a1 > self.bifurcation_thresh) or (
+                    if (
+                        self.bifurcation_type == 1 and a1 > self.bifurcation_thresh
+                    ) or (
                         self.bifurcation_type == 2 and a3 / a1 < self.bifurcation_thresh
                     ):
                         is_bifurcating = True
@@ -410,17 +430,16 @@ class FreeFEM_ThinFingers(FreeFEM):
                         r = np.random.uniform(0, 1)  # uniform distribution [0,1)
                         if p > r:
                             is_bifurcating = True
-            
+
             if is_moving:
                 # __streamline_extension formula is derived in the coordinate
                 # system where the tip segment lies on a negative Y axis;
                 # hence, we rotate obtained dR vector to that system
                 tip_angle = np.pi / 2 - branch.tip_angle()
-                dr = dt * (a1 - self.crit_shields_param)**self.eta
+                dr = dt * (a1 - self.crit_shields_param) ** self.eta
                 beta = a1 / a2
                 dRs_test[i] = np.dot(
-                    rotation_matrix(
-                        tip_angle), self.__streamline_extension(beta, dr)
+                    rotation_matrix(tip_angle), self.__streamline_extension(beta, dr)
                 )
             else:
                 dRs_test[i] = -10
@@ -430,13 +449,17 @@ class FreeFEM_ThinFingers(FreeFEM):
 
             if is_bifurcating:
                 logger.info("! Branch %d bifurcated !", branch.ID)
-                dR = dRs_test[i].copy() 
+                dR = dRs_test[i].copy()
                 dRs_test[i] = -10
-                dRs_test = np.vstack( (dRs_test, [
-                    np.dot(
-                        rotation_matrix(-self.bifurcation_angle / 2), dR),
-                    np.dot(rotation_matrix(
-                        self.bifurcation_angle / 2), dR) ]) )
+                dRs_test = np.vstack(
+                    (
+                        dRs_test,
+                        [
+                            np.dot(rotation_matrix(-self.bifurcation_angle / 2), dR),
+                            np.dot(rotation_matrix(self.bifurcation_angle / 2), dR),
+                        ],
+                    )
+                )
 
                 # create new branches
                 max_branch_id = len(network.branches) - 1
@@ -453,8 +476,8 @@ class FreeFEM_ThinFingers(FreeFEM):
                 network.active_branches.remove(branch)
             else:
                 branch.dR = dRs_test[i]
-            
-        dRs_test = dRs_test[dRs_test[:,0]>-10]
+
+        dRs_test = dRs_test[dRs_test[:, 0] > -10]
         return dRs_test, dt
 
     def prepare_script(self, network):
@@ -464,24 +487,29 @@ class FreeFEM_ThinFingers(FreeFEM):
         border_network = ""
         inside_buildmesh = self._script_inside_buildmesh_box
         for i, branch in enumerate(network.branches):
-            border_network, inside_buildmesh = super().prepare_contour_list(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
+            border_network, inside_buildmesh = super().prepare_contour_list(
+                border_network,
+                inside_buildmesh,
+                i,
+                branch.points,
+                label=branch.BC,
+                border_name="branch",
+            )
             # border_network, inside_buildmesh = super().prepare_contour(border_network, inside_buildmesh, i, branch.points, label=branch.BC, border_name="branch")
             if branch in network.active_branches:
                 ind = network.active_branches.index(branch)
-                tips[ind, 0] = branch.BC # boundary condition
-                tips[ind, 1] = branch.tip_angle() # angle with X axis
-                tips[ind, 2] = branch.points[-1, 0] 
+                tips[ind, 0] = branch.BC  # boundary condition
+                tips[ind, 1] = branch.tip_angle()  # angle with X axis
+                tips[ind, 2] = branch.points[-1, 0]
                 tips[ind, 3] = branch.points[-1, 1]
         inside_buildmesh = inside_buildmesh[:-2]
 
         buildmesh = (
-            textwrap.dedent(
-                """
+            textwrap.dedent("""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // BUILDING MESH
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-            """
-            )
+            """)
             + self._script_border_box
             + border_network
             + "\nplot({inside_buildmesh}, dim=2, wait=true);\n\n".format(
@@ -493,7 +521,7 @@ class FreeFEM_ThinFingers(FreeFEM):
             + "\nreal buildTime=clock() - buildTime0;\n"
             + "plot(Th, wait=true);\n"
         )
-                
+
         tip_information = textwrap.dedent(
             """
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -507,16 +535,21 @@ class FreeFEM_ThinFingers(FreeFEM):
             real[int] Y(nbTips); Y={y};\n
             """.format(
                 n_tips=len(network.active_branches),
-                bc=super().arr2str(tips[:,0]),
-                angle=super().arr2str(tips[:,1]),
-                x=super().arr2str(tips[:,2]),
-                y=super().arr2str(tips[:,3]),
+                bc=super().arr2str(tips[:, 0]),
+                angle=super().arr2str(tips[:, 1]),
+                x=super().arr2str(tips[:, 2]),
+                y=super().arr2str(tips[:, 3]),
             )
         )
 
-        script = self._script_init + buildmesh + tip_information + \
-                    self._script_problem + self._script_adaptmesh + \
-                        self._script_tip_integration
+        script = (
+            self._script_init
+            + buildmesh
+            + tip_information
+            + self._script_problem
+            + self._script_adaptmesh
+            + self._script_tip_integration
+        )
 
         return script
 
@@ -537,7 +570,7 @@ class FreeFEM_ThinFingers(FreeFEM):
 
         """
         script = self.prepare_script(network)
-        
+
         out_freefem = super().run_freefem(script)
         if out_freefem.returncode or "nan" in out_freefem.stdout.decode():
             logger.warning("Trying again...")
@@ -546,33 +579,41 @@ class FreeFEM_ThinFingers(FreeFEM):
             ind = script.find(lookfor) + len(lookfor)
             ind2 = ind + script[ind:].find(",")
             boxN_0 = script[ind:ind2]
-            script_perturbed = script.replace(lookfor+boxN_0,lookfor+str(int(boxN_0)+1))
+            script_perturbed = script.replace(
+                lookfor + boxN_0, lookfor + str(int(boxN_0) + 1)
+            )
             out_freefem = super().run_freefem(script_perturbed)
-            
+
         ai_coeffs_flat = self.array_from_string(out_freefem.stdout, "kopytko")
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)
-        
+
         with np.printoptions(formatter={"float": "{:.6e}".format}):
             logger.info("a1a2a3")
             for i, branch in enumerate(network.active_branches):
-                logger.info("Branch %d: %s, l=%.3g", branch.ID, self.flux_info[i], branch.length())
-        
+                logger.info(
+                    "Branch %d: %s, l=%.3g",
+                    branch.ID,
+                    self.flux_info[i],
+                    branch.length(),
+                )
+
         if self.is_backward:
             return self.flux_info.copy()
         if is_out_freefem_returned:
             return out_freefem
-        
+
+
 class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
     r"""A PDE solver based on the finite element method implemented in FreeFEM [Ref2]_.
     Solves PDE, computes a1a2a3 coefficients and forges it into tip trajectory with the streamline algorithm [Ref1]_.
     Extension for co-evolving boundary case.
-    
+
     Attributes
     ----------
     equation, eta, ds, is_script_saved inherited from FreeFEM
 
-    flux_info, bifurcation_type, bifurcation_thresh, 
-        bifurcation_angle, distance_from_bif_thresh, 
+    flux_info, bifurcation_type, bifurcation_thresh,
+        bifurcation_angle, distance_from_bif_thresh,
         sleep_frac_thresh, crit_shields_param inherited from FreeFEM_ThinFingers
 
     flux_info_boundary : array
@@ -588,38 +629,38 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
     response_func : str, default "linear"
         Function to map fluxes to boundary growth velocity.
     response_func_params : dict, default {}
-        Parameters for the response function.        
+        Parameters for the response function.
 
     References
     ----------
     .. [Ref1] "Through history to growth dynamics: backward evolution of spatial networks",
-        S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022). 
+        S. Żukowski, P. Morawiecki, H. Seybold, P. Szymczak, Sci Rep 12, 20407 (2022).
         https://doi.org/10.1038/s41598-022-24656-x
-        
+
     .. [Ref2] https://freefem.org/
 
     """
 
     def __init__(
-            self, 
-            network,
-            equation=0,
-            eta=1.0,
-            ds=0.01,
-            is_script_saved=False,
-            bifurcation_type=0,
-            bifurcation_thresh=None,
-            bifurcation_angle=2 * np.pi / 5,
-            distance_from_bif_thresh=None,
-            sleep_frac_thresh=0.01,
-            crit_shields_param=0,
-            boundary_pts_sep_min=0.019,
-            boundary_pts_sep_max=0.021,
-            box_history=None,
-            v_rim=1,
-            response_func="linear",
-            response_func_params={},
-        ):
+        self,
+        network,
+        equation=0,
+        eta=1.0,
+        ds=0.01,
+        is_script_saved=False,
+        bifurcation_type=0,
+        bifurcation_thresh=None,
+        bifurcation_angle=2 * np.pi / 5,
+        distance_from_bif_thresh=None,
+        sleep_frac_thresh=0.01,
+        crit_shields_param=0,
+        boundary_pts_sep_min=0.019,
+        boundary_pts_sep_max=0.021,
+        box_history=None,
+        v_rim=1,
+        response_func="linear",
+        response_func_params={},
+    ):
         """Initialize FreeFEM_ThinFingers_Boundary.
 
         Parameters
@@ -639,16 +680,26 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         box_history : list, default []
         v_rim : float, default 1.0
         response_func : str, default "linear"
-        response_func_params : dict, default {}        
+        response_func_params : dict, default {}
 
         Returns
         -------
         None.
 
         """
-        super().__init__(network, equation, eta, ds, is_script_saved, \
-                         bifurcation_type, bifurcation_thresh, bifurcation_angle, \
-                         distance_from_bif_thresh, sleep_frac_thresh, crit_shields_param)
+        super().__init__(
+            network,
+            equation,
+            eta,
+            ds,
+            is_script_saved,
+            bifurcation_type,
+            bifurcation_thresh,
+            bifurcation_angle,
+            distance_from_bif_thresh,
+            sleep_frac_thresh,
+            crit_shields_param,
+        )
         self.boundary_pts_sep_min = boundary_pts_sep_min
         self.boundary_pts_sep_max = boundary_pts_sep_max
         if box_history is None:
@@ -661,10 +712,12 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         if response_func == "linear_sigmoid":
             self.response_func = self.linear_sigmoid
 
-        self.response_func_params = response_func_params        
-        
-        add_after = lambda text, after_what, add_what: text.replace(after_what, after_what+add_what)
-        
+        self.response_func_params = response_func_params
+
+        add_after = lambda text, after_what, add_what: text.replace(
+            after_what, after_what + add_what
+        )
+
         script_distance_0 = textwrap.dedent("""
                         // Distance from the rim and required edges
                         fespace Vh1(Th,P1);
@@ -676,9 +729,8 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
                         // plot(dist,wait=1,fill=1);
                         Vh1 distExp=1 - 0.3*erf(1) + 0.3*erf(sqrt(dist^2/(2*(R)^2)));
                         plot(distExp, wait=true, fill=1);
-                        """
-                        )
-        
+                        """)
+
         script_distance_1 = textwrap.dedent("""
                         u=u; ub=ub;dist=dist;distExp=distExp;
                         varf vbLoop(u1,v1) = on(2, u1=1);
@@ -686,24 +738,35 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
                         ub[] = ub[] ? 0 : 1;
                         distance(Th, ub, dist[], distmax=100);
                         distExp = 1 - 0.3*erf(1) + 0.3*erf(sqrt(dist^2/(2*R^2)));        
-                        """
-                        )
+                        """)
 
         self._script_init = """load "distance"\n""" + self._script_init
 
-        self._script_adaptmesh = self._script_adaptmesh.replace("\n// Solving the problem", \
-                                          script_distance_0+"\n// Solving the problem")
-        self._script_adaptmesh = self._script_adaptmesh.replace("nvAroundTips.min < 250", "nvAroundTips.min < 100")
-        self._script_adaptmesh = self._script_adaptmesh.replace("adaptCounter<=3", "adaptCounter<=2")
-        self._script_adaptmesh = self._script_adaptmesh.replace("u=u;", script_distance_1)
+        self._script_adaptmesh = self._script_adaptmesh.replace(
+            "\n// Solving the problem", script_distance_0 + "\n// Solving the problem"
+        )
+        self._script_adaptmesh = self._script_adaptmesh.replace(
+            "nvAroundTips.min < 250", "nvAroundTips.min < 100"
+        )
+        self._script_adaptmesh = self._script_adaptmesh.replace(
+            "adaptCounter<=3", "adaptCounter<=2"
+        )
+        self._script_adaptmesh = self._script_adaptmesh.replace(
+            "u=u;", script_distance_1
+        )
         # self._script_adaptmesh = self._script_adaptmesh.replace("Th = adaptmesh(Th,1,", "// Th = adaptmesh(Th,1,")
-        self._script_adaptmesh = add_after(self._script_adaptmesh, "keepbackvertices=1",",requirededges=reqEdgs")
-        self._script_adaptmesh = add_after( self._script_adaptmesh, \
-                                            "// counting cells around the tips",
-                                            f"\nint[int] reqEdgs=[{DIRICHLET_1}];" )
-        self._script_adaptmesh = add_after(self._script_adaptmesh, \
-                                            "*R,nbTips)", ", 20*distExp")
-    
+        self._script_adaptmesh = add_after(
+            self._script_adaptmesh, "keepbackvertices=1", ",requirededges=reqEdgs"
+        )
+        self._script_adaptmesh = add_after(
+            self._script_adaptmesh,
+            "// counting cells around the tips",
+            f"\nint[int] reqEdgs=[{DIRICHLET_1}];",
+        )
+        self._script_adaptmesh = add_after(
+            self._script_adaptmesh, "*R,nbTips)", ", 20*distExp"
+        )
+
         script_flux_rim = textwrap.dedent(f"""
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // CALCULATE FLUXES AT THE RIM
@@ -780,18 +843,22 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
             real[int] indices(ndof);
             for(int i=0; i<ndof; i++) indices[i] = i;
             plot([indices, fluxes], wait=true);
-            """
-        )
+            """)
         self._script_tip_integration = self._script_tip_integration + script_flux_rim
-    
+
     def linear(self, fluxes):
-        return self.v_rim*fluxes
+        return self.v_rim * fluxes
+
     def linear_sigmoid(self, fluxes, sig_shift, sig_rate):
-        return self.v_rim * fluxes * sigmoid(fluxes, sig_shift=sig_shift, sig_rate=sig_rate, sig_h=1)
+        return (
+            self.v_rim
+            * fluxes
+            * sigmoid(fluxes, sig_shift=sig_shift, sig_rate=sig_rate, sig_h=1)
+        )
 
     def control_point_density(self, network, boundary_pts):
         ###### CONTROL POINT DENSITY ######
-        if network.box.initial_condition==350: # full circle
+        if network.box.initial_condition == 350:  # full circle
             boundary_pts = np.vstack((boundary_pts, boundary_pts[0]))
         processed_points = [boundary_pts[0]]
         for i in range(1, len(boundary_pts)):
@@ -804,106 +871,148 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
                 num_segments = int(np.ceil(distance / self.boundary_pts_sep_max))
                 # Use linear interpolation to generate the intermediate points
                 t_values = np.linspace(0, 1, num_segments + 1)
-                interpolated_points = (1 - t_values[:, np.newaxis]) * last_kept_point + t_values[:, np.newaxis] * current_point
+                interpolated_points = (
+                    1 - t_values[:, np.newaxis]
+                ) * last_kept_point + t_values[:, np.newaxis] * current_point
                 # Add all new points to the list, except the first (which is last_kept_point)
                 processed_points.extend(interpolated_points[1:])
             # Accepted separation range -> Keep the point
             elif distance >= self.boundary_pts_sep_min:
                 processed_points.append(current_point)
             # If the last two points are too close, replace the penultimate point with the last
-            elif i==len(boundary_pts)-1:
+            elif i == len(boundary_pts) - 1:
                 processed_points[-1] = current_point
-        if network.box.initial_condition==350: # full circle
+        if network.box.initial_condition == 350:  # full circle
             processed_points.pop(-1)
-                    
+
         processed_points = np.array(processed_points)
-        x, y = processed_points[:,0], processed_points[:,1]
-            
+        x, y = processed_points[:, 0], processed_points[:, 1]
+
         ###### UPDATE BOX ######
         n_seeds = len(network.box.seeds_connectivity)
-        
+
         # POINTS
-        if network.box.initial_condition==300: # rectangle, seeds vertically at the bottom
+        if (
+            network.box.initial_condition == 300
+        ):  # rectangle, seeds vertically at the bottom
             # shift top right/left corner vertically only
-            network.box.points = np.vstack(( network.box.points[0], np.stack((x,y)).T, network.box.points[-1-n_seeds:] ))
-            network.box.points[1,0] = network.box.points[0,0]
-            network.box.points[-2-n_seeds,0] = 0
-        if network.box.initial_condition==301: # semiellipse, seeds vertically at the bottom boundary
+            network.box.points = np.vstack(
+                (
+                    network.box.points[0],
+                    np.stack((x, y)).T,
+                    network.box.points[-1 - n_seeds :],
+                )
+            )
+            network.box.points[1, 0] = network.box.points[0, 0]
+            network.box.points[-2 - n_seeds, 0] = 0
+        if (
+            network.box.initial_condition == 301
+        ):  # semiellipse, seeds vertically at the bottom boundary
             # shift bottom right/left 'corner' horizontally only
-            network.box.points = np.vstack(( np.stack((x,y)).T, network.box.points[-n_seeds:] ))
-            network.box.points[0,1] = 0
-            network.box.points[-1-n_seeds,1] = 0
-        if network.box.initial_condition==350: # full circle, seeds in the center
-            network.box.points = np.stack((x,y)).T
-        if network.box.initial_condition==351: # slice, seeds in the center
+            network.box.points = np.vstack(
+                (np.stack((x, y)).T, network.box.points[-n_seeds:])
+            )
+            network.box.points[0, 1] = 0
+            network.box.points[-1 - n_seeds, 1] = 0
+        if network.box.initial_condition == 350:  # full circle, seeds in the center
+            network.box.points = np.stack((x, y)).T
+        if network.box.initial_condition == 351:  # slice, seeds in the center
             # keep angular width
-            ang_width = np.atan2(*network.box.points[0])*2
-            network.box.points = np.vstack(( np.stack((x,y)).T, [0,0] ))
-            x_right = network.box.points[0,0]
-            y_right = network.box.points[0,1]
-            network.box.points[0,0] = ((1-np.cos(ang_width))*x_right + np.sin(ang_width)*y_right)/2
-            network.box.points[0,1] = ((1+np.cos(ang_width))*y_right + np.sin(ang_width)*x_right)/2
-            x_left = network.box.points[-2,0]
-            y_left = network.box.points[-2,1]
-            network.box.points[-2,0] = ((1-np.cos(ang_width))*x_left - np.sin(ang_width)*y_left)/2
-            network.box.points[-2,1] = ((1+np.cos(ang_width))*y_left - np.sin(ang_width)*x_left)/2
+            ang_width = np.atan2(*network.box.points[0]) * 2
+            network.box.points = np.vstack((np.stack((x, y)).T, [0, 0]))
+            x_right = network.box.points[0, 0]
+            y_right = network.box.points[0, 1]
+            network.box.points[0, 0] = (
+                (1 - np.cos(ang_width)) * x_right + np.sin(ang_width) * y_right
+            ) / 2
+            network.box.points[0, 1] = (
+                (1 + np.cos(ang_width)) * y_right + np.sin(ang_width) * x_right
+            ) / 2
+            x_left = network.box.points[-2, 0]
+            y_left = network.box.points[-2, 1]
+            network.box.points[-2, 0] = (
+                (1 - np.cos(ang_width)) * x_left - np.sin(ang_width) * y_left
+            ) / 2
+            network.box.points[-2, 1] = (
+                (1 + np.cos(ang_width)) * y_left - np.sin(ang_width) * x_left
+            ) / 2
         # SEEDS_CONNECTIVITY and CONNECTIONS
         network.box.seeds_connectivity = np.column_stack(
-                    (
-                        len(network.box.points) - n_seeds + np.arange(n_seeds),
-                        np.arange(n_seeds),
-                    )
-                )
+            (
+                len(network.box.points) - n_seeds + np.arange(n_seeds),
+                np.arange(n_seeds),
+            )
+        )
         network.box.connections = np.vstack(
-            [np.arange(len(network.box.points)), np.roll(
-                np.arange(len(network.box.points)), -1)]
+            [
+                np.arange(len(network.box.points)),
+                np.roll(np.arange(len(network.box.points)), -1),
+            ]
         ).T
         # BOUNDARY_CONDITIONS
-        network.box.boundary_conditions = DIRICHLET_1 * np.ones(len(network.box.connections), dtype=int)
-        if network.box.initial_condition==300:
+        network.box.boundary_conditions = DIRICHLET_1 * np.ones(
+            len(network.box.connections), dtype=int
+        )
+        if network.box.initial_condition == 300:
             network.box.boundary_conditions[0] = NEUMANN_0
-            network.box.boundary_conditions[-2-n_seeds] = NEUMANN_0
-            network.box.boundary_conditions[-1-n_seeds:] = DIRICHLET_0
-        if network.box.initial_condition==301 or (network.box.initial_condition==351):
-            network.box.boundary_conditions[-1-n_seeds:] = NEUMANN_0
+            network.box.boundary_conditions[-2 - n_seeds] = NEUMANN_0
+            network.box.boundary_conditions[-1 - n_seeds :] = DIRICHLET_0
+        if network.box.initial_condition == 301 or (
+            network.box.initial_condition == 351
+        ):
+            network.box.boundary_conditions[-1 - n_seeds :] = NEUMANN_0
 
     def find_test_dRs_boundary(self, network, dt):
         # moving-boundary points
-        mask = network.box.boundary_conditions==DIRICHLET_1
-        mask[1:] |= mask[:-1].copy() # "spill" True on point i+1 (i-last detected)
-        x = network.box.points[mask,0]
-        y = network.box.points[mask,1]
+        mask = network.box.boundary_conditions == DIRICHLET_1
+        mask[1:] |= mask[:-1].copy()  # "spill" True on point i+1 (i-last detected)
+        x = network.box.points[mask, 0]
+        y = network.box.points[mask, 1]
 
         # VELOCITY
-        velocity = self.response_func(self.flux_info_boundary, **self.response_func_params)
+        velocity = self.response_func(
+            self.flux_info_boundary, **self.response_func_params
+        )
 
         ####### find dRs ######
-        vx = np.diff(x,prepend=2*x[0]-x[1],append=2*x[-1]-x[-2]) # warunki na brzegach = symetria względem ostatniego punktu
-        vy = np.diff(y,prepend=2*y[0]-y[1],append=2*y[-1]-y[-2])
-        if network.box.initial_condition==300:
-            vy = np.diff(y,prepend=y[1],append=y[-2]) # warunki na brzegach = odbicie względem osi pionowej (tylko dla prostokątów)
-        if network.box.initial_condition==350:
-            vx = np.diff(x,prepend=x[-1],append=x[0]) # warunki na brzegach = cykliczne (tylko dla pełnego koła)
-            vy = np.diff(y,prepend=y[-1],append=y[0])
-        alfa = (np.arctan2(-vy[:-1],-vx[:-1])+np.arctan2(vy[1:],vx[1:]))/2 # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
-        s = velocity*dt
-        sx = s*np.cos(alfa) # definicja dwusiecznej i wartość przesunięcia z fluxów
-        sy = s*np.sin(alfa)
+        vx = np.diff(
+            x, prepend=2 * x[0] - x[1], append=2 * x[-1] - x[-2]
+        )  # warunki na brzegach = symetria względem ostatniego punktu
+        vy = np.diff(y, prepend=2 * y[0] - y[1], append=2 * y[-1] - y[-2])
+        if network.box.initial_condition == 300:
+            vy = np.diff(
+                y, prepend=y[1], append=y[-2]
+            )  # warunki na brzegach = odbicie względem osi pionowej (tylko dla prostokątów)
+        if network.box.initial_condition == 350:
+            vx = np.diff(
+                x, prepend=x[-1], append=x[0]
+            )  # warunki na brzegach = cykliczne (tylko dla pełnego koła)
+            vy = np.diff(y, prepend=y[-1], append=y[0])
+        alfa = (
+            np.arctan2(-vy[:-1], -vx[:-1]) + np.arctan2(vy[1:], vx[1:])
+        ) / 2  # kąt nachylenia dwusiecznej (między 1->0 a 1->2)
+        s = velocity * dt
+        sx = s * np.cos(alfa)  # definicja dwusiecznej i wartość przesunięcia z fluxów
+        sy = s * np.sin(alfa)
 
         # x += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sx # przesuwanie punktów (zmiana znaku nierówności zmieni zwrot)
-        # y += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sy        
-        dRs_boundary = np.array([(2*(vx[1:]*sy<vy[1:]*sx)-1)*sx, \
-                         (2*(vx[1:]*sy<vy[1:]*sx)-1)*sy]).T
+        # y += (2*(vx[1:]*sy<vy[1:]*sx)-1)*sy
+        dRs_boundary = np.array(
+            [
+                (2 * (vx[1:] * sy < vy[1:] * sx) - 1) * sx,
+                (2 * (vx[1:] * sy < vy[1:] * sx) - 1) * sy,
+            ]
+        ).T
 
         return dRs_boundary
 
     def prepare_script(self, network):
         """Return a FreeFEM script with ``network`` geometry."""
 
-        self._script_border_box, self._script_inside_buildmesh_box = \
-            super().prepare_script_box(network.box.connections_bc(), \
-                                        network.box.points)
-        
+        self._script_border_box, self._script_inside_buildmesh_box = (
+            super().prepare_script_box(network.box.connections_bc(), network.box.points)
+        )
+
         script = super().prepare_script(network)
 
         return script
@@ -926,13 +1035,17 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
 
         out_freefem = super().solve_PDE(network, is_out_freefem_returned=True)
 
-        rim_xs = self.array_from_string(out_freefem.stdout,"xs")
-        fluxes = self.array_from_string(out_freefem.stdout,"fluxes")
+        rim_xs = self.array_from_string(out_freefem.stdout, "xs")
+        fluxes = self.array_from_string(out_freefem.stdout, "fluxes")
 
-        rim_xs2 = np.concatenate(([rim_xs[1]], (rim_xs[:-2:2]+rim_xs[3::2])/2, [rim_xs[-2]]))
-        self.flux_info_boundary = np.concatenate(([fluxes[1]], (fluxes[:-2:2]+fluxes[3::2])/2, [fluxes[-2]]))
-        
-        if network.box.initial_condition==350:
+        rim_xs2 = np.concatenate(
+            ([rim_xs[1]], (rim_xs[:-2:2] + rim_xs[3::2]) / 2, [rim_xs[-2]])
+        )
+        self.flux_info_boundary = np.concatenate(
+            ([fluxes[1]], (fluxes[:-2:2] + fluxes[3::2]) / 2, [fluxes[-2]])
+        )
+
+        if network.box.initial_condition == 350:
             self.flux_info_boundary = self.flux_info_boundary[:-1]
 
         # import matplotlib.pyplot as plt

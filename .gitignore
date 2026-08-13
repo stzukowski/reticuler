@@ -155,3 +155,7 @@ cython_debug/
 
 # VSCode
 .vscode
+
+#Claude
+CLAUDE.md
+PROMPTS.md

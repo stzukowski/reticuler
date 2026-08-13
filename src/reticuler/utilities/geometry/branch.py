@@ -13,6 +13,7 @@ from reticuler.utilities.misc import DIRICHLET_0
 
 logger = logging.getLogger("reticuler")
 
+
 class Branch:
     """A class of a single branch in a network.
 
@@ -60,12 +61,14 @@ class Branch:
 
         self.points = points  # in order of creation
         self.steps = steps  # at which step of the evolution the point was added
-        self.BC = BC # boundary condition
+        self.BC = BC  # boundary condition
 
     def extend(self, step, dR):
         """Add a new point to ``self.points`` (progressed tip) and update ``self.steps``."""
         if np.linalg.norm(dR) < 9e-5:
-            logger.warning("! Extremely small dR, tip %d not extended but shifted !", self.ID)
+            logger.warning(
+                "! Extremely small dR, tip %d not extended but shifted !", self.ID
+            )
             tip_versor = self.points[-1] - self.points[-2]
             tip_versor = tip_versor / np.linalg.norm(tip_versor)
             self.points[-1] = self.points[-1] + tip_versor * dR
@@ -75,7 +78,7 @@ class Branch:
 
     def length(self):
         """Return length of the Branch."""
-        return np.sum(np.linalg.norm(self.points[1:]-self.points[:-1], axis=1))
+        return np.sum(np.linalg.norm(self.points[1:] - self.points[:-1], axis=1))
 
     def tip_angle(self):
         """Return the angle between the tip segment (last and penultimate point) and X axis."""
