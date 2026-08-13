@@ -311,13 +311,12 @@ def main():
             # Solver
             if args.pde_solver[0] == "FreeFEM_ThinFingers":
                 pde_solver_class = pde_solvers.FreeFEM_ThinFingers
+            if args.pde_solver[0] == "FreeFEM_ThinFingers_Boundary":
+                pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
             elif args.pde_solver[0] == "FreeFEM_ThickFingers":
                 pde_solver_class = pde_solvers.FreeFEM_ThickFingers
             elif args.pde_solver[0] == "FreeFEM_ThickFingers_Elasticity":
                 pde_solver_class = pde_solvers.FreeFEM_ThickFingers_Elasticity
-        if args.extender[0] == "ModifiedEulerMethod_Boundary":
-            extender_class = extenders.ModifiedEulerMethod_Boundary
-            pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
 
         pde_solver = pde_solver_class(network, **args.pde_solver_params[0])
         extender = extender_class(pde_solver=pde_solver, **args.extender_params[0])

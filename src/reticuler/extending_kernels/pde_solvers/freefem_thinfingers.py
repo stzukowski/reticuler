@@ -1035,12 +1035,12 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
 
         out_freefem = super().solve_PDE(network, is_out_freefem_returned=True)
 
-        rim_xs = self.array_from_string(out_freefem.stdout, "xs")
+        # rim_xs = self.array_from_string(out_freefem.stdout, "xs")
+        # rim_xs2 = np.concatenate(
+        #     ([rim_xs[1]], (rim_xs[:-2:2] + rim_xs[3::2]) / 2, [rim_xs[-2]])
+        # )
+        
         fluxes = self.array_from_string(out_freefem.stdout, "fluxes")
-
-        rim_xs2 = np.concatenate(
-            ([rim_xs[1]], (rim_xs[:-2:2] + rim_xs[3::2]) / 2, [rim_xs[-2]])
-        )
         self.flux_info_boundary = np.concatenate(
             ([fluxes[1]], (fluxes[:-2:2] + fluxes[3::2]) / 2, [fluxes[-2]])
         )

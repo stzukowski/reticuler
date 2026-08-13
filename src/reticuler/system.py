@@ -422,8 +422,6 @@ class System:
                 # Extender
                 if json_extender["type"] == "ModifiedEulerMethod":
                     extender_class = extenders.ModifiedEulerMethod
-                elif json_extender["type"] == "ModifiedEulerMethod_Boundary":
-                    extender_class = extenders.ModifiedEulerMethod_Boundary
 
                 extender = extender_class(
                     pde_solver=pde_solver,
