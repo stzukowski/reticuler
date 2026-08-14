@@ -6,7 +6,6 @@ import json
 import textwrap
 import importlib.metadata
 
-from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem
 from reticuler.backward_evolution import trimmers
 
@@ -43,12 +42,12 @@ def main(argv=None):
         help=textwrap.dedent("""\
             File to export:
             exp_name = ``exp_name``+'_back.json'.
-            If left as default: 
+            If left as default:
             exp_name = ``input_file``+'_back.json'.
-            
-            default = ''
+
+            default = None
             """),
-        default=[""],
+        default=[None],
     )
 
     # BEA options
@@ -72,7 +71,7 @@ def main(argv=None):
                 - 4 : BackwardSystem.__doc__.find("exp_name")
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Trimmer
@@ -107,7 +106,7 @@ def main(argv=None):
                 - 6
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Continuation
@@ -122,33 +121,22 @@ def main(argv=None):
             System will be imported from ``input_file`` and backward system from 
             ``continuation_file``+'.json'.
             """),
-        default=[""],
+        default=[None],
     )
 
     # parse the arguments from standard input
     args = parser.parse_args(argv)
 
-    # Import System from JSON file
-    system = System.import_json(input_file=args.input_file[0])
-    if args.output_file[0] != "":
-        system.exp_name = args.output_file[0]
-    else:
-        system.exp_name = args.input_file[0]
-
-    # Create or import BackwardSystem
-    if args.continuation_file[0] != "":
-        backward_system = BackwardSystem.import_json(
-            input_file=args.continuation_file[0], system=system
-        )
-        backward_system.exp_name = backward_system.exp_name + "_cont"
-    else:
-        # Trimmer
-        if args.trimmer[0] == "BackwardModifiedEulerMethod":
-            trimmer = trimmers.BackwardModifiedEulerMethod(
-                system.extender.pde_solver, **args.trimmer_params[0]
-            )
-        # All
-        backward_system = BackwardSystem(system, trimmer)
+    raw_params = {
+        "input_file": args.input_file[0],
+        "output_file": args.output_file[0],
+        "BEA_params": args.BEA_params[0],
+        "trimmer_params": args.trimmer_params[0],
+        "continuation_file": args.continuation_file[0],
+    }
+    backward_system = BackwardSystem.construct(
+        {k: v for k, v in raw_params.items() if v}
+    )
 
     # Running BEA
     backward_system.run_BEA()

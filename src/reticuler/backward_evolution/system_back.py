@@ -14,7 +14,7 @@ import numpy as np
 import importlib.metadata
 import json
 
-from reticuler.system import NumpyEncoder
+from reticuler.system import NumpyEncoder, System
 from reticuler.backward_evolution import trimmers
 
 logger = logging.getLogger("reticuler")
@@ -204,6 +204,39 @@ class BackwardSystem:
 
         self.dump_every = dump_every
         self.exp_name = system.exp_name + "_back"
+
+    @classmethod
+    def construct(cls, params):
+        """Construct a BackwardSystem from scratch, from a dict of construction
+        parameters (or import a continuation).
+
+        See ``reticulate_back.py`` for the CLI-facing
+        equivalent of each key: ``input_file``, ``output_file``,
+        ``BEA_params``, ``trimmer_params``, ``continuation_file``.
+
+        Parameters
+        ----------
+        params : dict
+
+        Returns
+        -------
+        BackwardSystem
+
+        """
+        system = System.import_json(input_file=params["input_file"])
+        system.exp_name = params.get("output_file") or params["input_file"]
+
+        if params.get("continuation_file"):
+            backward_system = cls.import_json(
+                input_file=params["continuation_file"], system=system
+            )
+            backward_system.exp_name = backward_system.exp_name + "_cont"
+        else:
+            trimmer = trimmers.BackwardModifiedEulerMethod(
+                system.extender.pde_solver, **params.get("trimmer_params", {})
+            )
+            backward_system = cls(system, trimmer, **params.get("BEA_params", {}))
+        return backward_system
 
     @classmethod
     def import_json(cls, input_file, system):

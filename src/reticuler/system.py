@@ -100,6 +100,76 @@ class System:
         self.dump_every = dump_every
         self.exp_name = exp_name
 
+    @classmethod
+    def construct(cls, params):
+        """Construct a System from scratch, from a dict of construction parameters.
+
+        See ``reticulate.py`` for the CLI-facing equivalent of
+        each key: ``output_file``, ``growth_params``, ``initial_condition``,
+        ``kwargs_box``, ``pde_solver``, ``pde_solver_params``, ``extender``,
+        ``extender_params``, ``morpher``, ``morpher_params``. Any key can be
+        omitted, in which case the underlying class's own default applies.
+
+        Parameters
+        ----------
+        params : dict
+
+        Returns
+        -------
+        System
+
+        """
+        box_kwargs = dict(params.get("kwargs_box", {}))
+        if "initial_condition" in params:
+            box_kwargs["initial_condition"] = params["initial_condition"]
+        box, branches, active_branches, branch_connectivity = Box.construct(
+            **box_kwargs
+        )
+
+        network = Network(
+            box=box,
+            branches=branches,
+            active_branches=active_branches,
+            branch_connectivity=branch_connectivity,
+        )
+
+        if params.get("morpher") == "Jellyfish" \
+            or params.get("initial_condition", 100) // 100 == 2:
+            morpher = morphers.Jellyfish(
+                radii=np.array(
+                    [
+                        (
+                            network.box.points[:, 0].min()
+                            + network.box.points[:, 0].max()
+                        )
+                        / 2
+                    ]
+                ),
+                **params.get("morpher_params", {}),
+            )
+        else:
+            morpher = None
+
+        pde_solver_class = {
+            "FreeFEM_ThinFingers": pde_solvers.FreeFEM_ThinFingers,
+            "FreeFEM_ThinFingers_Boundary": pde_solvers.FreeFEM_ThinFingers_Boundary,
+            "FreeFEM_ThickFingers": pde_solvers.FreeFEM_ThickFingers,
+            "FreeFEM_ThickFingers_Elasticity": pde_solvers.FreeFEM_ThickFingers_Elasticity,
+        }[params.get("pde_solver", "FreeFEM_ThinFingers")]
+        pde_solver = pde_solver_class(network, **params.get("pde_solver_params", {}))
+
+        extender_class = {"ModifiedEulerMethod": extenders.ModifiedEulerMethod}[
+            params.get("extender", "ModifiedEulerMethod")
+        ]
+        extender = extender_class(
+            pde_solver=pde_solver, **params.get("extender_params", {})
+        )
+
+        system_kwargs = dict(params.get("growth_params", {}))
+        if "output_file" in params:
+            system_kwargs["exp_name"] = params["output_file"]
+        return cls(network=network, extender=extender, morpher=morpher, **system_kwargs)
+
     def copy(self):
         """Return a deepcopy of the Network."""
         return copy.deepcopy(self)

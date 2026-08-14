@@ -6,9 +6,8 @@ import json
 import textwrap
 import importlib.metadata
 import matplotlib.pyplot as plt
-import numpy as np
 
-from reticuler.utilities.geometry import Box, Network
+from reticuler.utilities.geometry import Box
 from reticuler.system import System
 from reticuler.extending_kernels import extenders, pde_solvers
 from reticuler.utilities import morphers
@@ -39,7 +38,7 @@ def main(argv=None):
         help=textwrap.dedent("""\
             File to import. If None, the System is prepared based on the rest of the arguments.
             default = None"""),
-        default=None,
+        default=[None],
     )
 
     parser.add_argument(
@@ -49,10 +48,10 @@ def main(argv=None):
         nargs=1,
         metavar="exp_name",
         help=textwrap.dedent("""\
-            File to export. If we import a file and leave this as default, 
+            File to export. If we import a file and leave this as default,
             ``system.exp_name`` will be set to ``input_file``.
-            default = '' """),
-        default=[""],
+            default = None"""),
+        default=[None],
     )
 
     # Growth options
@@ -77,7 +76,7 @@ def main(argv=None):
                 )
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Box options
@@ -94,7 +93,7 @@ def main(argv=None):
                 ) : Box.construct.__doc__.find("kwargs_construct")
             ]
         ),
-        default=[100],
+        default=[None],
     )
     parser.add_argument(
         "--kwargs_box",
@@ -118,7 +117,7 @@ def main(argv=None):
                 - 2
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Solver
@@ -130,7 +129,7 @@ def main(argv=None):
         help=textwrap.dedent("""\
             PDE solver
             default = FreeFEM_ThinFingers"""),
-        default=["FreeFEM_ThinFingers"],
+        default=[None],
     )
     parser.add_argument(
         "--pde_solver_params",
@@ -184,7 +183,7 @@ def main(argv=None):
                 - 2
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Extender
@@ -196,7 +195,7 @@ def main(argv=None):
         help=textwrap.dedent("""\
             Extender
             default = ModifiedEulerMethod"""),
-        default=["ModifiedEulerMethod"],
+        default=[None],
     )
     parser.add_argument(
         "--extender_params",
@@ -221,7 +220,7 @@ def main(argv=None):
                 - 4
             ]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Morpher
@@ -253,7 +252,7 @@ def main(argv=None):
         + textwrap.dedent(
             morphers.Jellyfish.__doc__[morphers.Jellyfish.__doc__.find("radii") :]
         ),
-        default=[{}],
+        default=[None],
     )
 
     # Plotting at the end
@@ -269,71 +268,29 @@ def main(argv=None):
     # parse the arguments from standard input
     args = parser.parse_args(argv)
 
-    if args.input_file is None:
-        # Prepare the System from scratch
-
-        # Box
-        box, branches, active_branches, branch_connectivity = Box.construct(
-            initial_condition=args.initial_condition[0], **args.kwargs_box[0]
-        )
-
-        # Network
-        network = Network(
-            box=box,
-            branches=branches,
-            active_branches=active_branches,
-            branch_connectivity=branch_connectivity,
-        )
-
-        # Morpher
-        if args.initial_condition[0] // 100 == 2:
-            args.morpher = "Jellyfish"
-
-        if args.morpher == "Jellyfish":
-            morpher = morphers.Jellyfish(
-                radii=np.array(
-                    [
-                        (
-                            network.box.points[:, 0].min()
-                            + network.box.points[:, 0].max()
-                        )
-                        / 2
-                    ]
-                ),
-                **args.morpher_params[0],
-            )
-        else:
-            morpher = None
-
-        # Extender
-        if args.extender[0] == "ModifiedEulerMethod":
-            extender_class = extenders.ModifiedEulerMethod
-            # Solver
-            if args.pde_solver[0] == "FreeFEM_ThinFingers":
-                pde_solver_class = pde_solvers.FreeFEM_ThinFingers
-            if args.pde_solver[0] == "FreeFEM_ThinFingers_Boundary":
-                pde_solver_class = pde_solvers.FreeFEM_ThinFingers_Boundary
-            elif args.pde_solver[0] == "FreeFEM_ThickFingers":
-                pde_solver_class = pde_solvers.FreeFEM_ThickFingers
-            elif args.pde_solver[0] == "FreeFEM_ThickFingers_Elasticity":
-                pde_solver_class = pde_solvers.FreeFEM_ThickFingers_Elasticity
-
-        pde_solver = pde_solver_class(network, **args.pde_solver_params[0])
-        extender = extender_class(pde_solver=pde_solver, **args.extender_params[0])
-
-        # General
-        system = System(
-            network=network,
-            extender=extender,
-            morpher=morpher,
-            exp_name=args.output_file[0],
-            **args.growth_params[0],
-        )
+    if args.input_file[0] is None:
+        # Prepare the System from scratch. Every nargs=1 arg above defaults
+        # to [None], so args.X[0] is always safe to index; the filter below
+        # drops unset/empty entries so System.construct's own defaults apply.
+        raw_params = {
+            "output_file": args.output_file[0],
+            "growth_params": args.growth_params[0],
+            "initial_condition": args.initial_condition[0],
+            "kwargs_box": args.kwargs_box[0],
+            "pde_solver": args.pde_solver[0],
+            "pde_solver_params": args.pde_solver_params[0],
+            "extender": args.extender[0],
+            "extender_params": args.extender_params[0],
+            "morpher": args.morpher[0],
+            "morpher_params": args.morpher_params[0],
+        }
+        params = {k: v for k, v in raw_params.items() if v}
+        system = System.construct(params)
 
     else:
         # Import System from JSON file
         system = System.import_json(input_file=args.input_file[0])
-        if args.output_file[0] != "":
+        if args.output_file[0] is not None:
             system.exp_name = args.output_file[0]
 
     system.evolve()

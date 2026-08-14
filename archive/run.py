@@ -61,7 +61,7 @@ MAX_PARALLEL = 5
 # One params dict per ETAS value.
 EXPERIMENTS = [
     {
-        "output_file": f"eta{10*ETA:02d}",
+        "output_file": f"eta{int(10*ETA):02d}",
         "continued": IS_CONTINUED,
         "growth_params": {
             "growth_thresh_type": GROWTH_THRESH_TYPE,

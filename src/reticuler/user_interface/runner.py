@@ -6,20 +6,21 @@ FileHandler added below never needs to be removed, since it dies with the
 process it's attached to.
 
 Functions:
-    build_argv
     run_experiment
-    build_argv_back
     run_experiment_back
     ignore_non_py
 
 """
 
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
-from reticuler.user_interface import reticulate, reticulate_back
+import matplotlib.pyplot as plt
+
+from reticuler.system import System
+from reticuler.backward_evolution.system_back import BackwardSystem
+from reticuler.user_interface import graphics
 
 
 def _add_file_handler(log_path):
@@ -30,35 +31,9 @@ def _add_file_handler(log_path):
     root_logger.addHandler(handler)
 
 
-def build_argv(params):
-    """Translate an experiment's parameter dict into a reticulate CLI-style argv list."""
-    if params.get("continued"):
-        argv = ["-in", params["output_file"]]
-        if params.get("output_file_override"):
-            argv += ["-out", params["output_file_override"]]
-    else:
-        argv = [
-            "-out",
-            params["output_file"],
-            "--growth_params",
-            json.dumps(params["growth_params"]),
-            "-ic",
-            str(params["initial_condition"]),
-            "--kwargs_box",
-            json.dumps(params["kwargs_box"]),
-            "--pde_solver",
-            params.get("pde_solver"),
-            "--pde_solver_params",
-            json.dumps(params["pde_solver_params"]),
-            "--extender_params",
-            json.dumps(params.get("extender_params")),
-        ]
-    argv.append("--final_plot")
-    return argv
-
-
 def run_experiment(params):
-    """Worker entry point: configure per-process file logging, then run reticulate.main()."""
+    """Worker entry point: configure per-process file logging, then construct
+    (or import) and evolve a System."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting experiment: {params['output_file']}", flush=True)
 
@@ -66,7 +41,19 @@ def run_experiment(params):
     _add_file_handler(f"{params['output_file']}{suffix}.log")
 
     try:
-        reticulate.main(argv=build_argv(params))
+        if params.get("continued"):
+            system = System.import_json(input_file=params["output_file"])
+            if params.get("output_file_override"):
+                system.exp_name = params["output_file_override"]
+        else:
+            system = System.construct(params)
+
+        system.evolve()
+
+        if params.get("final_plot", True):
+            fig, ax = plt.subplots()
+            graphics.plot_tree(system=system, ax=ax)
+            fig.savefig(system.exp_name + ".jpg", bbox_inches="tight", dpi=300)
     except Exception:
         logging.getLogger("reticuler").exception(
             "Experiment %s failed", params["output_file"]
@@ -74,23 +61,9 @@ def run_experiment(params):
         raise
 
 
-def build_argv_back(params):
-    """Translate a BEA experiment's parameter dict into a reticulate_back CLI-style argv list."""
-    argv = [params["input_file"], "-out", params["output_file"]]
-    if params.get("continuation_file"):
-        argv += ["-cont", params["continuation_file"]]
-    else:
-        argv += [
-            "--BEA_params",
-            json.dumps(params["BEA_params"]),
-            "--trimmer_params",
-            json.dumps(params["trimmer_params"]),
-        ]
-    return argv
-
-
 def run_experiment_back(params):
-    """Worker entry point: configure per-process file logging, then run reticulate_back.main()."""
+    """Worker entry point: configure per-process file logging, then construct
+    (or import) and run a BackwardSystem."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting BEA experiment: {params['output_file']}", flush=True)
 
@@ -98,7 +71,8 @@ def run_experiment_back(params):
     _add_file_handler(f"{params['output_file']}{suffix}.log")
 
     try:
-        reticulate_back.main(argv=build_argv_back(params))
+        backward_system = BackwardSystem.construct(params)
+        backward_system.run_BEA()
     except Exception:
         logging.getLogger("reticuler").exception(
             "BEA experiment %s failed", params["output_file"]
