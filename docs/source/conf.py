@@ -14,6 +14,7 @@ import os
 import sys
 from typing import MutableMapping
 
+
 def get_meta() -> MutableMapping:
     """Get project metadata from pyproject.toml file.
     Returns:
@@ -28,7 +29,8 @@ def get_meta() -> MutableMapping:
 
     return pyproject
 
-sys.path.insert(0, os.path.abspath('../../src'))
+
+sys.path.insert(0, os.path.abspath("../../src"))
 meta = get_meta()
 
 # -- Project information -----------------------------------------------------
@@ -47,16 +49,16 @@ release = meta["project"]["version"]
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
-    'sphinx.ext.napoleon', # Support for NumPy and Google style docstrings # instead of 'numpydoc'
-    'sphinx.ext.imgmath', # render math as images
-    'sphinx_copybutton', # adds copybutton to blocks of code
-    'sphinx-prompt',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
+    "sphinx.ext.napoleon",  # Support for NumPy and Google style docstrings # instead of 'numpydoc'
+    "sphinx.ext.imgmath",  # render math as images
+    "sphinx_copybutton",  # adds copybutton to blocks of code
+    "sphinx-prompt",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -72,10 +74,10 @@ exclude_patterns = []
 # html_theme = 'sphinx_rtd_theme'
 html_theme = "pydata_sphinx_theme"
 html_sidebars = {
-   'index': [],  # Hide sidebar
+    "index": [],  # Hide sidebar
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]

@@ -16,7 +16,7 @@ from reticuler.user_interface import graphics
 
 
 # %%
-def main():
+def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     parser = argparse.ArgumentParser(
         description="Grow a network.", formatter_class=argparse.RawTextHelpFormatter
@@ -267,7 +267,7 @@ def main():
     )
 
     # parse the arguments from standard input
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.input_file is None:
         # Prepare the System from scratch
@@ -345,6 +345,8 @@ def main():
 
         # ani = graphics.animate_tree(system0=system)
         # ani.save(system.exp_name + ".avi", writer="ffmpeg", dpi=600)
+
+    return system
 
 
 if __name__ == "__main__":

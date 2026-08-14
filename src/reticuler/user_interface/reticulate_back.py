@@ -12,7 +12,7 @@ from reticuler.backward_evolution import trimmers
 
 
 # %%
-def main():
+def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(message)s")
     parser = argparse.ArgumentParser(
         description="Run the Backward Evolution Algorithm.",
@@ -126,7 +126,7 @@ def main():
     )
 
     # parse the arguments from standard input
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Import System from JSON file
     system = System.import_json(input_file=args.input_file[0])
@@ -152,6 +152,8 @@ def main():
 
     # Running BEA
     backward_system.run_BEA()
+
+    return backward_system
 
 
 if __name__ == "__main__":

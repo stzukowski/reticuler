@@ -12,7 +12,7 @@ logger = logging.getLogger("reticuler")
 
 
 # %%
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Clip a network.", formatter_class=argparse.RawTextHelpFormatter
     )
@@ -121,7 +121,7 @@ def main():
     )
 
     # parse the arguments from standard input
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Import System from JSON file
     system = System.import_json(input_file=args.input_file[0])
@@ -155,6 +155,8 @@ def main():
         logger.warning("Network not clipped - you must choose a clipping limit!")
 
     system.export_json()
+
+    return system
 
 
 if __name__ == "__main__":

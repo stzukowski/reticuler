@@ -56,7 +56,9 @@ class ModifiedEulerMethod:
         # max_approximation_step for the trajectory integration
         self.max_approximation_step = max_approximation_step
 
-        self.is_moving_boundary = type(self.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary"
+        self.is_moving_boundary = (
+            type(self.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary"
+        )
 
     def integrate(self, network, step, is_dr_normalized=True):
         """Integrate tip trajectories with modified Euler's method.
@@ -79,7 +81,7 @@ class ModifiedEulerMethod:
         """
         # running PDE solver
         # self.pde_solver.flux_info are updated in FreeFEM solver
-        out_solver = self.pde_solver.solve_PDE(network) # returns flux_info_0 for BEA
+        out_solver = self.pde_solver.solve_PDE(network)  # returns flux_info_0 for BEA
 
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
         dRs_0, dt_0 = self.pde_solver.find_test_dRs(
