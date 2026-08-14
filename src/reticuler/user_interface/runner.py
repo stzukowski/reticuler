@@ -1,9 +1,4 @@
-"""Helpers for running batches of reticuler experiments in parallel.
-
-Workers are expected to run under Pool(..., maxtasksperchild=1), so each
-worker process handles exactly one experiment and is then discarded -- the
-FileHandler added below never needs to be removed, since it dies with the
-process it's attached to.
+"""Helpers for running system/system_back in CLI and batches of reticuler experiments in parallel.
 
 Functions:
     run_experiment
@@ -24,6 +19,7 @@ from reticuler.user_interface import graphics
 
 
 def _add_file_handler(log_path):
+    """Log to file"""
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     handler = logging.FileHandler(log_path, mode="a")
@@ -31,20 +27,22 @@ def _add_file_handler(log_path):
     root_logger.addHandler(handler)
 
 
-def run_experiment(params):
-    """Worker entry point: configure per-process file logging, then construct
-    (or import) and evolve a System."""
+def run_experiment(params, log_to_file=True):
+    """Construct (or import) and evolve a System, optionally saving a final
+    plot. If log_to_file, attach a per-process FileHandler (for Pool-based 
+    batch runs sharing one stdout)."""
+    name = params.get("output_file") or params.get("input_file")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"{timestamp}  Starting experiment: {params['output_file']}", flush=True)
-
-    suffix = "_cont" if params.get("continued") else ""
-    _add_file_handler(f"{params['output_file']}{suffix}.log")
+    print(f"{timestamp}  Starting experiment: {name}", flush=True)
+    if log_to_file:
+        suffix = "_cont" if params.get("input_file") and not params.get("output_file") else ""
+        _add_file_handler(f"{name}{suffix}.log") # set logs to file
 
     try:
-        if params.get("continued"):
-            system = System.import_json(input_file=params["output_file"])
-            if params.get("output_file_override"):
-                system.exp_name = params["output_file_override"]
+        if params.get("input_file"):
+            system = System.import_json(input_file=params["input_file"])
+            if params.get("output_file"):
+                system.exp_name = params["output_file"]
         else:
             system = System.construct(params)
 
@@ -55,28 +53,25 @@ def run_experiment(params):
             graphics.plot_tree(system=system, ax=ax)
             fig.savefig(system.exp_name + ".jpg", bbox_inches="tight", dpi=300)
     except Exception:
-        logging.getLogger("reticuler").exception(
-            "Experiment %s failed", params["output_file"]
-        )
+        logging.getLogger("reticuler").exception("Experiment %s failed", name)
         raise
 
 
-def run_experiment_back(params):
-    """Worker entry point: configure per-process file logging, then construct
-    (or import) and run a BackwardSystem."""
+def run_experiment_back(params, log_to_file=True):
+    """Construct (or import) and run a BackwardSystem's BEA. If log_to_file,
+    also attach a per-process FileHandler (for Pool-based batch runs sharing one stdout)."""
+    name = params.get("output_file") or params.get("input_file")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"{timestamp}  Starting BEA experiment: {params['output_file']}", flush=True)
-
-    suffix = "_cont" if params.get("continuation_file") else ""
-    _add_file_handler(f"{params['output_file']}{suffix}.log")
+    print(f"{timestamp}  Starting BEA experiment: {name}", flush=True)
+    if log_to_file:
+        suffix = "_cont" if params.get("continuation_file") else ""
+        _add_file_handler(f"{name}{suffix}.log")
 
     try:
         backward_system = BackwardSystem.construct(params)
         backward_system.run_BEA()
     except Exception:
-        logging.getLogger("reticuler").exception(
-            "BEA experiment %s failed", params["output_file"]
-        )
+        logging.getLogger("reticuler").exception("BEA experiment %s failed", name)
         raise
 
 

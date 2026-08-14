@@ -5,13 +5,12 @@ import argparse
 import json
 import textwrap
 import importlib.metadata
-import matplotlib.pyplot as plt
 
 from reticuler.utilities.geometry import Box
 from reticuler.system import System
 from reticuler.extending_kernels import extenders, pde_solvers
 from reticuler.utilities import morphers
-from reticuler.user_interface import graphics
+from reticuler.user_interface import runner
 
 
 # %%
@@ -268,42 +267,25 @@ def main(argv=None):
     # parse the arguments from standard input
     args = parser.parse_args(argv)
 
-    if args.input_file[0] is None:
-        # Prepare the System from scratch. Every nargs=1 arg above defaults
-        # to [None], so args.X[0] is always safe to index; the filter below
-        # drops unset/empty entries so System.construct's own defaults apply.
-        raw_params = {
-            "output_file": args.output_file[0],
-            "growth_params": args.growth_params[0],
-            "initial_condition": args.initial_condition[0],
-            "kwargs_box": args.kwargs_box[0],
-            "pde_solver": args.pde_solver[0],
-            "pde_solver_params": args.pde_solver_params[0],
-            "extender": args.extender[0],
-            "extender_params": args.extender_params[0],
-            "morpher": args.morpher[0],
-            "morpher_params": args.morpher_params[0],
-        }
-        params = {k: v for k, v in raw_params.items() if v}
-        system = System.construct(params)
 
-    else:
-        # Import System from JSON file
-        system = System.import_json(input_file=args.input_file[0])
-        if args.output_file[0] is not None:
-            system.exp_name = args.output_file[0]
+    raw_params = {
+        "output_file": args.output_file[0],
+        "growth_params": args.growth_params[0],
+        "initial_condition": args.initial_condition[0],
+        "kwargs_box": args.kwargs_box[0],
+        "pde_solver": args.pde_solver[0],
+        "pde_solver_params": args.pde_solver_params[0],
+        "extender": args.extender[0],
+        "extender_params": args.extender_params[0],
+        "morpher": args.morpher[0],
+        "morpher_params": args.morpher_params[0],
+        "input_file": args.input_file[0],
+    }
+    params = {k: v for k, v in raw_params.items() if v}  # drops unset/empty entries so
+    # System.construct's own defaults apply for anything not given here.
+    params["final_plot"] = bool(args.final_plot)  # set after the filter: False must survive
 
-    system.evolve()
-
-    if args.final_plot:
-        fig, ax = plt.subplots()
-        graphics.plot_tree(system=system, ax=ax)
-        fig.savefig(system.exp_name + ".jpg", bbox_inches="tight", dpi=300)
-
-        # ani = graphics.animate_tree(system0=system)
-        # ani.save(system.exp_name + ".avi", writer="ffmpeg", dpi=600)
-
-    return system
+    runner.run_experiment(params, log_to_file=False)
 
 
 if __name__ == "__main__":

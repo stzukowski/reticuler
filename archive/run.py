@@ -9,6 +9,11 @@ copied into `reticuler_temp/` for reproducibility, same as run.sh did.
 Copy this file into a fresh experiment working directory and edit the
 GROWTH SETTINGS section below.
 
+To continue an existing experiment instead of starting fresh, give its dict
+an "input_file" key (the name to import from) instead of "initial_condition"/
+"kwargs_box"/etc. -- e.g. {"input_file": "eta15", "output_file": "eta15_v2"}
+("output_file" is optional there, only needed to rename on export).
+
 Run with:
 ( python run.py > run.log 2>&1 & )
 """
@@ -23,7 +28,8 @@ from reticuler.user_interface import runner
 ################ GROWTH SETTINGS ################
 IS_SCRIPT_SAVED = 0
 IS_RECONNECTING = 0
-IS_CONTINUED = 0
+# If you want to continue simulations (instead of creating new) 
+# replace "output_file" by "input_file" in EXPERIMENTS
 
 # equation can have 2 values:
 # 0 - Laplace equation
@@ -62,7 +68,6 @@ MAX_PARALLEL = 5
 EXPERIMENTS = [
     {
         "output_file": f"eta{int(10*ETA):02d}",
-        "continued": IS_CONTINUED,
         "growth_params": {
             "growth_thresh_type": GROWTH_THRESH_TYPE,
             "growth_thresh": GROWTH_THRESH,

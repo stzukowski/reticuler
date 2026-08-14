@@ -8,6 +8,7 @@ import importlib.metadata
 
 from reticuler.backward_evolution.system_back import BackwardSystem
 from reticuler.backward_evolution import trimmers
+from reticuler.user_interface import runner
 
 
 # %%
@@ -134,14 +135,9 @@ def main(argv=None):
         "trimmer_params": args.trimmer_params[0],
         "continuation_file": args.continuation_file[0],
     }
-    backward_system = BackwardSystem.construct(
-        {k: v for k, v in raw_params.items() if v}
-    )
+    params = {k: v for k, v in raw_params.items() if v}
 
-    # Running BEA
-    backward_system.run_BEA()
-
-    return backward_system
+    runner.run_experiment_back(params, log_to_file=False)
 
 
 if __name__ == "__main__":
