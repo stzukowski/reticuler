@@ -1,18 +1,13 @@
 """Template for running batches of reticuler experiments in parallel.
 
-Replaces the old run.sh workflow: define a parameter sweep as plain Python
+Define a parameter sweep as plain Python
 dicts, run each experiment in its own worker process via
 multiprocessing.Pool (bounded by `MAX_PARALLEL`), with each worker's log
 going to its own `<output_file>.log` file and the reticuler source snapshot
-copied into `reticuler_temp/` for reproducibility, same as run.sh did.
+copied into `reticuler_temp/` for reproducibility.
 
 Copy this file into a fresh experiment working directory and edit the
 GROWTH SETTINGS section below.
-
-To continue an existing experiment instead of starting fresh, give its dict
-an "input_file" key (the name to import from) instead of "initial_condition"/
-"kwargs_box"/etc. -- e.g. {"input_file": "eta15", "output_file": "eta15_v2"}
-("output_file" is optional there, only needed to rename on export).
 
 Run with:
 ( python run.py > run.log 2>&1 & )
@@ -29,7 +24,7 @@ from reticuler.user_interface import runner
 IS_SCRIPT_SAVED = 0
 IS_RECONNECTING = 0
 # If you want to continue simulations (instead of creating new) 
-# replace "output_file" by "input_file" in EXPERIMENTS
+# replace "output_file" by "input_file" in EXPERIMENTS below.
 
 # equation can have 2 values:
 # 0 - Laplace equation
@@ -48,9 +43,8 @@ DS = 0.01  # spatial step
 MAX_APPROXIMATION_STEP = 3  # for ModifiedEulerMethod
 
 # growth limit (when to stop the simulation)
-GROWTH_THRESH_TYPE = (
-    1  # 0: number of steps, 1: height, 2: network length, 3: evolution time
-)
+# 0: number of steps, 1: height, 2: network length, 3: evolution time
+GROWTH_THRESH_TYPE = 1
 GROWTH_THRESH = 2.5  # Poisson: 13 for pictures, 9 for the BEA
 
 # bifurcationType:
