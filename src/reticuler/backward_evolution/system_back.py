@@ -436,6 +436,11 @@ class BackwardSystem:
                 network.active_branches.append(forward_branch)
 
         # above, we go over branches, so the mother_IDs are repeated; hence np.unique
+        if not mother_IDs:
+            raise ValueError(
+                "Network has no bifurcations -- the Backward Evolution Algorithm "
+                "requires at least one bifurcation point to run."
+            )
         backward_bifurcations = BackwardBifurcations(np.unique(mother_IDs))
 
         return backward_branches, backward_bifurcations
