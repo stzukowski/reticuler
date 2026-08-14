@@ -33,7 +33,7 @@ def run_experiment(params, log_to_file=True):
     plot. If log_to_file, attach a per-process FileHandler (for Pool-based 
     batch runs sharing one stdout)."""
     name = params.get("output_file") or params.get("input_file")
-    setproctitle(f"reticuler:{name}")
+    setproctitle(f"ret:{name}")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting experiment: {name}", flush=True)
     if log_to_file:
@@ -63,7 +63,7 @@ def run_experiment_back(params, log_to_file=True):
     """Construct (or import) and run a BackwardSystem's BEA. If log_to_file,
     also attach a per-process FileHandler (for Pool-based batch runs sharing one stdout)."""
     name = params.get("output_file") or params.get("input_file")
-    setproctitle(f"reticuler:{name}")
+    setproctitle(f"ret_back:{name}")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting BEA experiment: {name}", flush=True)
     if log_to_file:

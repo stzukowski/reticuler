@@ -12,6 +12,9 @@ BEA SETTINGS section below.
 
 Run with:
 ( python run_BEA.py > run_BEA.log 2>&1 & )
+
+Kill all with:
+pkill -f '^ret_back'
 """
 
 import multiprocessing as mp

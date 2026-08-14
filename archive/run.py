@@ -11,6 +11,9 @@ GROWTH SETTINGS section below.
 
 Run with:
 ( python run.py > run.log 2>&1 & )
+
+Kill all with:
+pkill -f '^ret'
 """
 
 import multiprocessing as mp
