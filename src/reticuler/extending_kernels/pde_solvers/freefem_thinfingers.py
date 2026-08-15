@@ -402,8 +402,8 @@ class FreeFEM_ThinFingers(FreeFEM):
                 # moving condition
                 if (
                     a1 < self.crit_shields_param
-                    and (
-                        (a1 - self.crit_shields_param)
+                    or (
+                        np.maximum(a1 - self.crit_shields_param, 1e-12)
                         / (max_a1 - self.crit_shields_param)
                     )
                     ** self.eta

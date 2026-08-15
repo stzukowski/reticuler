@@ -103,7 +103,7 @@ class BackwardModifiedEulerMethod:
                 / (max_a1 - self.crit_shields_param)
             )
             ** self.eta
-            < self.sleep_frac_thresh,
+            > self.sleep_frac_thresh,
         )
         # shallow copy of active_branches (creates new list instance, but the elements are still the same)
         branches_to_iterate = network.active_branches.copy()
