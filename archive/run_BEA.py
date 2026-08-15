@@ -1,3 +1,4 @@
+#!/usr/bin/env -S conda run -n reticuler --no-capture-output python
 """Template for running batches of Backward Evolution Algorithm (BEA) experiments
 in parallel, natively in Python.
 
@@ -11,15 +12,21 @@ Copy this file into a fresh experiment working directory and edit the
 BEA SETTINGS section below.
 
 Run with:
-( python run_BEA.py > run_BEA.log 2>&1 & )
+( ./run_BEA.py & )
+(the shebang above assumes a conda env named "reticuler" — edit "-n reticuler" if yours is named differently)
 
 Kill all with:
 pkill -f '^ret_back'
 """
 
+import sys
+from pathlib import Path
+
+# send stdout/stderr to <script_name>.log
+sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "a", buffering=1)
+
 import multiprocessing as mp
 import shutil
-from pathlib import Path
 
 import reticuler
 from reticuler.user_interface import clip_ret, runner

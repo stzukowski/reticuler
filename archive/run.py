@@ -1,3 +1,4 @@
+#!/usr/bin/env -S conda run -n reticuler --no-capture-output python
 """Template for running batches of reticuler experiments in parallel.
 
 Define a parameter sweep as plain Python
@@ -10,15 +11,21 @@ Copy this file into a fresh experiment working directory and edit the
 GROWTH SETTINGS section below.
 
 Run with:
-( python run.py > run.log 2>&1 & )
+( ./run.py & )
+(the shebang above assumes a conda env named "reticuler" — edit "-n reticuler" if yours is named differently)
 
 Kill all with:
 pkill -f '^ret'
 """
 
+import sys
+from pathlib import Path
+
+# send stdout/stderr to <script_name>.log
+sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "a", buffering=1)
+
 import multiprocessing as mp
 import shutil
-from pathlib import Path
 
 import reticuler
 from reticuler.user_interface import runner
