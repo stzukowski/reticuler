@@ -86,8 +86,11 @@ def run_bounded(target, params, sem):
     """Run ``target(params)`` (``run_experiment``/``run_experiment_back``), then
     release ``sem`` so a caller throttling concurrent processes with a
     multiprocessing.Semaphore can start the next one."""
+    name = params.get("output_file") or params.get("input_file")
     try:
         target(params)
+    except Exception:
+        print(f"Experiment {name} failed - see {name}.log", flush=True)
     finally:
         sem.release()
 

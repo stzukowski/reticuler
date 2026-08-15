@@ -65,7 +65,7 @@ class Branch:
 
     def extend(self, step, dR):
         """Add a new point to ``self.points`` (progressed tip) and update ``self.steps``."""
-        if np.linalg.norm(dR) < 9e-5:
+        if np.linalg.norm(dR) < 1e-4:
             logger.warning(
                 "! Extremely small dR, tip %d not extended but shifted !", self.ID
             )

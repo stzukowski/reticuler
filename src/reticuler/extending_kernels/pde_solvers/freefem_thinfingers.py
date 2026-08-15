@@ -47,7 +47,7 @@ class FreeFEM_ThinFingers(FreeFEM):
     distance_from_bif_thresh : float, default 2.1*``ds``
         A minimal distance the tip has to move from the previous bifurcations
         to split again.
-    sleep_frac_thresh : float, default 0.01
+    sleep_frac_thresh : float, default 0.05
         Numerical threshold to put asleep tips that are slower than
         ``sleep_frac_thresh`` * max velocity.
     crit_shields_param : float, default 0
@@ -78,7 +78,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         bifurcation_thresh=None,
         bifurcation_angle=2 * np.pi / 5,
         distance_from_bif_thresh=None,
-        sleep_frac_thresh=0.01,
+        sleep_frac_thresh=0.05,
         crit_shields_param=0,
         is_backward=False,
     ):
@@ -94,7 +94,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
         distance_from_bif_thresh : float, default 2.1*``ds``
-        sleep_frac_thresh : float, default 0.01
+        sleep_frac_thresh : float, default 0.05
         crit_shields_param : float, default 0
         is_backward : bool, default False
 
@@ -480,6 +480,21 @@ class FreeFEM_ThinFingers(FreeFEM):
         dRs_test = dRs_test[dRs_test[:, 0] > -10]
         return dRs_test, dt
 
+    def _filter_dense_points(self, points):
+        """Drop points closer than 1e-3 to the last kept one, so that FreeFEM
+        doesn't choke on near-degenerate border segments. First and last
+        (tip) points are always kept."""
+        min_sep = 5e-4
+        if len(points) < 2:
+            return points
+
+        kept = [points[0]]
+        for pt in points[1:-1]:
+            if np.linalg.norm(pt - kept[-1]) >= min_sep:
+                kept.append(pt)
+        kept.append(points[-1])
+        return np.array(kept)
+
     def prepare_script(self, network):
         """Return a FreeFEM script with ``network`` geometry."""
 
@@ -491,7 +506,7 @@ class FreeFEM_ThinFingers(FreeFEM):
                 border_network,
                 inside_buildmesh,
                 i,
-                branch.points,
+                self._filter_dense_points(branch.points),
                 label=branch.BC,
                 border_name="branch",
             )
@@ -652,7 +667,7 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         bifurcation_thresh=None,
         bifurcation_angle=2 * np.pi / 5,
         distance_from_bif_thresh=None,
-        sleep_frac_thresh=0.01,
+        sleep_frac_thresh=0.05,
         crit_shields_param=0,
         boundary_pts_sep_min=0.019,
         boundary_pts_sep_max=0.021,
@@ -673,7 +688,7 @@ class FreeFEM_ThinFingers_Boundary(FreeFEM_ThinFingers):
         bifurcation_thresh : float, default 0
         bifurcation_angle : float, default 2pi/5
         distance_from_bif_thresh : float, None
-        sleep_frac_thresh : float, default 0.01
+        sleep_frac_thresh : float, default 0.05
         crit_shields_param : float, default 0
         boundary_pts_sep_min : float, default 0.015
         boundary_pts_sep_max : float, default 0.03
