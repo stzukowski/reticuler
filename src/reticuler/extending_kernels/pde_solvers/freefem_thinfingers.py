@@ -55,7 +55,8 @@ class FreeFEM_ThinFingers(FreeFEM):
         v = (flux - ``crit_shields_param``)**``eta''
 
     is_backward : bool, default False
-        If True, solve_PDE returns flux_info.
+        A boolean condition if the Backward Evolution Algorithm is on.
+        If True, ``dt``=``self.ds`` and solve_PDE returns flux_info.
 
     References
     ----------
@@ -363,14 +364,13 @@ class FreeFEM_ThinFingers(FreeFEM):
         )
         return np.array([x, y])
 
-    def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
+    def find_test_dRs(self, network, check_move_bif=False):
         """Find a single test shift over which the tip is moving.
 
         Parameters
         ----------
         network : object of class Network
-        is_dr_normalized : bool
-        is_zero_approx_step : bool, default False
+        check_move_bif : bool, default False
 
         Returns
         -------
@@ -380,7 +380,7 @@ class FreeFEM_ThinFingers(FreeFEM):
 
         """
         max_a1 = np.max(self.flux_info[..., 0])
-        if is_dr_normalized:
+        if not self.is_backward:
             # normalize dr, so that the fastest tip moves over ds
             v_max = np.maximum(max_a1 - self.crit_shields_param, 1e-12) ** self.eta
             dt = self.ds / v_max
@@ -398,7 +398,7 @@ class FreeFEM_ThinFingers(FreeFEM):
             # check bifurcations and moving condition
             is_bifurcating = False
             is_moving = True
-            if is_zero_approx_step:
+            if check_move_bif and not self.is_backward:
                 # moving condition
                 if (
                     a1 < self.crit_shields_param

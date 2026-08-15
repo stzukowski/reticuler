@@ -562,7 +562,6 @@ class BackwardSystem:
                 _, flux_info = self.system.extender.integrate(
                     network=test_network,
                     step=self.system.growth_gauges[0],
-                    is_dr_normalized=False,
                 )  # dt, flux_info
 
             # compare the network before and after the backward-forward steps

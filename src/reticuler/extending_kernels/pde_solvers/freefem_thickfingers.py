@@ -267,14 +267,13 @@ class FreeFEM_ThickFingers(FreeFEM):
             cout << "kopytko" << "end";
             """.format(DIRICHLET_0_GLOB_FLUX_script=DIRICHLET_0_GLOB_FLUX_script))
 
-    def find_test_dRs(self, network, is_dr_normalized, is_zero_approx_step=False):
+    def find_test_dRs(self, network, check_move_bif=False):
         """Find a single test shift over which the tip is moving.
 
         Parameters
         ----------
         network : object of class Network
-        is_dr_normalized : bool
-        is_zero_approx_step : bool, default False
+        check_move_bif : bool, default False
 
         Returns
         -------
@@ -284,11 +283,8 @@ class FreeFEM_ThickFingers(FreeFEM):
 
         """
 
-        if is_dr_normalized:
-            # normalize dr, so that the fastest tip moves over ds
-            dt = self.ds / np.max(self.flux_info[..., 0] ** self.eta)
-        else:
-            dt = self.ds
+        # normalize dr, so that the fastest tip moves over ds
+        dt = self.ds / np.max(self.flux_info[..., 0] ** self.eta)
         dRs_test = np.empty((len(network.active_branches), 2))
         for i, branch in enumerate(network.active_branches):
             a1 = self.flux_info[i, 0]

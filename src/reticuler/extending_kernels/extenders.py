@@ -60,16 +60,15 @@ class ModifiedEulerMethod:
             type(self.pde_solver).__name__ == "FreeFEM_ThinFingers_Boundary"
         )
 
-    def integrate(self, network, step, is_dr_normalized=True):
+    def integrate(self, network, step):
         """Integrate tip trajectories with modified Euler's method.
 
         Parameters
         ----------
         network : Network
             An object of class Network.
-        is_dr_normalized : bool, default True
-            A boolean condition if the Backward Evolution Algorithm is off.
-            If False ``dt``=``self.ds``.
+        step : int
+            Step of the simulation.
 
         Returns
         -------
@@ -80,12 +79,12 @@ class ModifiedEulerMethod:
 
         """
         # running PDE solver
-        # self.pde_solver.flux_info are updated in FreeFEM solver
+        # self.pde_solver.flux_ino are updated in FreeFEM solver
         out_solver = self.pde_solver.solve_PDE(network)  # returns flux_info_0 for BEA
 
         # x[n + 1] = x[n] + dt * v[x(n)]: finding position n+1 with explicit Euler
         dRs_0, dt_0 = self.pde_solver.find_test_dRs(
-            network, is_dr_normalized, is_zero_approx_step=True
+            network, check_move_bif=True
         )
         if self.is_moving_boundary:
             dRs_boundary_0 = self.pde_solver.find_test_dRs_boundary(network, dt_0)
@@ -119,11 +118,11 @@ class ModifiedEulerMethod:
             self.pde_solver.solve_PDE(network)
 
             # v[ x(n+1)] ]: finding velocity at the next point
-            dRs_1, dt_1 = self.pde_solver.find_test_dRs(network, is_dr_normalized)
+            dRs_1, dt_1 = self.pde_solver.find_test_dRs(network)
 
             # average dR
             dRs_test = (dRs_0 + dRs_1) / 2
-            if is_dr_normalized:
+            if not self.pde_solver.is_backward:
                 dRs_test = (
                     self.pde_solver.ds
                     * dRs_test
