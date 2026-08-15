@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 
 # send stdout/stderr to <script_name>.log
-sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "a", buffering=1)
+sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", buffering=1)
 
 import multiprocessing as mp
 import shutil
@@ -110,7 +110,9 @@ def main():
         dirs_exist_ok=True,
     )
 
-    output_files = ", ".join(exp["output_file"] for exp in EXPERIMENTS)
+    output_files = ", ".join(
+        exp.get("output_file") or exp.get("input_file") for exp in EXPERIMENTS
+    )
     print(f"Starting {len(EXPERIMENTS)} experiment(s): {output_files}")
 
     with mp.Pool(
