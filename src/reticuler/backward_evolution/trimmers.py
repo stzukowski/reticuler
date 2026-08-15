@@ -97,8 +97,11 @@ class BackwardModifiedEulerMethod:
         max_a1 = np.max(a1s)
         # (first condition for low eta, second for high)
         are_moving = np.logical_and(
-            a1s < self.crit_shields_param,
-            ((a1s - self.crit_shields_param) / (max_a1 - self.crit_shields_param))
+            a1s > self.crit_shields_param,
+            (
+                np.maximum(a1s - self.crit_shields_param, 1e-12)
+                / (max_a1 - self.crit_shields_param)
+            )
             ** self.eta
             < self.sleep_frac_thresh,
         )
@@ -405,7 +408,7 @@ class BackwardModifiedEulerMethod:
             self.pde_solver.solve_PDE(test_network)
             velocity_1 = (
                 np.maximum(
-                    (self.pde_solver.flux_info[:, 0] - self.crit_shields_param), 0
+                    (self.pde_solver.flux_info[:, 0] - self.crit_shields_param), 1e-12
                 )
                 ** self.eta
             )

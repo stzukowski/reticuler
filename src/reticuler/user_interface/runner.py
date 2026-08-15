@@ -26,6 +26,7 @@ def _add_file_handler(log_path):
     handler = logging.FileHandler(log_path, mode="a")
     handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s"))
     root_logger.addHandler(handler)
+    logging.captureWarnings(True)  # route warnings.warn() (e.g. numpy) through the same handler
 
 
 def run_experiment(params, log_to_file=True):

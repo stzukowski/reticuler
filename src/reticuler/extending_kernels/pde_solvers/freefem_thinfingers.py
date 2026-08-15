@@ -382,7 +382,7 @@ class FreeFEM_ThinFingers(FreeFEM):
         max_a1 = np.max(self.flux_info[..., 0])
         if is_dr_normalized:
             # normalize dr, so that the fastest tip moves over ds
-            v_max = np.maximum((max_a1 - self.crit_shields_param) ** self.eta, 1e-12)
+            v_max = np.maximum(max_a1 - self.crit_shields_param, 1e-12) ** self.eta
             dt = self.ds / v_max
         else:
             dt = self.ds
@@ -436,7 +436,7 @@ class FreeFEM_ThinFingers(FreeFEM):
                 # system where the tip segment lies on a negative Y axis;
                 # hence, we rotate obtained dR vector to that system
                 tip_angle = np.pi / 2 - branch.tip_angle()
-                dr = dt * (a1 - self.crit_shields_param) ** self.eta
+                dr = dt * np.maximum( a1 - self.crit_shields_param, 1e-12) ** self.eta
                 beta = a1 / a2
                 dRs_test[i] = np.dot(
                     rotation_matrix(tip_angle), self.__streamline_extension(beta, dr)
