@@ -5,8 +5,9 @@ in parallel, natively in Python.
 For each ETA_ORIGINAL, clips the corresponding forward-growth tree (copied from
 SOURCE_DIRECTORY) to CLIP_HEIGHT, then runs the BEA once per eta in
 ETA_ORIGINAL + ETA_TO_ADD (in tenths, matching the old run.sh convention),
-all etas across all ETA_ORIGINALS sharing one multiprocessing.Pool bounded by
-MAX_PARALLEL -- same effect as run.sh's wait_till-based throttling.
+all etas across all ETA_ORIGINALS sharing one process pool bounded by
+MAX_PARALLEL concurrent (via a semaphore) -- same effect as run.sh's
+wait_till-based throttling.
 
 Copy this file into a fresh experiment working directory and edit the
 BEA SETTINGS section below.
@@ -26,9 +27,9 @@ from pathlib import Path
 sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", buffering=1)
 
 import multiprocessing as mp
+import os
 import shutil
 
-import reticuler
 from reticuler.user_interface import clip_ret, runner
 
 ################ BEA SETTINGS ################
@@ -73,14 +74,7 @@ def prepare_eta_original(eta_original):
 
 
 def main():
-    experiment_dir = Path.cwd()
-    snapshot_dir = experiment_dir / "reticuler_temp"
-    shutil.copytree(
-        Path(reticuler.__file__).parent,
-        snapshot_dir,
-        ignore=runner.ignore_non_py,
-        dirs_exist_ok=True,
-    )
+    runner.copy_reticuler_temp()
 
     experiments = [
         exp
@@ -93,10 +87,17 @@ def main():
     )
     print(f"Starting {len(experiments)} BEA experiment(s): {output_files}")
 
-    with mp.Pool(
-        processes=min(MAX_PARALLEL, len(experiments)), maxtasksperchild=1
-    ) as pool:
-        pool.map(runner.run_experiment_back, experiments)
+    # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
+    sem = mp.Semaphore(MAX_PARALLEL)
+    for params in experiments:
+        sem.acquire()
+        p = mp.Process(
+            target=runner.run_bounded, args=(runner.run_experiment_back, params, sem)
+        )
+        p.start()
+
+    # Exit once everything is launched.
+    os._exit(0)
 
 
 if __name__ == "__main__":

@@ -2,10 +2,10 @@
 """Template for running batches of reticuler experiments in parallel.
 
 Define a parameter sweep as plain Python
-dicts, run each experiment in its own worker process via
-multiprocessing.Pool (bounded by `MAX_PARALLEL`), with each worker's log
-going to its own `<output_file>.log` file and the reticuler source snapshot
-copied into `reticuler_temp/` for reproducibility.
+dicts, run each experiment in its own process (bounded to `MAX_PARALLEL`
+concurrent via a semaphore), with each process's log going to its own
+`<output_file>.log` file and the reticuler source snapshot copied into
+`reticuler_temp/` for reproducibility.
 
 Copy this file into a fresh experiment working directory and edit the
 GROWTH SETTINGS section below.
@@ -25,9 +25,8 @@ from pathlib import Path
 sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", buffering=1)
 
 import multiprocessing as mp
-import shutil
+import os
 
-import reticuler
 from reticuler.user_interface import runner
 
 ################ GROWTH SETTINGS ################
@@ -101,24 +100,22 @@ EXPERIMENTS = [
 
 
 def main():
-    experiment_dir = Path.cwd()
-    snapshot_dir = experiment_dir / "reticuler_temp"
-    shutil.copytree(
-        Path(reticuler.__file__).parent,
-        snapshot_dir,
-        ignore=runner.ignore_non_py,
-        dirs_exist_ok=True,
-    )
+    runner.copy_reticuler_temp()
 
     output_files = ", ".join(
         exp.get("output_file") or exp.get("input_file") for exp in EXPERIMENTS
     )
     print(f"Starting {len(EXPERIMENTS)} experiment(s): {output_files}")
 
-    with mp.Pool(
-        processes=min(MAX_PARALLEL, len(EXPERIMENTS)), maxtasksperchild=1
-    ) as pool:
-        pool.map(runner.run_experiment, EXPERIMENTS)
+    # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
+    sem = mp.Semaphore(MAX_PARALLEL)
+    for params in EXPERIMENTS:
+        sem.acquire()
+        p = mp.Process(target=runner.run_bounded, args=(runner.run_experiment, params, sem))
+        p.start()
+
+    # Exit once everything is launched.
+    os._exit(0)
 
 
 if __name__ == "__main__":

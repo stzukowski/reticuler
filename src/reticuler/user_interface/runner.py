@@ -3,17 +3,20 @@
 Functions:
     run_experiment
     run_experiment_back
-    ignore_non_py
+    run_bounded
+    copy_reticuler_temp
 
 """
 
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 from setproctitle import setproctitle
 
+import reticuler
 from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem
 from reticuler.user_interface import graphics
@@ -79,7 +82,29 @@ def run_experiment_back(params, log_to_file=True):
         raise
 
 
-def ignore_non_py(directory, names):
+def run_bounded(target, params, sem):
+    """Run ``target(params)`` (``run_experiment``/``run_experiment_back``), then
+    release ``sem`` so a caller throttling concurrent processes with a
+    multiprocessing.Semaphore can start the next one."""
+    try:
+        target(params)
+    finally:
+        sem.release()
+
+
+def copy_reticuler_temp(experiment_dir=None):
+    """Copy the reticuler source (.py files only) into
+    ``<experiment_dir>/reticuler_temp`` (default: cwd), for reproducibility."""
+    experiment_dir = Path.cwd() if experiment_dir is None else Path(experiment_dir)
+    shutil.copytree(
+        Path(reticuler.__file__).parent,
+        experiment_dir / "reticuler_temp",
+        ignore=_ignore_non_py,
+        dirs_exist_ok=True,
+    )
+
+
+def _ignore_non_py(directory, names):
     """shutil.copytree ignore callback: keep only .py files (and dirs to recurse into)."""
     ignored = []
     for name in names:
