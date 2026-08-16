@@ -102,11 +102,6 @@ EXPERIMENTS = [
 def main():
     runner.copy_reticuler_temp()
 
-    output_files = ", ".join(
-        exp.get("output_file") or exp.get("input_file") for exp in EXPERIMENTS
-    )
-    print(f"Starting {len(EXPERIMENTS)} experiment(s): {output_files}")
-
     # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
     sem = mp.Semaphore(MAX_PARALLEL)
     for params in EXPERIMENTS:

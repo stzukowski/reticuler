@@ -102,11 +102,6 @@ def main():
         for exp in prepare_eta_original(eta_original, shields_original)
     ]
 
-    output_files = ", ".join(
-        exp.get("output_file") or exp.get("input_file") for exp in experiments
-    )
-    print(f"Starting {len(experiments)} BEA experiment(s): {output_files}")
-
     # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
     sem = mp.Semaphore(MAX_PARALLEL)
     for params in experiments:
