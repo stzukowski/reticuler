@@ -95,7 +95,6 @@ class BackwardModifiedEulerMethod:
         """Check moving conditions."""
         a1s = self.pde_solver.flux_info[:, 0]
         max_a1 = np.max(a1s)
-        # (first condition for low eta, second for high)
         are_moving = np.logical_and(
             a1s > self.crit_shields_param,
             (

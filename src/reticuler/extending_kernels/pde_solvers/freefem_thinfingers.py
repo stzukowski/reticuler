@@ -1,4 +1,5 @@
 import logging
+import re
 import textwrap
 import numpy as np
 
@@ -481,18 +482,20 @@ class FreeFEM_ThinFingers(FreeFEM):
         return dRs_test, dt
 
     def _filter_dense_points(self, points):
-        """Drop points closer than 1e-3 to the last kept one, so that FreeFEM
-        doesn't choke on near-degenerate border segments. First and last
-        (tip) points are always kept."""
+        """Drop points closer than min_sep to the last kept one, so that
+        FreeFEM doesn't choke on near-degenerate border segments. Filtering
+        starts at the tip and works back towards the bifurcation. First (bifurcation)
+        and last (tip) points are always kept."""
         min_sep = 5e-4
         if len(points) < 2:
             return points
 
-        kept = [points[0]]
-        for pt in points[1:-1]:
+        kept = [points[-1]]
+        for pt in points[-2:0:-1]:
             if np.linalg.norm(pt - kept[-1]) >= min_sep:
                 kept.append(pt)
-        kept.append(points[-1])
+        kept.append(points[0])
+        kept.reverse()
         return np.array(kept)
 
     def prepare_script(self, network):
@@ -598,6 +601,25 @@ class FreeFEM_ThinFingers(FreeFEM):
                 lookfor + boxN_0, lookfor + str(int(boxN_0) + 1)
             )
             out_freefem = super().run_freefem(script_perturbed)
+
+        if out_freefem.returncode or "nan" in out_freefem.stdout.decode():
+            # buildmesh's automatic background sizing can produce degenerate
+            # triangles for specific vertex budgets;
+            # cycle through a spread of nbvx values on the initial buildmesh() call
+            for nbvx in (3000, 6000, 9000, 12000, 15000):
+                logger.warning("Trying again with nbvx=%d...", nbvx)
+                script_nbvx = re.sub(
+                    r"(mesh Th = buildmesh\([^;]*)\);",
+                    rf"\1, nbvx={nbvx});",
+                    script,
+                    count=1,
+                )
+                out_freefem = super().run_freefem(script_nbvx)
+                if (
+                    not out_freefem.returncode
+                    and "nan" not in out_freefem.stdout.decode()
+                ):
+                    break
 
         ai_coeffs_flat = self.array_from_string(out_freefem.stdout, "kopytko")
         self.flux_info = ai_coeffs_flat.reshape(len(ai_coeffs_flat) // 3, 3)

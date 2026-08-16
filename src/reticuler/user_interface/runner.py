@@ -90,7 +90,7 @@ def run_bounded(target, params, sem):
     try:
         target(params)
     except Exception:
-        print(f"Experiment {name} failed - see {name}.log", flush=True)
+        print(f"Experiment {name} failed.", flush=True)
     finally:
         sem.release()
 
