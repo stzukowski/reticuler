@@ -501,8 +501,7 @@ class BackwardSystem:
                 # overshoot
                 backward_branch.overshoot = np.append(
                     backward_branch.overshoot,
-                    np.linalg.norm(test_point - initial_point)
-                    / np.linalg.norm(initial_point - back_point),
+                    np.linalg.norm(test_point - initial_point),
                 )
 
                 # angular deflection
