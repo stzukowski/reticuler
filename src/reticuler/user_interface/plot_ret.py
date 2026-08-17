@@ -4,6 +4,7 @@ import glob
 import logging
 import argparse
 import json
+import re
 import textwrap
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,8 +12,42 @@ import numpy as np
 from reticuler.system import System
 from reticuler.user_interface import graphics, clippers
 from reticuler.utilities.misc import create_dir
+from reticuler.backward_evolution.postprocessor import BEAPostProcessor
 
 logger = logging.getLogger("reticuler")
+
+def plot_back(args):
+    """Handle `-back`: plot a BEA eta* scan.
+
+    `file_name` is used as a prefix, same as with `-all`: every
+    "<file_name>eta##_back.json" file (as produced by `run_BEA.py`) is read
+    to infer eta_range, then plotted against "original_tree.json" (expected
+    in the current directory) via BEAPostProcessor.
+    """
+    system0 = System.import_json(input_file="original_tree")
+
+    prefix = args.input_file[0]
+    pattern = re.compile(re.escape(prefix.replace("\\", "/")) + r"eta(\d+)_back\.json$")
+    etas = [
+        int(m.group(1)) / 10
+        for f in glob.glob(prefix + "eta*_back.json")
+        if (m := pattern.match(f.replace("\\", "/")))
+    ]
+    if not etas:
+        raise FileNotFoundError(f"No '{prefix}eta##_back.json' files found.")
+    eta_range = np.array(sorted(etas))
+
+    output_name = prefix + "BEA_results"
+    if args.output_file is not None:
+        output_name = args.output_file[0]
+
+    logger.info("Plotting BEA scan %s (eta_range=%s)", prefix, eta_range)
+    post = BEAPostProcessor(
+        exp_name=prefix, system=system0, eta_range=eta_range, **args.back_params[0]
+    )
+    fig, _ = post.plot()
+    fig.savefig(output_name + ".pdf", bbox_inches="tight")
+    plt.close(fig)
 
 
 def main():
@@ -131,6 +166,38 @@ def main():
             """),
     )
 
+    # Plot a BEA eta* scan
+    parser.add_argument(
+        "-back",
+        "--backward",
+        action=argparse.BooleanOptionalAction,
+        help=textwrap.dedent("""\
+            Flag indicating to plot a BEA results. `file_name` is used as a prefix,
+            same as with -all: every "<file_name>eta##_back.json" file is
+            read to infer eta_range, then plotted against
+            "original_tree.json" (expected in the current directory) via
+            BEAPostProcessor.
+            """),
+    )
+    parser.add_argument(
+        "-back_params",
+        "--back_params",
+        type=json.loads,
+        nargs=1,
+        metavar="dict",
+        help=textwrap.dedent("""\
+                            Optional parameters for -back, passed to BEAPostProcessor
+                            (e.g. eta_original, bif_type).
+
+                            Pass dictionary in a form (no spaces,
+                            backslash before quotes around `value`):
+                                "{\\"value\\":key}"
+                            default = {} (keeps BEAPostProcessor's own defaults)
+
+                            """),
+        default=[{}],
+    )
+
     # Rotate the plot
     parser.add_argument(
         "-rot",
@@ -179,6 +246,10 @@ def main():
 
     # parse the arguments from standard input
     args = parser.parse_args()
+
+    if args.backward:
+        plot_back(args)
+        return
 
     if args.plot_all:
         file_names = glob.glob(args.input_file[0] + "*.json")

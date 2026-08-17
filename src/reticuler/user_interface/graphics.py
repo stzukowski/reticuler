@@ -1,7 +1,11 @@
 r"""Preparing plots.
 
 Functions:
-    plot_tree(ax, network, height=2.0, width=2.0, \*\*kwargs_tree_plot)
+    plot_polygon(ax, poly, \*\*kwargs)
+    plot_tree(system, ax, rot_angle=None, is_thick=None, xmin=None, xmax=None,
+        ymin=None, ymax=None, facecolor="#def1ff", \*\*kwargs_tree_plot)
+    animate_tree(system0, rot_angle=None, is_thick=None, xmin=None, xmax=None,
+        ymin=None, ymax=None, max_time=None, speed_factor=None, \*\*kwargs_tree_plot)
 
 """
 

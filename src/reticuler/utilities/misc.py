@@ -7,6 +7,10 @@ Functions:
     cyl2cart
     cart2cyl
     extend_radially
+    rotation_matrix
+    create_dir
+    sigmoid
+    integerise
 
 Classes:
     NumpyEncoder
@@ -168,3 +172,11 @@ def sigmoid(x, sig_shift, sig_rate, sig_h):
     if is_scalar:
         result = result[0]
     return result
+
+
+def integerise(x):
+    """Convert x to string without a trailing dot if it is an integer ('2.' -> '2')."""
+    if np.isclose(x, round(x), atol=1e-3):
+        return "{:.0f}".format(x)
+    else:
+        return "{}".format(x)

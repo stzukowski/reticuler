@@ -38,12 +38,12 @@ BACK_FORTH_STEPS_THRESH = 1  # n steps backward, then n forward, then compare gr
 
 CLIP_HEIGHT = 2.5
 
-# Where the original forward-growth trees (etaXX.json) live, relative to $HOME.
+# Where the original forward-growth trees live, relative to $HOME.
 SOURCE_DIRECTORY = (
     "pro/rete/archive_loc/misc/4_crit_shields_param/0_3_growth/"
 )
 
-ETA_ORIGINALS = [15]  # e.g. list(range(10, 61, 5)); in tenths, so 15 = eta 1.5
+ETA_ORIGINALS = [15]  # in tenths, so 15 = eta 1.5
 ETA_TO_ADD = range(-10, 11)  # in tenths
 SHIELDS_ORIGINALS = [0, 0.2, 0.4, 0.6]
 
@@ -51,12 +51,13 @@ MAX_PARALLEL = 20
 
 
 def prepare_eta_original(eta_original, shields_original):
-    """Set up eta_original<NN>_shields<NN>/ (clip the source tree into it) and
-    build the list of BEA experiment param dicts to run against that source
-    tree -- one shields<j_shields>/ subdirectory per j_shields in
-    SHIELDS_ORIGINALS (tried as the trimmer's crit_shields_param, independent
-    of which shields value grew the tree), each holding every j_eta (from
-    ETA_ORIGINAL + ETA_TO_ADD) trimmed with that j_shields."""
+    """Set up directories and params for a pair (eta_original, shields_original).
+
+    Copy original_tree.json and clip it to CLIP_HEIGHT.
+    Build the list of BEA experiment params to run against that source tree:
+    - one shields<j_shields>/ subdirectory per j_shields in SHIELDS_ORIGINALS
+    - each holding every j_eta (from ETA_ORIGINAL + ETA_TO_ADD).
+    """
     shields_tag = f"{round(shields_original * 10):02d}"
     exp_dir = f"original_eta{eta_original:02d}_shields{shields_tag}"
     Path(exp_dir).mkdir(exist_ok=True)
@@ -72,20 +73,20 @@ def prepare_eta_original(eta_original, shields_original):
     clip_ret.main(argv=[original_tree, "-H", str(CLIP_HEIGHT), "-out", original_tree])
 
     experiments = []
-    for j_shields in SHIELDS_ORIGINALS:
-        shields_dir = f"{exp_dir}/shields{j_shields}"
-        Path(shields_dir).mkdir(exist_ok=True)
+    for shields_back in SHIELDS_ORIGINALS:
+        shields_dir = f"{exp_dir}/shields{shields_back}"
+        Path(shields_dir).mkdir(exist_ok=True) # subdir for each shields_back
         for eta_to_add in ETA_TO_ADD:
-            j_eta = eta_original + eta_to_add
+            j_eta_back = eta_original + eta_to_add
             experiments.append(
                 {
                     "input_file": original_tree,
-                    "output_file": f"{shields_dir}/eta{j_eta:02d}_shields{j_shields}",
+                    "output_file": f"{shields_dir}/eta{j_eta_back:02d}",
                     "BEA_params": {"back_forth_steps_thresh": BACK_FORTH_STEPS_THRESH},
                     "trimmer_params": {
-                        "eta": j_eta / 10,
+                        "eta": j_eta_back / 10,
                         "ds": DS,
-                        "crit_shields_param": j_shields,
+                        "crit_shields_param": shields_back,
                     },
                 }
             )
