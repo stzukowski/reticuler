@@ -487,6 +487,9 @@ class System:
 
                 json_solver.pop("type")
                 json_solver.pop("description")
+                # !!! Backward compatibility
+                if "inflow_thresh" in json_solver:
+                    json_solver["sleep_frac_thresh"] = json_solver.pop("inflow_thresh")
                 pde_solver = pde_solver_class(network, **json_solver)
 
                 # Extender

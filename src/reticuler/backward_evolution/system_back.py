@@ -290,14 +290,15 @@ class BackwardSystem:
 
         # Trimmer
         json_trimmer = json_load["trimmer"]
+        # !!! Backward compatibility
+        if "inflow_thresh" in json_trimmer:
+            json_trimmer["sleep_frac_thresh"] = json_trimmer.pop("inflow_thresh")
         if json_trimmer["type"] == "BackwardModifiedEulerMethod":
+            json_trimmer.pop("type")
+            json_trimmer.pop("pde_solver")
             trimmer = trimmers.BackwardModifiedEulerMethod(
                 pde_solver=system.extender.pde_solver,
-                eta=json_trimmer["eta"],
-                ds=json_trimmer["ds"],
-                max_approximation_step=json_trimmer["max_approximation_step"],
-                sleep_frac_thresh=json_trimmer["sleep_frac_thresh"],
-                crit_shields_param=json_trimmer["crit_shields_param"],
+                **json_trimmer,
             )
 
         # General
