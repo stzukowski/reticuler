@@ -47,6 +47,16 @@ def _norm_metric(metric_results):
     return np.copy(metric_results)
 
 
+_ID_PALETTE = plt.colormaps["tab20"].colors
+
+
+def _color_for_id(branch_id):
+    """Stable color for a branch/bifurcation ID, shared across the tree
+    markers and every per-branch/per-bifurcation line plot, so the same
+    ID always gets the same color everywhere."""
+    return _ID_PALETTE[branch_id % len(_ID_PALETTE)]
+
+
 class BEAPostProcessor:
     """Gather, process, and plot BEA metrics across a range of eta* values.
 
@@ -122,8 +132,8 @@ class BEAPostProcessor:
                     angular_deflection = np.append(angular_deflection, b_b.angular_deflection)
 
                     results_branches_sep[jj, i, 1:4] = np.mean(b_b.flux_info, axis=0)
-                    results_branches_sep[jj, i, 4] = np.mean(overshoot)
-                    results_branches_sep[jj, i, 5] = np.mean(angular_deflection)
+                    results_branches_sep[jj, i, 4] = np.mean(b_b.overshoot)
+                    results_branches_sep[jj, i, 5] = np.mean(b_b.angular_deflection)
                     results_branches_sep[jj, i, 0] = b_b.ID
                 else:
                     results_branches_sep[jj] = np.nan
@@ -260,6 +270,7 @@ class BEAPostProcessor:
         axes = axes0[0]
         for i in range(self.results_bif_sep.shape[0]):
             b_ID = int(self.results_bif_sep[i, 0, 0])
+            color = _color_for_id(b_ID)
             ax_tree.scatter(
                 *self.system.network.branches[int(self.results_bif_sep[i, 0, 0])].points[-1],
                 s=10,
@@ -267,13 +278,15 @@ class BEAPostProcessor:
                 zorder=3,
                 edgecolor="k",
                 linewidth=0.2,
+                color=color,
                 label=b_ID,
             )
-            axes[0].plot(self.eta_range, self.results_bif_sep[i, :, 4], label=b_ID)
-            axes[1].plot(self.eta_range, self.results_bif_sep[i, :, 1], label=b_ID)
+            axes[0].plot(self.eta_range, self.results_bif_sep[i, :, 4], color=color, label=b_ID)
+            axes[1].plot(self.eta_range, self.results_bif_sep[i, :, 1], color=color, label=b_ID)
             axes[2].plot(
                 self.eta_range,
                 self.results_bif_sep[i, :, 3] / self.results_bif_sep[i, :, 1],
+                color=color,
                 label=b_ID,
             )
         axes[1].axhline(0.8, c="0.5", linewidth=0.7, linestyle="--")
@@ -321,16 +334,24 @@ class BEAPostProcessor:
         for i in range(self.results_branches_sep.shape[0]):
             if ~np.isnan(self.results_branches_sep[i, 0, 0]):
                 b_ID = int(self.results_branches_sep[i, 0, 0])
+                color = _color_for_id(b_ID)
                 pts = self.system.network.branches[b_ID].points
                 pt = pts[len(pts) // 2]
-                ax_tree.scatter(*pt, s=10, zorder=3, edgecolor="k", linewidth=0.2, label=b_ID)
+                ax_tree.scatter(
+                    *pt, s=10, zorder=3, edgecolor="k", linewidth=0.2, color=color, label=b_ID
+                )
                 axes[0].plot(
                     self.eta_range,
                     self.results_branches_sep[i, :, 2] / self.results_branches_sep[i, :, 1] ** 2,
+                    color=color,
                     label=b_ID,
                 )
-                axes[1].plot(self.eta_range, self.results_branches_sep[i, :, 4], label=b_ID)
-                axes[2].plot(self.eta_range, self.results_branches_sep[i, :, 5], label=b_ID)
+                axes[1].plot(
+                    self.eta_range, self.results_branches_sep[i, :, 4], color=color, label=b_ID
+                )
+                axes[2].plot(
+                    self.eta_range, self.results_branches_sep[i, :, 5], color=color, label=b_ID
+                )
         [ax.axhline(0, c="0.5", linewidth=0.7, linestyle="-") for ax in axes]
 
         ########## BRANCHES (TOGETHER) ##########

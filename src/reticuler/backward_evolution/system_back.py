@@ -42,7 +42,7 @@ class BackwardBranch:
         A 3-n array with a1,a2,a3 coefficients in a point after backward step.
     overshoot : array
         A 1-n array with overshoot after virtual forward step.
-    geometric_deviation : array
+    geometric_deflection : array
         A 1-n array with geometric deviation: distance between the initial
         point and the point after virtual forward step.
     angular_deflection : array
@@ -75,7 +75,7 @@ class BackwardBranch:
         # we don't collect metrics at the first and the last point of the initial branch
         self.flux_info = np.empty((0, 3), dtype=float)
         self.overshoot = []
-        self.geometric_deviation = []
+        self.geometric_deflection = []
         self.angular_deflection = []
 
     def add_point(self, point, ind, BEA_step):
@@ -277,9 +277,9 @@ class BackwardSystem:
                 backward_branch.steps = np.array(points_numsleft_steps[:, 3], dtype=int)
                 backward_branch.flux_info = np.asarray(json_branch["flux_info"])
                 backward_branch.overshoot = np.asarray(json_branch["overshoot"])
-                # !!! Backward compatibility -- older dumps don't have geometric_deviation
-                backward_branch.geometric_deviation = np.asarray(
-                    json_branch.get("geometric_deviation", [])
+                # !!! Backward compatibility -- older dumps don't have geometric_deflection
+                backward_branch.geometric_deflection = np.asarray(
+                    json_branch.get("geometric_deflection", [])
                 )
                 backward_branch.angular_deflection = np.asarray(
                     json_branch["angular_deflection"]
@@ -379,7 +379,7 @@ class BackwardSystem:
                     "points_numsleft_steps": branch.points_numsleft_steps(),
                     "flux_info": branch.flux_info,
                     "overshoot": branch.overshoot,
-                    "geometric_deviation": branch.geometric_deviation,
+                    "geometric_deflection": branch.geometric_deflection,
                     "angular_deflection": branch.angular_deflection,
                 }
             }
@@ -510,13 +510,13 @@ class BackwardSystem:
                 # overshoot
                 backward_branch.overshoot = np.append(
                     backward_branch.overshoot,
-                    np.linalg.norm(back_point - initial_point) - \
-                        np.linalg.norm(back_point - test_point),
+                    (1 - np.linalg.norm(back_point - test_point)
+                     / np.linalg.norm(back_point - initial_point)),
                 )
 
-                # geometric deviation
-                backward_branch.geometric_deviation = np.append(
-                    backward_branch.geometric_deviation,
+                # geometric deflection
+                backward_branch.geometric_deflection = np.append(
+                    backward_branch.geometric_deflection,
                     np.linalg.norm(test_point - initial_point),
                 )
 
