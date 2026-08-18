@@ -131,11 +131,22 @@ class BEAPostProcessor:
             mask = backward_system.backward_bifurcations.flags == 3
             a1a2a3_coefficients_bif = backward_system.backward_bifurcations.flux_info
             length_mismatch = backward_system.backward_bifurcations.length_mismatch
+            results_bif_sep[:, i, 0] = backward_system.backward_bifurcations.mother_IDs
+
+            if a1a2a3_coefficients.shape[0] > 0:
+                results[0, i, :] = _calculate_quantiles(
+                    a1a2a3_coefficients[:, 1] / a1a2a3_coefficients[:, 0] ** 2, q
+                )
+                results[1, i, :] = _calculate_quantiles(overshoot, q)
+                results[2, i, :] = _calculate_quantiles(angular_deflection, q)
+            else:
+                results[:, i, :] = np.nan
+
+            # Bifurcation-derived metrics require every bifurcation to have been reached.
             if sum(mask) < len(mask):
                 print("eta={:.2f}, not all bifurcations reached...".format(eta))
                 results_bif[:, i, :] = np.nan
-                results[:, i, :] = np.nan
-                results_bif_sep[:, i, :] = np.nan
+                results_bif_sep[:, i, 1:] = np.nan
             else:
                 results_bif[0, i, :] = _calculate_quantiles(length_mismatch[mask])
                 results_bif[1, i, :] = _calculate_quantiles(a1a2a3_coefficients_bif[mask, 0])
@@ -143,15 +154,8 @@ class BEAPostProcessor:
                     a1a2a3_coefficients_bif[mask, 2] / a1a2a3_coefficients_bif[mask, 0]
                 )
 
-                results[0, i, :] = _calculate_quantiles(
-                    a1a2a3_coefficients[:, 1] / a1a2a3_coefficients[:, 0] ** 2, q
-                )
-                results[1, i, :] = _calculate_quantiles(overshoot, q)
-                results[2, i, :] = _calculate_quantiles(angular_deflection, q)
-
                 results_bif_sep[:, i, 1:4] = a1a2a3_coefficients_bif
                 results_bif_sep[:, i, 4] = length_mismatch
-                results_bif_sep[:, i, 0] = backward_system.backward_bifurcations.mother_IDs
 
         self.results = results
         self.results_bif = results_bif

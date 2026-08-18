@@ -16,17 +16,26 @@ from reticuler.backward_evolution.postprocessor import BEAPostProcessor
 
 logger = logging.getLogger("reticuler")
 
-def plot_back(args):
-    """Handle `-back`: plot a BEA eta* scan.
+def plot_back(prefix, output_name=None, back_params=None):
+    """Plot a BEA eta* scan.
 
-    `file_name` is used as a prefix, same as with `-all`: every
-    "<file_name>eta##_back.json" file (as produced by `run_BEA.py`) is read
+    `prefix` is used the same way as `file_name` with `-all`: every
+    "<prefix>eta##_back.json" file (as produced by `run_BEA.py`) is read
     to infer eta_range, then plotted against "original_tree.json" (expected
     in the current directory) via BEAPostProcessor.
+
+    Parameters
+    -------
+    prefix : str
+        Path/prefix shared by the BackwardSystem dumps (e.g. a shields_dir).
+    output_name : str, default None
+        File to export (".pdf" appended). If None, ``prefix + "BEA_results"``.
+    back_params : dict, default None
+        Extra kwargs forwarded to `BEAPostProcessor` (e.g. `eta_original`, `bif_type`).
+
     """
     system0 = System.import_json(input_file="original_tree")
 
-    prefix = args.input_file[0]
     pattern = re.compile(re.escape(prefix.replace("\\", "/")) + r"eta(\d+)_back\.json$")
     etas = [
         int(m.group(1)) / 10
@@ -37,13 +46,11 @@ def plot_back(args):
         raise FileNotFoundError(f"No '{prefix}eta##_back.json' files found.")
     eta_range = np.array(sorted(etas))
 
-    output_name = prefix + "BEA_results"
-    if args.output_file is not None:
-        output_name = args.output_file[0]
+    output_name = output_name if output_name is not None else prefix + "BEA_results"
 
     logger.info("Plotting BEA scan %s (eta_range=%s)", prefix, eta_range)
     post = BEAPostProcessor(
-        exp_name=prefix, system=system0, eta_range=eta_range, **args.back_params[0]
+        exp_name=prefix, system=system0, eta_range=eta_range, **(back_params or {})
     )
     fig, _ = post.plot()
     fig.savefig(output_name + ".pdf", bbox_inches="tight")
@@ -73,7 +80,7 @@ def main():
         help=textwrap.dedent("""\
                             File to export. If None the same as input.
                             default = None """),
-        default=None,
+        default=[None],
     )
 
     parser.add_argument(
@@ -248,7 +255,7 @@ def main():
     args = parser.parse_args()
 
     if args.backward:
-        plot_back(args)
+        plot_back(args.input_file[0], output_name=args.output_file[0], back_params=args.back_params[0])
         return
 
     if args.plot_all:
@@ -272,13 +279,13 @@ def main():
                 rot_angle=args.rot_angle[0],
                 **args.plot_params[0],
             )
-            if args.output_file is None:
+            if args.output_file[0] is None:
                 ani.save(exp_name + ".avi", writer="ffmpeg", dpi=600)
             else:
                 ani.save(args.output_file[0] + ".avi", writer="ffmpeg", dpi=600)
         else:
             output_name = exp_name
-            if args.output_file is not None:
+            if args.output_file[0] is not None:
                 output_name = args.output_file[0]
 
             steps = [int(system0.growth_gauges[0])]

@@ -22,8 +22,7 @@ from reticuler.backward_evolution.system_back import BackwardSystem
 from reticuler.user_interface import graphics
 
 
-def _add_file_handler(log_path):
-    """Log to file"""
+def _log_to_file(log_path):
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     handler = logging.FileHandler(log_path, mode="a")
@@ -37,12 +36,12 @@ def run_experiment(params, log_to_file=True):
     plot. If log_to_file, attach a per-process FileHandler (for Pool-based 
     batch runs sharing one stdout)."""
     name = params.get("output_file") or params.get("input_file")
-    setproctitle(f"ret:{name}")
+    setproctitle(f"ret:{name}")  # change name of the process in Linux ps
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting experiment: {name}", flush=True)
     if log_to_file:
         suffix = "_cont" if params.get("input_file") and not params.get("output_file") else ""
-        _add_file_handler(f"{name}{suffix}.log") # set logs to file
+        _log_to_file(f"{name}{suffix}.log") # set logs to file
 
     try:
         if params.get("input_file"):
@@ -67,12 +66,12 @@ def run_experiment_back(params, log_to_file=True):
     """Construct (or import) and run a BackwardSystem's BEA. If log_to_file,
     also attach a per-process FileHandler (for Pool-based batch runs sharing one stdout)."""
     name = params.get("output_file") or params.get("input_file")
-    setproctitle(f"ret_back:{name}")
+    setproctitle(f"ret_back:{name}")  # change name of the process in Linux ps
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting BEA experiment: {name}", flush=True)
     if log_to_file:
         suffix = "_cont" if params.get("continuation_file") else ""
-        _add_file_handler(f"{name}{suffix}.log")
+        _log_to_file(f"{name}{suffix}.log")
 
     try:
         backward_system = BackwardSystem.construct(params)
