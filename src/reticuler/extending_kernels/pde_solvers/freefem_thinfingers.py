@@ -533,7 +533,7 @@ class FreeFEM_ThinFingers(FreeFEM):
             + "\nplot({inside_buildmesh}, dim=2, wait=true);\n\n".format(
                 inside_buildmesh=inside_buildmesh
             )
-            + "\nmesh Th = buildmesh({inside_buildmesh});\n".format( # , fixedborder=true
+            + "\nmesh Th = buildmesh({inside_buildmesh}, fixedborder=true);\n".format(
                 inside_buildmesh=inside_buildmesh
             )
             + "\nreal buildTime=clock() - buildTime0;\n"

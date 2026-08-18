@@ -61,7 +61,7 @@ class Jellyfish:
         v_rim=1.3,
         sprouting_stochastic_shift=0.25,
         sprouting_thresh=1.5,
-        sprouting_sig_rate=0.15,
+        sprouting_sig_rate=6.667,
         sprouting_sig_h=10,
     ):
         """Initialize Jellyfish.
@@ -73,7 +73,7 @@ class Jellyfish:
         v_rim : float, default 1.3 [mm/day]
         sprouting_stochastic_shift : float, default 0.25
         sprouting_thresh : float, default 1.5
-        sprouting_sig_rate : float, default 0.15
+        sprouting_sig_rate : float, default 6.667
         sprouting_sig_h : float, default 10
 
         Returns
