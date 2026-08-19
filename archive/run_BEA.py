@@ -28,7 +28,6 @@ sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", bufferin
 import multiprocessing as mp
 import os
 import shutil
-import numpy as np
 
 from reticuler.user_interface import clip_ret, runner
 
@@ -73,7 +72,7 @@ def prepare_eta_back_scan(source_file, output_prefix, eta_back_range, trimmer_pa
     for eta_back in eta_back_range:
         params = {
             "input_file": f"original_{source_file}/original_tree",
-            "output_file": f"original_{source_file}/{output_prefix}eta_{eta_back:02d}",
+            "output_file": f"original_{source_file}/{output_prefix}eta{eta_back:02d}",
             "BEA_params": {"back_forth_steps_thresh": BACK_FORTH_STEPS_THRESH},
             "trimmer_params": {
                 "eta": eta_back / 10,
@@ -90,11 +89,11 @@ for shields_original in SHIELDS_ORIGINAL_LIST:
         source_file = f"eta{eta_original:02d}_shields{shields_original:03d}"
         create_exp_dir_original_tree(source_file)
 
-        eta_back_range = eta_original + np.array(ETA_TO_ADD)
+        eta_back_range = [eta_original + eta_to_add for eta_to_add in ETA_TO_ADD]
         for shields_back in SHIELDS_BACK_LIST:
             output_prefix = f"shields{shields_back:03d}/"
             Path(f"original_{source_file}/{output_prefix}").mkdir(exist_ok=True)
-            EXPERIMENTS.append(prepare_eta_back_scan(source_file, output_prefix, eta_back_range, {"crit_shields_param": shields_back / 1000}))
+            EXPERIMENTS.extend(prepare_eta_back_scan(source_file, output_prefix, eta_back_range, {"crit_shields_param": shields_back / 1000}))
 
 
 def main():

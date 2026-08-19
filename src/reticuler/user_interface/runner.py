@@ -119,9 +119,7 @@ def _reap_finished(procs):
 
 
 def _plot_shields_dir(source_file, output_prefix):
-    """Plot the BEA analysis for a finished shields_dir, via plot_ret's -back
-    (`original_tree.json` is expected in `exp_dir`). ``shields_dir`` is a
-    filename prefix within `exp_dir` (not an actual subdirectory)."""
+    """Plot the BEA analysis for a finished output_prefix, via plot_ret's -back."""
     cwd0 = os.getcwd()
     os.chdir(f"original_{source_file}")
     try:
@@ -132,11 +130,11 @@ def _plot_shields_dir(source_file, output_prefix):
         os.chdir(cwd0)
 
 
-def _run_experiment_back_and_maybe_plot(exp_dir, shields_dir, params, remaining, sem):
-    """Run one eta_back experiment, then -- if it happens to be the last one
-    to finish for its shields_dir -- plot that shields_dir's BEA scan.
+def _run_experiment_back_and_maybe_plot(source_file, output_prefix, params, remaining, sem):
+    """Run one eta_back experiment, then -- if it's the last one for its
+    output_prefix -- plot that output_prefix's BEA scan.
 
-    ``remaining`` is a shared counter (one per shields_dir group): whichever
+    ``remaining`` is a shared counter (one per output_prefix group): whichever
     worker decrements it to zero is the one that plots.
     """
     _run_bounded(run_experiment_back, params, sem)
@@ -146,7 +144,7 @@ def _run_experiment_back_and_maybe_plot(exp_dir, shields_dir, params, remaining,
         is_last = remaining.value == 0
 
     if is_last:
-        _plot_shields_dir(exp_dir, shields_dir)
+        _plot_shields_dir(source_file, output_prefix)
 
 
 def run_batch(max_parallel, experiments, is_backward=False):
@@ -155,11 +153,9 @@ def run_batch(max_parallel, experiments, is_backward=False):
 
     Each item is a params dict run via ``run_experiment``.
 
-    If ``is_backward``, each item is a ``(exp_dir, shields_dir, params,
-    remaining)`` tuple run via ``run_experiment_back``, where ``remaining`` is
-    a shared per-shields_dir counter (see ``_run_experiment_back_and_maybe_plot``):
-    whichever process decrements it to zero also plots that shields_dir's BEA
-    eta* scan.
+    If ``is_backward``, each item is a ``(source_file, output_prefix, params,
+    remaining)`` tuple run via ``run_experiment_back`` (see
+    ``_run_experiment_back_and_maybe_plot``).
     """
     running = []
     sem = mp.Semaphore(max_parallel)
