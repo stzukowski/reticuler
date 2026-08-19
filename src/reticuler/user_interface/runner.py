@@ -3,13 +3,16 @@
 Functions:
     run_experiment
     run_experiment_back
-    run_bounded
+    run_batch
     copy_reticuler_temp
 
 """
 
 import logging
+import multiprocessing as mp
+import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -19,7 +22,7 @@ from setproctitle import setproctitle
 import reticuler
 from reticuler.system import System
 from reticuler.backward_evolution.system_back import BackwardSystem
-from reticuler.user_interface import graphics
+from reticuler.user_interface import graphics, plot_ret
 
 
 def _log_to_file(log_path):
@@ -28,21 +31,26 @@ def _log_to_file(log_path):
     handler = logging.FileHandler(log_path, mode="a")
     handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s"))
     root_logger.addHandler(handler)
-    logging.captureWarnings(True)  # route warnings.warn() (e.g. numpy) through the same handler
+
+    # route warnings.warn() (e.g. numpy) through the same handler
+    logging.captureWarnings(True)
 
 
 def run_experiment(params, log_to_file=True):
     """Construct (or import) and evolve a System, optionally saving a final
-    plot. If log_to_file, attach a per-process FileHandler (for Pool-based 
-    batch runs sharing one stdout)."""
+    plot. If log_to_file, attach a per-process FileHandler."""
     name = params.get("output_file") or params.get("input_file")
     setproctitle(f"ret:{name}")  # change name of the process in Linux ps
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting experiment: {name}", flush=True)
+
+    # switch on logging to file
     if log_to_file:
         suffix = "_cont" if params.get("input_file") and not params.get("output_file") else ""
         _log_to_file(f"{name}{suffix}.log") # set logs to file
 
+    # run growth and plot at the end
     try:
         if params.get("input_file"):
             system = System.import_json(input_file=params["input_file"])
@@ -64,15 +72,19 @@ def run_experiment(params, log_to_file=True):
 
 def run_experiment_back(params, log_to_file=True):
     """Construct (or import) and run a BackwardSystem's BEA. If log_to_file,
-    also attach a per-process FileHandler (for Pool-based batch runs sharing one stdout)."""
+    also attach a per-process FileHandler."""
     name = params.get("output_file") or params.get("input_file")
     setproctitle(f"ret_back:{name}")  # change name of the process in Linux ps
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"{timestamp}  Starting BEA experiment: {name}", flush=True)
+
+    # switch on logging to file
     if log_to_file:
         suffix = "_cont" if params.get("continuation_file") else ""
         _log_to_file(f"{name}{suffix}.log")
 
+    # run BEA
     try:
         backward_system = BackwardSystem.construct(params)
         backward_system.run_BEA()
@@ -81,9 +93,9 @@ def run_experiment_back(params, log_to_file=True):
         raise
 
 
-def run_bounded(target, params, sem):
+def _run_bounded(target, params, sem):
     """Run ``target(params)`` (``run_experiment``/``run_experiment_back``), then
-    release ``sem`` so a caller throttling concurrent processes with a
+    release ``sem`` so a caller throttling other processes with a
     multiprocessing.Semaphore can start the next one."""
     name = params.get("output_file") or params.get("input_file")
     try:
@@ -92,6 +104,76 @@ def run_bounded(target, params, sem):
         print(f"Experiment {name} failed.", flush=True)
     finally:
         sem.release()
+
+
+def _reap_finished(procs):
+    """Join and close any of ``procs`` that have exited, returning the still-running ones."""
+    still_running = []
+    for p in procs:
+        if p.exitcode is None:
+            still_running.append(p)
+        else:
+            p.join()
+            p.close()
+    return still_running
+
+
+def _plot_shields_dir(source_file, output_prefix):
+    """Plot the BEA analysis for a finished shields_dir, via plot_ret's -back
+    (`original_tree.json` is expected in `exp_dir`). ``shields_dir`` is a
+    filename prefix within `exp_dir` (not an actual subdirectory)."""
+    cwd0 = os.getcwd()
+    os.chdir(f"original_{source_file}")
+    try:
+        plot_ret.plot_back(output_prefix)
+    except Exception:
+        logging.getLogger("reticuler").exception("Plotting failed for %s", f"original_{source_file}/{output_prefix}")
+    finally:
+        os.chdir(cwd0)
+
+
+def _run_experiment_back_and_maybe_plot(exp_dir, shields_dir, params, remaining, sem):
+    """Run one eta_back experiment, then -- if it happens to be the last one
+    to finish for its shields_dir -- plot that shields_dir's BEA scan.
+
+    ``remaining`` is a shared counter (one per shields_dir group): whichever
+    worker decrements it to zero is the one that plots.
+    """
+    _run_bounded(run_experiment_back, params, sem)
+
+    with remaining.get_lock():
+        remaining.value -= 1
+        is_last = remaining.value == 0
+
+    if is_last:
+        _plot_shields_dir(exp_dir, shields_dir)
+
+
+def run_batch(max_parallel, experiments, is_backward=False):
+    """Launch one ``mp.Process`` per item in ``experiments`` (never reused),
+    bounded to ``max_parallel`` concurrent.
+
+    Each item is a params dict run via ``run_experiment``.
+
+    If ``is_backward``, each item is a ``(exp_dir, shields_dir, params,
+    remaining)`` tuple run via ``run_experiment_back``, where ``remaining`` is
+    a shared per-shields_dir counter (see ``_run_experiment_back_and_maybe_plot``):
+    whichever process decrements it to zero also plots that shields_dir's BEA
+    eta* scan.
+    """
+    running = []
+    sem = mp.Semaphore(max_parallel)
+    for item in experiments:
+        sem.acquire()
+        running = _reap_finished(running)  # sem freed up -> something just exited
+        if is_backward:
+            target, args = _run_experiment_back_and_maybe_plot, (*item, sem)
+        else:
+            target, args = _run_bounded, (run_experiment, item, sem)
+        p = mp.Process(target=target, args=args)
+        p.start()
+        running.append(p)
+        time.sleep(0.001)
 
 
 def copy_reticuler_temp(experiment_dir=None):

@@ -26,7 +26,6 @@ from pathlib import Path
 # send stdout/stderr to <script_name>.log
 sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", buffering=1)
 
-import multiprocessing as mp
 import os
 import numpy as np
 
@@ -113,13 +112,7 @@ EXPERIMENTS = [
 
 def main():
     runner.copy_reticuler_temp()
-
-    # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
-    sem = mp.Semaphore(MAX_PARALLEL)
-    for params in EXPERIMENTS:
-        sem.acquire()
-        p = mp.Process(target=runner.run_bounded, args=(runner.run_experiment, params, sem))
-        p.start()
+    runner.run_batch(MAX_PARALLEL, EXPERIMENTS)
 
     # Exit once everything is launched.
     os._exit(0)

@@ -24,7 +24,6 @@ from pathlib import Path
 # send stdout/stderr to <script_name>.log
 sys.stdout = sys.stderr = open(Path(__file__).with_suffix(".log"), "w", buffering=1)
 
-import multiprocessing as mp
 import os
 
 from reticuler.user_interface import runner
@@ -62,7 +61,7 @@ GROWTH_THRESH = 2.5  # Poisson: 13 for pictures, 9 for the BEA
 # 2 - bifurcation when a3/a1<bifurcation_treshold
 BIFURCATION_TYPE = 1
 
-ETAS = [1.5]  # e.g. [5, 10, 20, 25, 30, 35, 40, 45, 50, 55, 60]
+ETA_LIST = [1.5]  # e.g. [5, 10, 20, 25, 30, 35, 40, 45, 50, 55, 60]
 
 MAX_PARALLEL = 5
 
@@ -95,19 +94,13 @@ EXPERIMENTS = [
             "max_approximation_step": MAX_APPROXIMATION_STEP,
         },
     }
-    for ETA in ETAS
+    for ETA in ETA_LIST
 ]
 
 
 def main():
     runner.copy_reticuler_temp()
-
-    # One process per experiment (never reused), bounded to MAX_PARALLEL concurrent.
-    sem = mp.Semaphore(MAX_PARALLEL)
-    for params in EXPERIMENTS:
-        sem.acquire()
-        p = mp.Process(target=runner.run_bounded, args=(runner.run_experiment, params, sem))
-        p.start()
+    runner.run_batch(MAX_PARALLEL, EXPERIMENTS)
 
     # Exit once everything is launched.
     os._exit(0)
