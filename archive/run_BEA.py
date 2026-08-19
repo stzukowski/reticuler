@@ -1,19 +1,13 @@
-#!/usr/bin/env -S conda run -n reticuler --no-capture-output python
+#!/bin/bash
+"exec" "conda" "run" "-n" "reticuler" "--no-capture-output" "python" "$0" "$@"
+
 """Template for running batches of Backward Evolution Algorithm (BEA) experiments
 in parallel, natively in Python.
 
-For each (ETA_ORIGINAL, SHIELDS_ORIGINAL) pair, clips the corresponding
-forward-growth tree (copied from SOURCE_DIRECTORY) to CLIP_HEIGHT, then runs
-the BEA once per eta in ETA_ORIGINAL + ETA_TO_ADD (in tenths), all etas
-across all ETA_ORIGINALS/SHIELDS_ORIGINALS
-sharing one process pool bounded by MAX_PARALLEL concurrent (via a semaphore).
-
-Copy this file into a fresh experiment working directory and edit the
-BEA SETTINGS section below.
-
-Run with:
+Copy this file into a fresh experiment working directory and run with:
 ( ./run_BEA.py & )
-(the shebang above assumes a conda env named "reticuler" — edit "-n reticuler" if yours is named differently)
+(the shebang above assumes a conda env named "reticuler";
+edit "-n reticuler" if yours is named differently)
 
 Kill all with:
 pkill -f '^ret_back'

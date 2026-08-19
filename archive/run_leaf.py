@@ -3,18 +3,10 @@
 
 """Template for running batches of reticuler experiments in parallel.
 
-Define a parameter sweep as plain Python
-dicts, run each experiment in its own process (bounded to `MAX_PARALLEL`
-concurrent via a semaphore), with each process's log going to its own
-`<output_file>.log` file and the reticuler source snapshot copied into
-`reticuler_temp/` for reproducibility.
-
-Copy this file into a fresh experiment working directory and edit the
-GROWTH SETTINGS section below.
-
-Run with:
+Copy this file into a fresh experiment working directory and run with:
 ( ./run.py & )
-(the shebang above assumes a conda env named "reticuler" — edit "-n reticuler" if yours is named differently)
+(the shebang above assumes a conda env named "reticuler";
+edit "-n reticuler" if yours is named differently)
 
 Kill all with:
 pkill -f '^ret'
