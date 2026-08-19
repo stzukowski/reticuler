@@ -119,17 +119,25 @@ class BEAPostProcessor:
             (len(system.network.branches) - 1, eta_range.shape[0], 6)
         )
         for i, eta in enumerate(eta_range):
-            file_name = self.exp_name + "eta{eta:02d}_back".format(eta=int(np.round(eta * 10)))
-            backward_system = BackwardSystem.import_json(input_file=file_name, system=system)
+            file_name = self.exp_name + "eta{eta:02d}_back".format(
+                eta=int(np.round(eta * 10))
+            )
+            backward_system = BackwardSystem.import_json(
+                input_file=file_name, system=system
+            )
 
             a1a2a3_coefficients = np.empty((0, 3), dtype=float)
             overshoot = []
             angular_deflection = []
             for jj, b_b in enumerate(backward_system.backward_branches[1:]):
                 if len(b_b.steps) > 1:
-                    a1a2a3_coefficients = np.vstack((a1a2a3_coefficients, b_b.flux_info))
+                    a1a2a3_coefficients = np.vstack(
+                        (a1a2a3_coefficients, b_b.flux_info)
+                    )
                     overshoot = np.append(overshoot, b_b.overshoot)
-                    angular_deflection = np.append(angular_deflection, b_b.angular_deflection)
+                    angular_deflection = np.append(
+                        angular_deflection, b_b.angular_deflection
+                    )
 
                     results_branches_sep[jj, i, 1:4] = np.mean(b_b.flux_info, axis=0)
                     results_branches_sep[jj, i, 4] = np.mean(b_b.overshoot)
@@ -159,7 +167,9 @@ class BEAPostProcessor:
                 results_bif_sep[:, i, 1:] = np.nan
             else:
                 results_bif[0, i, :] = _calculate_quantiles(length_mismatch[mask])
-                results_bif[1, i, :] = _calculate_quantiles(a1a2a3_coefficients_bif[mask, 0])
+                results_bif[1, i, :] = _calculate_quantiles(
+                    a1a2a3_coefficients_bif[mask, 0]
+                )
                 results_bif[2, i, :] = _calculate_quantiles(
                     a1a2a3_coefficients_bif[mask, 2] / a1a2a3_coefficients_bif[mask, 0]
                 )
@@ -244,7 +254,9 @@ class BEAPostProcessor:
             for j, ax in enumerate(axes1):
                 ax.set_ylabel(titles[i][j])
                 if self.eta_original is not None:
-                    ax.axvline(x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--")
+                    ax.axvline(
+                        x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--"
+                    )
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
                 if i != 6:
@@ -255,9 +267,20 @@ class BEAPostProcessor:
                     ax.xaxis.set_label_coords(1.08, 0.08)
                     ax.set_xticks(
                         np.arange(self.eta_range.min(), self.eta_range.max(), 0.5),
-                        [integerise(e) for e in np.arange(self.eta_range.min(), self.eta_range.max(), 0.5)],
+                        [
+                            integerise(e)
+                            for e in np.arange(
+                                self.eta_range.min(), self.eta_range.max(), 0.5
+                            )
+                        ],
                     )
-                if (i == 0 and j == 0) or (i == 1 and j == 0) or i == 2 or i == 5 or i == 6:
+                if (
+                    (i == 0 and j == 0)
+                    or (i == 1 and j == 0)
+                    or i == 2
+                    or i == 5
+                    or i == 6
+                ):
                     ax.set_yscale("log")
                 else:
                     ax.ticklabel_format(axis="y", style="scientific", scilimits=(0, 0))
@@ -272,7 +295,9 @@ class BEAPostProcessor:
             b_ID = int(self.results_bif_sep[i, 0, 0])
             color = _color_for_id(b_ID)
             ax_tree.scatter(
-                *self.system.network.branches[int(self.results_bif_sep[i, 0, 0])].points[-1],
+                *self.system.network.branches[
+                    int(self.results_bif_sep[i, 0, 0])
+                ].points[-1],
                 s=10,
                 marker="^",
                 zorder=3,
@@ -281,8 +306,12 @@ class BEAPostProcessor:
                 color=color,
                 label=b_ID,
             )
-            axes[0].plot(self.eta_range, self.results_bif_sep[i, :, 4], color=color, label=b_ID)
-            axes[1].plot(self.eta_range, self.results_bif_sep[i, :, 1], color=color, label=b_ID)
+            axes[0].plot(
+                self.eta_range, self.results_bif_sep[i, :, 4], color=color, label=b_ID
+            )
+            axes[1].plot(
+                self.eta_range, self.results_bif_sep[i, :, 1], color=color, label=b_ID
+            )
             axes[2].plot(
                 self.eta_range,
                 self.results_bif_sep[i, :, 3] / self.results_bif_sep[i, :, 1],
@@ -296,12 +325,17 @@ class BEAPostProcessor:
         # LENGTH MISMATCH QUANTILES
         axes[0, 0].plot(self.eta_range, self.results_bif[0][:, 0:3], "-", ms=5)
         axes[0, 0].fill_between(
-            self.eta_range, self.results_bif[0][:, 1], self.results_bif[0][:, 2], alpha=0.3
+            self.eta_range,
+            self.results_bif[0][:, 1],
+            self.results_bif[0][:, 2],
+            alpha=0.3,
         )
         # LENGTH MISMATCH MEDIAN
         axes[1, 0].plot(self.eta_range, self.results_bif[0][:, 3], "-", ms=5, label="M")
         # LENGTH MISMATCH IQR
-        axes[1, 0].plot(self.eta_range, self.results_bif[0][:, 6] / 50, "-", ms=5, label="IQR/50")
+        axes[1, 0].plot(
+            self.eta_range, self.results_bif[0][:, 6] / 50, "-", ms=5, label="IQR/50"
+        )
 
         # BIFURCATION QUANTILES a1
         if self.bif_type == 1:
@@ -309,7 +343,10 @@ class BEAPostProcessor:
             axes[0, 1].axhline(y=0.8, color="0.5", linewidth=0.5)
         axes[0, 1].plot(self.eta_range, self.results_bif[1][:, 0:3], "-")
         axes[0, 1].fill_between(
-            self.eta_range, self.results_bif[1][:, 1], self.results_bif[1][:, 2], alpha=0.3
+            self.eta_range,
+            self.results_bif[1][:, 1],
+            self.results_bif[1][:, 2],
+            alpha=0.3,
         )
         # BIFURCATION IQR
         axes[1, 1].plot(self.eta_range, self.results_bif[1][:, 6], label="IQR")
@@ -320,7 +357,10 @@ class BEAPostProcessor:
             axes[0, 1].axhline(y=-0.1, color="0.5", linewidth=0.5)
         axes[0, 2].plot(self.eta_range, self.results_bif[2][:, 0:3])
         axes[0, 2].fill_between(
-            self.eta_range, self.results_bif[2][:, 1], self.results_bif[2][:, 2], alpha=0.3
+            self.eta_range,
+            self.results_bif[2][:, 1],
+            self.results_bif[2][:, 2],
+            alpha=0.3,
         )
         # BIFURCATION IQR
         axes[1, 2].plot(self.eta_range, self.results_bif[2][:, 6], label="IQR")
@@ -338,19 +378,32 @@ class BEAPostProcessor:
                 pts = self.system.network.branches[b_ID].points
                 pt = pts[len(pts) // 2]
                 ax_tree.scatter(
-                    *pt, s=10, zorder=3, edgecolor="k", linewidth=0.2, color=color, label=b_ID
+                    *pt,
+                    s=10,
+                    zorder=3,
+                    edgecolor="k",
+                    linewidth=0.2,
+                    color=color,
+                    label=b_ID,
                 )
                 axes[0].plot(
                     self.eta_range,
-                    self.results_branches_sep[i, :, 2] / self.results_branches_sep[i, :, 1] ** 2,
+                    self.results_branches_sep[i, :, 2]
+                    / self.results_branches_sep[i, :, 1] ** 2,
                     color=color,
                     label=b_ID,
                 )
                 axes[1].plot(
-                    self.eta_range, self.results_branches_sep[i, :, 4], color=color, label=b_ID
+                    self.eta_range,
+                    self.results_branches_sep[i, :, 4],
+                    color=color,
+                    label=b_ID,
                 )
                 axes[2].plot(
-                    self.eta_range, self.results_branches_sep[i, :, 5], color=color, label=b_ID
+                    self.eta_range,
+                    self.results_branches_sep[i, :, 5],
+                    color=color,
+                    label=b_ID,
                 )
         [ax.axhline(0, c="0.5", linewidth=0.7, linestyle="-") for ax in axes]
 
@@ -359,7 +412,9 @@ class BEAPostProcessor:
         for i, measure_results in enumerate(self.results):
             # plot DATA
             if self.eta_original is not None:
-                axes[0, i].axvline(x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--")
+                axes[0, i].axvline(
+                    x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--"
+                )
             axes[0, i].axhline(y=0, color="0.5", linewidth=0.5)
             axes[0, i].plot(
                 self.eta_range,
@@ -372,12 +427,16 @@ class BEAPostProcessor:
 
             # plot DATA MEDIAN (log)
             if self.eta_original is not None:
-                axes[1, i].axvline(x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--")
+                axes[1, i].axvline(
+                    x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--"
+                )
             axes[1, i].plot(self.eta_range, measure_results[:, 3])
 
             # plot IQR (log)
             if self.eta_original is not None:
-                axes[2, i].axvline(x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--")
+                axes[2, i].axvline(
+                    x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--"
+                )
             axes[2, i].plot(self.eta_range, measure_results[:, 6])
 
         ##########   ALL COMBINED    ##########
@@ -390,12 +449,19 @@ class BEAPostProcessor:
         ax_plus.set_xlabel(r"$\eta^*$")
         ax_plus.xaxis.set_label_coords(1.08, 0.04)
         if self.eta_original is not None:
-            ax_plus.axvline(x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--")
+            ax_plus.axvline(
+                x=self.eta_original, color="0.5", linewidth=0.7, linestyle="--"
+            )
         ax_plus.set_yticks([0, 1], ["0", "1"])
         xticks = np.arange(self.eta_range.min(), self.eta_range.max() + 0.01, 0.5)
         ax_plus.set_xticks(
             xticks,
-            [integerise(e) for e in np.arange(self.eta_range.min(), self.eta_range.max() + 0.01, 0.5)],
+            [
+                integerise(e)
+                for e in np.arange(
+                    self.eta_range.min(), self.eta_range.max() + 0.01, 0.5
+                )
+            ],
         )
 
         # colouring background

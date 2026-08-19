@@ -26,21 +26,6 @@ import shutil
 from reticuler.system import System
 from reticuler.user_interface import clippers, runner
 
-MAX_PARALLEL = 20
-################ BEA SETTINGS ################
-DS = 0.01  # spatial step
-BACK_FORTH_STEPS_THRESH = 1  # n steps backward, then n forward, then compare graphs
-
-# Where the original forward-growth trees live, relative to $HOME.
-SOURCE_DIRECTORY = (
-    "pro/rete/archive_loc/misc/4_crit_shields_param/1_/0_growth/"
-)
-CLIP_HEIGHT = 2.5
-
-ETA_ORIGINAL_LIST = [15]  # in tenths, so 15 = eta 1.5
-ETA_TO_ADD = range(-5, 26)  # in tenths, eta_back_list = eta_original + ETA_TO_ADD
-SHIELDS_ORIGINAL_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
-SHIELDS_BACK_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
 
 def prepare_exp_dir_original_tree(source_file):
     """Create exp_dir, copy original_tree.json and clip it to CLIP_HEIGHT"""
@@ -48,7 +33,7 @@ def prepare_exp_dir_original_tree(source_file):
     exp_dir = f"original_{source_file}"
     Path(exp_dir).mkdir(exist_ok=True)
     # copy original_tree
-    source_json = ( Path.home() / SOURCE_DIRECTORY / f"{source_file}.json" )
+    source_json = Path.home() / SOURCE_DIRECTORY / f"{source_file}.json"
     shutil.copy(source_json, Path(exp_dir) / "original_tree.json")
     # clip original_tree
     original_tree = f"{exp_dir}/original_tree"
@@ -56,11 +41,12 @@ def prepare_exp_dir_original_tree(source_file):
     clippers.clip_to_height(system, CLIP_HEIGHT)
     system.export_json()
 
+
 def prepare_eta_back_scan(source_file, output_prefix, eta_back_range, trimmer_params):
     """Prepare a scan over eta_back_range.
 
-    Builds the EXPERIMENTS list 
-    (source_file, output_prefix, params, remaining) 
+    Builds the EXPERIMENTS list
+    (source_file, output_prefix, params, remaining)
     of tasks to run BEA on original_tree over eta_back_range.
     """
     experiments = []
@@ -80,6 +66,22 @@ def prepare_eta_back_scan(source_file, output_prefix, eta_back_range, trimmer_pa
         experiments.append((source_file, output_prefix, params, remaining))
     return experiments
 
+
+################ BEA SETTINGS ################
+DS = 0.01  # spatial step
+BACK_FORTH_STEPS_THRESH = 1  # n steps backward, then n forward, then compare graphs
+
+# Where the original forward-growth trees live, relative to $HOME.
+SOURCE_DIRECTORY = "pro/rete/archive_loc/misc/4_crit_shields_param/1_/0_growth/"
+CLIP_HEIGHT = 2.5
+
+ETA_ORIGINAL_LIST = [15]  # in tenths, so 15 = eta 1.5
+ETA_TO_ADD = range(-5, 26)  # in tenths, eta_back_list = eta_original + ETA_TO_ADD
+SHIELDS_ORIGINAL_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
+SHIELDS_BACK_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
+
+MAX_PARALLEL = 20
+
 EXPERIMENTS = []
 for shields_original in SHIELDS_ORIGINAL_LIST:
     for eta_original in ETA_ORIGINAL_LIST:
@@ -90,7 +92,14 @@ for shields_original in SHIELDS_ORIGINAL_LIST:
         for shields_back in SHIELDS_BACK_LIST:
             output_prefix = f"shields{shields_back:03d}/"
             Path(f"original_{source_file}/{output_prefix}").mkdir(exist_ok=True)
-            EXPERIMENTS.extend(prepare_eta_back_scan(source_file, output_prefix, eta_back_range, {"crit_shields_param": shields_back / 1000}))
+            EXPERIMENTS.extend(
+                prepare_eta_back_scan(
+                    source_file,
+                    output_prefix,
+                    eta_back_range,
+                    {"crit_shields_param": shields_back / 1000},
+                )
+            )
 
 
 def main():

@@ -25,7 +25,7 @@ from reticuler.user_interface import runner
 ################ GROWTH SETTINGS ################
 IS_SCRIPT_SAVED = 0
 IS_RECONNECTING = 0
-# If you want to continue simulations (instead of creating new) 
+# If you want to continue simulations (instead of creating new)
 # replace "output_file" by "input_file" in EXPERIMENTS below.
 
 # equation can have 2 values:
@@ -55,15 +55,15 @@ GROWTH_THRESH = 2.5  # Poisson: 13 for pictures, 9 for the BEA
 # 2 - bifurcation when a3/a1<bifurcation_treshold
 BIFURCATION_TYPE = 1
 
-ETA_LIST = [1.5]  # e.g. [5, 10, 20, 25, 30, 35, 40, 45, 50, 55, 60]
+ETA_LIST = [15]  # e.g. [5, 10, 20, 25, 30, 35, 40, 45, 50, 55, 60]
 
-MAX_PARALLEL = 5
+MAX_PARALLEL = 20
 
 
 # One params dict per ETAS value.
 EXPERIMENTS = [
     {
-        "output_file": f"eta{int(10*ETA):02d}",
+        "output_file": f"eta{eta:02d}",
         "growth_params": {
             "growth_thresh_type": GROWTH_THRESH_TYPE,
             "growth_thresh": GROWTH_THRESH,
@@ -78,7 +78,7 @@ EXPERIMENTS = [
         "pde_solver": PDE_SOLVER,
         "pde_solver_params": {
             "equation": EQUATION,
-            "eta": ETA,
+            "eta": eta / 10,
             "ds": DS,
             "bifurcation_type": BIFURCATION_TYPE,
             "is_script_saved": IS_SCRIPT_SAVED,
@@ -88,7 +88,7 @@ EXPERIMENTS = [
             "max_approximation_step": MAX_APPROXIMATION_STEP,
         },
     }
-    for ETA in ETA_LIST
+    for eta in ETA_LIST
 ]
 
 

@@ -26,7 +26,7 @@ from reticuler.user_interface import runner
 ################ GROWTH SETTINGS ################
 IS_SCRIPT_SAVED = 0
 IS_RECONNECTING = 0
-# If you want to continue simulations (instead of creating new) 
+# If you want to continue simulations (instead of creating new)
 # replace "output_file" by "input_file" in EXPERIMENTS below.
 
 # equation can have 2 values:
@@ -76,7 +76,7 @@ EXPERIMENTS = [
             "seeds_phi": SEEDS_PHI,
             "initial_lengths": INITIAL_LENGTHS,
             "radius": RADIUS,
-            "angular_width": 2*np.pi/NSEEDS,
+            "angular_width": 2 * np.pi / NSEEDS,
         },
         "pde_solver": PDE_SOLVER,
         "pde_solver_params": {

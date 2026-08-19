@@ -47,8 +47,12 @@ def run_experiment(params, log_to_file=True):
 
     # switch on logging to file
     if log_to_file:
-        suffix = "_cont" if params.get("input_file") and not params.get("output_file") else ""
-        _log_to_file(f"{name}{suffix}.log") # set logs to file
+        suffix = (
+            "_cont"
+            if params.get("input_file") and not params.get("output_file")
+            else ""
+        )
+        _log_to_file(f"{name}{suffix}.log")  # set logs to file
 
     # run growth and plot at the end
     try:
@@ -125,12 +129,16 @@ def _plot_shields_dir(source_file, output_prefix):
     try:
         plot_ret.plot_back(output_prefix)
     except Exception:
-        logging.getLogger("reticuler").exception("Plotting failed for %s", f"original_{source_file}/{output_prefix}")
+        logging.getLogger("reticuler").exception(
+            "Plotting failed for %s", f"original_{source_file}/{output_prefix}"
+        )
     finally:
         os.chdir(cwd0)
 
 
-def _run_experiment_back_and_maybe_plot(source_file, output_prefix, params, remaining, sem):
+def _run_experiment_back_and_maybe_plot(
+    source_file, output_prefix, params, remaining, sem
+):
     """Run one eta_back experiment, then -- if it's the last one for its
     output_prefix -- plot that output_prefix's BEA scan.
 
