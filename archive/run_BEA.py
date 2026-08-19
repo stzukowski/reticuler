@@ -29,7 +29,8 @@ import multiprocessing as mp
 import os
 import shutil
 
-from reticuler.user_interface import clip_ret, runner
+from reticuler.system import System
+from reticuler.user_interface import clippers, runner
 
 MAX_PARALLEL = 20
 ################ BEA SETTINGS ################
@@ -47,7 +48,7 @@ ETA_TO_ADD = range(-5, 26)  # in tenths, eta_back_list = eta_original + ETA_TO_A
 SHIELDS_ORIGINAL_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
 SHIELDS_BACK_LIST = [0, 50, 100, 150, 200]  # in thousandths, so 50 = shields 0.05
 
-def create_exp_dir_original_tree(source_file):
+def prepare_exp_dir_original_tree(source_file):
     """Create exp_dir, copy original_tree.json and clip it to CLIP_HEIGHT"""
     # create exp_dir
     exp_dir = f"original_{source_file}"
@@ -57,7 +58,9 @@ def create_exp_dir_original_tree(source_file):
     shutil.copy(source_json, Path(exp_dir) / "original_tree.json")
     # clip original_tree
     original_tree = f"{exp_dir}/original_tree"
-    clip_ret.main(argv=[original_tree, "-H", str(CLIP_HEIGHT), "-out", original_tree])
+    system = System.import_json(input_file=original_tree)
+    clippers.clip_to_height(system, CLIP_HEIGHT)
+    system.export_json()
 
 def prepare_eta_back_scan(source_file, output_prefix, eta_back_range, trimmer_params):
     """Prepare a scan over eta_back_range.
@@ -87,7 +90,7 @@ EXPERIMENTS = []
 for shields_original in SHIELDS_ORIGINAL_LIST:
     for eta_original in ETA_ORIGINAL_LIST:
         source_file = f"eta{eta_original:02d}_shields{shields_original:03d}"
-        create_exp_dir_original_tree(source_file)
+        prepare_exp_dir_original_tree(source_file)
 
         eta_back_range = [eta_original + eta_to_add for eta_to_add in ETA_TO_ADD]
         for shields_back in SHIELDS_BACK_LIST:

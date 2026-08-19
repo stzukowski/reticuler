@@ -172,18 +172,6 @@ def run_batch(max_parallel, experiments, is_backward=False):
         time.sleep(0.001)
 
 
-def copy_reticuler_temp(experiment_dir=None):
-    """Copy the reticuler source (.py files only) into
-    ``<experiment_dir>/reticuler_temp`` (default: cwd), for reproducibility."""
-    experiment_dir = Path.cwd() if experiment_dir is None else Path(experiment_dir)
-    shutil.copytree(
-        Path(reticuler.__file__).parent,
-        experiment_dir / "reticuler_temp",
-        ignore=_ignore_non_py,
-        dirs_exist_ok=True,
-    )
-
-
 def _ignore_non_py(directory, names):
     """shutil.copytree ignore callback: keep only .py files (and dirs to recurse into)."""
     ignored = []
@@ -194,3 +182,15 @@ def _ignore_non_py(directory, names):
         elif not name.endswith(".py"):
             ignored.append(name)
     return ignored
+
+
+def copy_reticuler_temp(experiment_dir=None):
+    """Copy the reticuler source (.py files only) into
+    ``<experiment_dir>/reticuler_temp`` (default: cwd), for reproducibility."""
+    experiment_dir = Path.cwd() if experiment_dir is None else Path(experiment_dir)
+    shutil.copytree(
+        Path(reticuler.__file__).parent,
+        experiment_dir / "reticuler_temp",
+        ignore=_ignore_non_py,
+        dirs_exist_ok=True,
+    )
