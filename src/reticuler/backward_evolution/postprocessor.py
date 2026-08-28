@@ -98,7 +98,7 @@ class BEAPostProcessor:
         self.results_bif_sep = None
 
     def gather(self, q=0.25):
-        """Gather BEA metrics (flux coefficients, overshoot, angular
+        """Gather BEA metrics (flux coefficients, geometric_deflection, angular
         deflection, length mismatch) across `eta_range`, populating
         `results`, `results_bif`, `results_branches_sep`, `results_bif_sep`.
 
@@ -127,20 +127,20 @@ class BEAPostProcessor:
             )
 
             a1a2a3_coefficients = np.empty((0, 3), dtype=float)
-            overshoot = []
+            geometric_deflection = []
             angular_deflection = []
             for jj, b_b in enumerate(backward_system.backward_branches[1:]):
                 if len(b_b.steps) > 1:
                     a1a2a3_coefficients = np.vstack(
                         (a1a2a3_coefficients, b_b.flux_info)
                     )
-                    overshoot = np.append(overshoot, b_b.overshoot)
+                    geometric_deflection = np.append(geometric_deflection, b_b.geometric_deflection)
                     angular_deflection = np.append(
                         angular_deflection, b_b.angular_deflection
                     )
 
                     results_branches_sep[jj, i, 1:4] = np.mean(b_b.flux_info, axis=0)
-                    results_branches_sep[jj, i, 4] = np.mean(b_b.overshoot)
+                    results_branches_sep[jj, i, 4] = np.mean(b_b.geometric_deflection)
                     results_branches_sep[jj, i, 5] = np.mean(b_b.angular_deflection)
                     results_branches_sep[jj, i, 0] = b_b.ID
                 else:
@@ -155,7 +155,7 @@ class BEAPostProcessor:
                 results[0, i, :] = _calculate_quantiles(
                     a1a2a3_coefficients[:, 1] / a1a2a3_coefficients[:, 0] ** 2, q
                 )
-                results[1, i, :] = _calculate_quantiles(overshoot, q)
+                results[1, i, :] = _calculate_quantiles(geometric_deflection, q)
                 results[2, i, :] = _calculate_quantiles(angular_deflection, q)
             else:
                 results[:, i, :] = np.nan
@@ -202,7 +202,7 @@ class BEAPostProcessor:
         for i in [0, 6]:  # median, width
             results_all_norm.append(_norm_metric(np.log10(np.abs(res[:, i]))))
 
-        # overshoot, angular deflection
+        # geometric_deflection, angular deflection
         for res in results[1:]:
             for i in [3, 6]:  # median(abs), width
                 results_all_norm.append(_norm_metric(np.log10(res[:, i])))
@@ -225,7 +225,7 @@ class BEAPostProcessor:
         """Full eta* scan summary plot: tree overview with per-branch/
         per-bifurcation markers, plus aggregated quantile/IQR panels for BEA
         metrics (length mismatch, a1, a3/a1, local symmetry a2/a1^2,
-        overshoot, angular deflection) and a combined normalized-metric curve.
+        geometric_deflection, angular deflection) and a combined normalized-metric curve.
 
         Returns
         -------
@@ -367,7 +367,7 @@ class BEAPostProcessor:
 
         [ax.legend(frameon=False, fontsize=5) for ax in [axes[1, 0]]]
 
-        ##########   LOCAL SYMMETRY, OVERSHOOT, ANGULAR DEVIATION    ##########
+        ##########   LOCAL SYMMETRY, GEOMETRIC DEFLECTION, ANGULAR DEFLECTION    ##########
 
         ########## BRANCHES (SEPARATED RESULTS) ##########
         axes = axes0[3]
